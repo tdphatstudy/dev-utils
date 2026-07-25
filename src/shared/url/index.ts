@@ -1,0 +1,58 @@
+export interface ParsedUrl {
+  href: string
+  protocol: string
+  username: string
+  password: string
+  host: string
+  hostname: string
+  port: string
+  pathname: string
+  search: string
+  hash: string
+  origin: string
+  query: Record<string, string[]>
+}
+
+export function parseUrl(input: string): { ok: true; value: ParsedUrl } | { ok: false; error: string } {
+  try {
+    const u = new URL(input)
+    const query: Record<string, string[]> = {}
+    u.searchParams.forEach((value, key) => {
+      if (!query[key]) query[key] = []
+      query[key]!.push(value)
+    })
+    return {
+      ok: true,
+      value: {
+        href: u.href,
+        protocol: u.protocol,
+        username: u.username,
+        password: u.password,
+        host: u.host,
+        hostname: u.hostname,
+        port: u.port,
+        pathname: u.pathname,
+        search: u.search,
+        hash: u.hash,
+        origin: u.origin,
+        query
+      }
+    }
+  } catch {
+    return { ok: false, error: 'Invalid URL' }
+  }
+}
+
+export function encodeUriComponentSafe(input: string): string {
+  return encodeURIComponent(input)
+}
+
+export function decodeUriComponentSafe(
+  input: string
+): { ok: true; text: string } | { ok: false; error: string } {
+  try {
+    return { ok: true, text: decodeURIComponent(input.replace(/\+/g, ' ')) }
+  } catch {
+    return { ok: false, error: 'Invalid URI component' }
+  }
+}

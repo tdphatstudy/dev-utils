@@ -1,0 +1,16 @@
+node_modules
+dist
+out
+release
+.DS_Store
+*.log
+.env
+.env.*
+coverage
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.local
+package-lock.json
+yarn.lock
+.pnpm-store

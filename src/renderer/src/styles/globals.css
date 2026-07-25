@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --mac-bg: #f5f5f7;
+  --mac-surface: #ffffff;
+  --mac-raised: #ffffff;
+  --mac-overlay: rgba(255, 255, 255, 0.72);
+  --mac-sidebar: rgba(246, 246, 246, 0.85);
+  --mac-separator: rgba(0, 0, 0, 0.1);
+  --mac-label: #1d1d1f;
+  --mac-label-secondary: #6e6e73;
+  --mac-label-tertiary: #86868b;
+  --mac-accent: #007aff;
+  --mac-accent-hover: #0066d6;
+  --mac-accent-soft: rgba(0, 122, 255, 0.12);
+  --mac-control: rgba(0, 0, 0, 0.05);
+  --mac-control-hover: rgba(0, 0, 0, 0.08);
+  --mac-danger: #ff3b30;
+  --mac-success: #34c759;
+  --mac-warning: #ff9f0a;
+  --titlebar-height: 48px;
+}
+
+.dark {
+  --mac-bg: #1c1c1e;
+  --mac-surface: #2c2c2e;
+  --mac-raised: #3a3a3c;
+  --mac-overlay: rgba(44, 44, 46, 0.78);
+  --mac-sidebar: rgba(28, 28, 30, 0.92);
+  --mac-separator: rgba(255, 255, 255, 0.08);
+  --mac-label: #f5f5f7;
+  --mac-label-secondary: #a1a1a6;
+  --mac-label-tertiary: #6e6e73;
+  --mac-accent: #0a84ff;
+  --mac-accent-hover: #409cff;
+  --mac-accent-soft: rgba(10, 132, 255, 0.18);
+  --mac-control: rgba(255, 255, 255, 0.08);
+  --mac-control-hover: rgba(255, 255, 255, 0.12);
+  --mac-danger: #ff453a;
+  --mac-success: #30d158;
+  --mac-warning: #ffd60a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue',
+    Arial, sans-serif;
+  background: var(--mac-bg);
+  color: var(--mac-label);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.selectable,
+.cm-editor,
+textarea,
+input,
+pre,
+.code-select {
+  user-select: text;
+}
+
+.titlebar-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.55);
+  background-clip: content-box;
+}
+
+@layer components {
+  .mac-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-mac px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 ease-mac;
+  }
+  .mac-btn-primary {
+    @apply mac-btn bg-mac-accent text-white hover:bg-mac-accent-hover;
+  }
+  .mac-btn-secondary {
+    @apply mac-btn bg-mac-control text-mac-label hover:bg-mac-control-hover;
+  }
+  .mac-btn-ghost {
+    @apply mac-btn bg-transparent text-mac-label-secondary hover:bg-mac-control hover:text-mac-label;
+  }
+  .mac-input {
+    @apply w-full rounded-mac border border-mac-separator bg-mac-control px-3 py-1.5 text-[13px] text-mac-label outline-none transition-shadow placeholder:text-mac-label-tertiary focus:border-mac-accent focus:ring-2;
+    --tw-ring-color: var(--mac-accent-soft);
+  }
+  .mac-segment {
+    @apply inline-flex rounded-mac bg-mac-control p-0.5;
+  }
+  .mac-segment-item {
+    @apply rounded-[6px] px-3 py-1 text-[12px] font-medium text-mac-label-secondary transition-all;
+  }
+  .mac-segment-item[data-active='true'] {
+    @apply bg-mac-surface text-mac-label shadow-sm dark:bg-mac-raised;
+  }
+}

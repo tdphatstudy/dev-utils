@@ -1,0 +1,38 @@
+appId: com.devutils.app
+productName: DevUtils
+copyright: Copyright © DevUtils
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+asar: true
+icon: icon.png
+win:
+  icon: icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: DevUtils
+mac:
+  icon: icon.png
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+linux:
+  icon: icon.png
+  target:
+    - AppImage
+  category: Development
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
