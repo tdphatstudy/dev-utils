@@ -1,4 +1,4 @@
-import { useAppStore, type ThemeMode } from '@renderer/store/app-store'
+import { useAppStore, type LaunchMode, type ThemeMode } from '@renderer/store/app-store'
 import { useSessionStore } from '@renderer/store/session-store'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { useNavigate } from 'react-router-dom'
@@ -9,6 +9,8 @@ export function SettingsPage(): JSX.Element {
   const setTheme = useAppStore((s) => s.setTheme)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
+  const launchMode = useAppStore((s) => s.launchMode)
+  const setLaunchMode = useAppStore((s) => s.setLaunchMode)
   const history = useSessionStore((s) => s.history)
   const clearHistory = useSessionStore((s) => s.clearHistory)
   const navigate = useNavigate()
@@ -48,6 +50,29 @@ export function SettingsPage(): JSX.Element {
             >
               {sidebarCollapsed ? 'Expand' : 'Collapse'}
             </button>
+          </div>
+        </section>
+
+        <section className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
+          <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+            On launch
+          </h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[13px] text-mac-label-secondary">Start at</div>
+              <p className="mt-0.5 text-[11px] text-mac-label-tertiary">
+                Home is best for multi-tool apps. “Last tool” resumes where you left off (once per
+                session).
+              </p>
+            </div>
+            <SegmentedControl
+              value={launchMode}
+              onChange={(v) => setLaunchMode(v as LaunchMode)}
+              options={[
+                { value: 'home', label: 'Home' },
+                { value: 'last', label: 'Last tool' }
+              ]}
+            />
           </div>
         </section>
 

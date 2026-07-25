@@ -1,8 +1,8 @@
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { toolGroups, getToolsByGroup } from '@renderer/registry/tools'
 import { useAppStore } from '@renderer/store/app-store'
 import { cn } from '@renderer/lib/utils'
-import { PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Home, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { AppLogo } from './AppLogo'
 
 export function Sidebar(): JSX.Element {
@@ -24,9 +24,13 @@ export function Sidebar(): JSX.Element {
         )}
       >
         {collapsed ? (
-          <AppLogo size={28} />
+          <Link to="/" title="Home" className="rounded-mac hover:opacity-90">
+            <AppLogo size={28} />
+          </Link>
         ) : (
-          <AppLogo size={28} showWordmark className="min-w-0 flex-1 px-0.5" />
+          <Link to="/" title="Home" className="min-w-0 flex-1 rounded-mac hover:opacity-90">
+            <AppLogo size={28} showWordmark className="px-0.5" />
+          </Link>
         )}
         <button
           type="button"
@@ -43,6 +47,26 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-1">
+        <div className="mb-3">
+          <NavLink
+            to="/"
+            end
+            title="Home"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 rounded-mac px-2.5 py-[7px] text-[13px] transition-colors duration-150',
+                collapsed && 'justify-center !px-0',
+                isActive
+                  ? 'bg-mac-accent-soft font-medium text-mac-accent'
+                  : 'text-mac-label-secondary hover:bg-mac-control hover:text-mac-label'
+              )
+            }
+          >
+            <Home className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            {!collapsed && <span className="truncate">Home</span>}
+          </NavLink>
+        </div>
+
         {toolGroups.map((group) => {
           const groupTools = getToolsByGroup(group.id)
           if (groupTools.length === 0) return null

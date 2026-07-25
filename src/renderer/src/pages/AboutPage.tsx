@@ -34,7 +34,7 @@ export function AboutPage(): JSX.Element {
           <Card
             icon={<Shield className="h-4 w-4 text-mac-success" />}
             title="Secure defaults"
-            body="Passwords and random values use Web Crypto CSPRNG. Secrets are not written to disk. JWT decode does not verify signatures — inspect only."
+            body="Passwords and random values use Web Crypto CSPRNG. Secrets stay local and are not written to disk. JWT can decode, verify (HS/RS/ES), and sign HS tokens on-device."
           />
           <Card
             icon={<Keyboard className="h-4 w-4 text-mac-warning" />}

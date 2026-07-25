@@ -101,6 +101,15 @@ pre,
   background-clip: content-box;
 }
 
+/* Notion-like empty block placeholder (browsers often leave a lone <br>) */
+[contenteditable][data-placeholder]:empty:before,
+[contenteditable][data-placeholder]:has(> br:only-child):before {
+  content: attr(data-placeholder);
+  color: var(--mac-label-tertiary);
+  pointer-events: none;
+  font-weight: 400;
+}
+
 @layer components {
   .mac-btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-mac px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 ease-mac;

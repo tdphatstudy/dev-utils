@@ -17,16 +17,26 @@ import {
   Settings,
   Server,
   WrapText,
+  ArrowLeftRight,
+  Vault,
+  CalendarClock,
+  Regex,
+  QrCode,
+  Radio,
+  StickyNote,
   type LucideIcon
 } from 'lucide-react'
 
 export type ToolGroupId =
   | 'json'
   | 'yaml'
+  | 'convert'
   | 'base64'
   | 'security'
   | 'network'
   | 'file'
+  | 'text'
+  | 'privatebox'
   | 'app'
 
 export interface ToolGroup {
@@ -49,11 +59,14 @@ export interface ToolDefinition {
 export const toolGroups: ToolGroup[] = [
   { id: 'json', name: 'JSON', icon: Braces, order: 0 },
   { id: 'yaml', name: 'YAML', icon: FileCode2, order: 1 },
-  { id: 'base64', name: 'Base64', icon: Binary, order: 2 },
-  { id: 'security', name: 'Security', icon: Shield, order: 3 },
-  { id: 'network', name: 'Network', icon: Network, order: 4 },
-  { id: 'file', name: 'File', icon: File, order: 5 },
-  { id: 'app', name: 'App', icon: Info, order: 6 }
+  { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 2 },
+  { id: 'base64', name: 'Base64', icon: Binary, order: 3 },
+  { id: 'security', name: 'Security', icon: Shield, order: 4 },
+  { id: 'network', name: 'Network', icon: Network, order: 5 },
+  { id: 'file', name: 'File', icon: File, order: 6 },
+  { id: 'text', name: 'Text / Dev', icon: Regex, order: 7 },
+  { id: 'privatebox', name: 'Private Box', icon: Vault, order: 8 },
+  { id: 'app', name: 'App', icon: Info, order: 9 }
 ]
 
 export const tools: ToolDefinition[] = [
@@ -70,8 +83,8 @@ export const tools: ToolDefinition[] = [
     id: 'json.diff',
     group: 'json',
     name: 'JSON Diff',
-    description: 'Structural compare of two JSON documents',
-    keywords: ['json', 'diff', 'compare', 'delta'],
+    description: 'Line highlight and structural JSON compare',
+    keywords: ['json', 'diff', 'compare', 'delta', 'lines', 'tree'],
     icon: GitCompare,
     component: lazy(() => import('@renderer/features/tools/json/JsonDiff'))
   },
@@ -97,10 +110,28 @@ export const tools: ToolDefinition[] = [
     id: 'yaml.diff',
     group: 'yaml',
     name: 'YAML Diff',
-    description: 'Structural compare of two YAML documents',
-    keywords: ['yaml', 'diff', 'compare'],
+    description: 'Line highlight and structural YAML compare',
+    keywords: ['yaml', 'diff', 'compare', 'lines', 'tree'],
     icon: GitCompare,
     component: lazy(() => import('@renderer/features/tools/yaml/YamlDiff'))
+  },
+  {
+    id: 'convert.file-ext',
+    group: 'convert',
+    name: 'Convert File Ext',
+    description: 'Convert between formats (JSON ↔ YAML, more later)',
+    keywords: [
+      'convert',
+      'json',
+      'yaml',
+      'yml',
+      'transform',
+      'extension',
+      'file',
+      'to'
+    ],
+    icon: ArrowLeftRight,
+    component: lazy(() => import('@renderer/features/tools/convert/ConvertFileExt'))
   },
   {
     id: 'base64.codec',
@@ -150,9 +181,20 @@ export const tools: ToolDefinition[] = [
   {
     id: 'security.jwt',
     group: 'security',
-    name: 'JWT Decode',
-    description: 'Inspect JWT header & payload (no verify)',
-    keywords: ['jwt', 'token', 'decode', 'bearer', 'auth'],
+    name: 'JWT',
+    description: 'Decode, verify (HS/RS/ES + secret/PEM), and sign HS tokens',
+    keywords: [
+      'jwt',
+      'token',
+      'decode',
+      'verify',
+      'sign',
+      'secret',
+      'hs256',
+      'rs256',
+      'bearer',
+      'auth'
+    ],
     icon: KeyRound,
     component: lazy(() => import('@renderer/features/tools/security/JwtTool'))
   },
@@ -196,10 +238,42 @@ export const tools: ToolDefinition[] = [
     id: 'network.http',
     group: 'network',
     name: 'HTTP Client',
-    description: 'Simple request/response explorer',
-    keywords: ['http', 'rest', 'api', 'fetch', 'get', 'post'],
+    description: 'Postman-style requests, body modes, curl/PowerShell export',
+    keywords: [
+      'http',
+      'rest',
+      'api',
+      'fetch',
+      'get',
+      'post',
+      'curl',
+      'postman',
+      'powershell',
+      'axios'
+    ],
     icon: Globe,
     component: lazy(() => import('@renderer/features/tools/network/HttpClient'))
+  },
+  {
+    id: 'network.ports',
+    group: 'network',
+    name: 'Port Manager',
+    description: 'List listening ports, color system vs app, kill stuck processes',
+    keywords: [
+      'port',
+      'ports',
+      'listen',
+      'kill',
+      'pid',
+      'netstat',
+      '3000',
+      'stuck',
+      'process',
+      'tcp',
+      'eaddrinuse'
+    ],
+    icon: Radio,
+    component: lazy(() => import('@renderer/features/tools/network/PortManager'))
   },
   {
     id: 'file.hash',
@@ -218,6 +292,100 @@ export const tools: ToolDefinition[] = [
     keywords: ['crlf', 'lf', 'newline', 'line ending', 'dos', 'unix'],
     icon: WrapText,
     component: lazy(() => import('@renderer/features/tools/file/LineEndings'))
+  },
+  {
+    id: 'text.regex',
+    group: 'text',
+    name: 'Regex Tester',
+    description: 'Match, replace, split, explain — full JS RegExp toolkit',
+    keywords: [
+      'regex',
+      'regexp',
+      'regular expression',
+      'match',
+      'replace',
+      'split',
+      'pattern',
+      'flags',
+      'groups',
+      'test'
+    ],
+    icon: Regex,
+    component: lazy(() => import('@renderer/features/tools/text/RegexTool'))
+  },
+  {
+    id: 'text.cron',
+    group: 'text',
+    name: 'Cron Calculator',
+    description: 'Parse, explain, and list next cron runs (5/6-field)',
+    keywords: [
+      'cron',
+      'crontab',
+      'schedule',
+      'job',
+      'quartz',
+      'expression',
+      'next run',
+      'minute',
+      'scheduler'
+    ],
+    icon: CalendarClock,
+    component: lazy(() => import('@renderer/features/tools/text/CronTool'))
+  },
+  {
+    id: 'text.qr',
+    group: 'text',
+    name: 'QR Code',
+    description: 'Encode text → QR image, or decode QR image → raw data',
+    keywords: [
+      'qr',
+      'qrcode',
+      'barcode',
+      'scan',
+      'encode',
+      'decode',
+      'image',
+      'png',
+      'wifi'
+    ],
+    icon: QrCode,
+    component: lazy(() => import('@renderer/features/tools/text/QrTool'))
+  },
+  {
+    id: 'privatebox.home',
+    group: 'privatebox',
+    name: 'Private Box',
+    description: 'Encrypted vault explorer — files stored as .putl',
+    keywords: [
+      'private',
+      'box',
+      'vault',
+      'encrypt',
+      'putl',
+      'secure',
+      'notes',
+      'finder'
+    ],
+    icon: Vault,
+    component: lazy(() => import('@renderer/features/privatebox/PrivateBoxApp'))
+  },
+  {
+    id: 'privatebox.keep',
+    group: 'privatebox',
+    name: 'Keep',
+    description: 'Encrypted notes like Google Keep — Default Secret Box',
+    keywords: [
+      'keep',
+      'notes',
+      'sticky',
+      'memo',
+      'google keep',
+      'secret',
+      'encrypted',
+      'pin'
+    ],
+    icon: StickyNote,
+    component: lazy(() => import('@renderer/features/keep/KeepApp'))
   },
   {
     id: 'app.settings',

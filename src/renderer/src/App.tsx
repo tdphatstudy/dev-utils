@@ -4,7 +4,8 @@ import { AppShell } from './layouts/AppShell'
 import { ToolPage } from './pages/ToolPage'
 import { HomePage } from './pages/HomePage'
 import { useAppStore } from './store/app-store'
-import { tools } from './registry/tools'
+import { installGlobalErrorGuards } from './lib/error-guard'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function useThemeEffect(): void {
   const theme = useAppStore((s) => s.theme)
@@ -42,19 +43,25 @@ function useGlobalHotkeys(): void {
   }, [setCommandOpen])
 }
 
+/** Catch window.error + unhandledrejection → bounce to Home. */
+function useGlobalErrorGuard(): void {
+  useEffect(() => installGlobalErrorGuards(), [])
+}
+
 export default function App(): JSX.Element {
   useThemeEffect()
   useGlobalHotkeys()
-
-  const defaultTool = tools[0]?.id ?? 'json.studio'
+  useGlobalErrorGuard()
 
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<HomePage />} />
-        <Route path="tool/:toolId" element={<ToolPage />} />
-        <Route path="*" element={<Navigate to={`/tool/${defaultTool}`} replace />} />
-      </Route>
-    </Routes>
+    <ErrorBoundary scope="app" autoHomeMs={5000}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<HomePage />} />
+          <Route path="tool/:toolId" element={<ToolPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
   )
 }

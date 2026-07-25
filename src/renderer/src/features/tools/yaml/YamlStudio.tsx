@@ -6,6 +6,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { formatYaml, jsonToYaml, parseYaml, yamlToJson } from '@shared/yaml'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const SAMPLE = `name: DevUtils
 version: 1
@@ -77,6 +78,22 @@ export default function YamlStudio(): JSX.Element {
               { value: 'yaml', label: 'YAML' },
               { value: 'json', label: 'JSON' }
             ]}
+          />
+          <SaveToBoxButton
+            type={view === 'json' && asJson.ok ? 'json' : 'text'}
+            content={
+              view === 'json' && asJson.ok
+                ? jsonOut
+                : formatted.ok
+                  ? yamlOut || input
+                  : input
+            }
+            defaultName={
+              view === 'json' && asJson.ok
+                ? undefined
+                : `yaml-${new Date().toISOString().slice(0, 10)}.yaml`
+            }
+            disabled={!parsed.ok && !!input.trim()}
           />
           <CopyButton text={outputCopy} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>

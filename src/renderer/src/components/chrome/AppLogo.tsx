@@ -6,19 +6,34 @@ interface Props {
   size?: number
   className?: string
   showWordmark?: boolean
-  variant?: 'svg' | 'png'
+  /**
+   * `auto` — PNG for large (rich lighting), SVG for tiny (crisp glyph)
+   * `png` / `svg` — force a specific asset
+   */
+  variant?: 'auto' | 'svg' | 'png'
 }
+
+/**
+ * Apple-like continuous corner radius ≈ 22.37% of side
+ * (matches macOS / iOS icon mask proportion).
+ */
+const APPLE_CORNER = 0.2237
 
 export function AppLogo({
   size = 28,
   className,
   showWordmark = false,
-  variant = 'svg'
+  variant = 'auto'
 }: Props): JSX.Element {
-  const src = variant === 'png' ? logoUrl : logoSvg
+  // PNG master already includes squircle + lighting (use for ≥40px / About / dock-like)
+  // SVG is a crisp flat match for tiny chrome (title bar, sidebar)
+  const usePng = variant === 'png' || (variant === 'auto' && size >= 40)
+  const src = usePng ? logoUrl : logoSvg
+  // SVG is square full art; light continuous-corner clip. PNG already has alpha squircle.
+  const radius = usePng ? 0 : Math.round(size * APPLE_CORNER * 10) / 10
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('flex items-center gap-2.5', className)}>
       <img
         src={src}
         width={size}
@@ -30,15 +45,24 @@ export function AppLogo({
         style={{
           width: size,
           height: size,
-          borderRadius: variant === 'png' ? '22.3%' : undefined
+          borderRadius: radius,
+          // Soft modern lift (no heavy plastic shadow)
+          boxShadow:
+            size >= 48
+              ? '0 4px 14px rgba(30, 50, 120, 0.16)'
+              : size >= 28
+                ? '0 1px 2px rgba(30, 50, 120, 0.1)'
+                : undefined
         }}
       />
       {showWordmark && (
         <div className="min-w-0 leading-tight">
-          <div className="truncate text-[13px] font-semibold tracking-tight text-mac-label">
+          <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-mac-label">
             DevUtils
           </div>
-          <div className="truncate text-[10px] text-mac-label-tertiary">Local developer tools</div>
+          <div className="truncate text-[10px] font-medium tracking-wide text-mac-label-tertiary">
+            Local tools
+          </div>
         </div>
       )}
     </div>

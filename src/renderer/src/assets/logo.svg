@@ -1,33 +1,64 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="DevUtils">
   <defs>
-    <linearGradient id="bg" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#8A9AAB"/>
-      <stop offset="42%" stop-color="#5E6E7D"/>
-      <stop offset="100%" stop-color="#3A4652"/>
+    <linearGradient id="bg" x1="160" y1="40" x2="880" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2F6BFF"/>
+      <stop offset="55%" stop-color="#3D4FE8"/>
+      <stop offset="100%" stop-color="#5B2DBA"/>
     </linearGradient>
-    <linearGradient id="sheen" x1="512" y1="0" x2="512" y2="380" gradientUnits="userSpaceOnUse">
+    <linearGradient id="glassA" x1="280" y1="260" x2="720" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="50%" stop-color="#DCEBFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#B8C8FF" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="glassB" x1="340" y1="220" x2="780" y2="700" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#C8D6FF" stop-opacity="0.10"/>
     </linearGradient>
-    <linearGradient id="brace" x1="512" y1="170" x2="512" y2="854" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#E6EBEF"/>
+    <linearGradient id="glassC" x1="400" y1="180" x2="820" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#C0CCFF" stop-opacity="0.08"/>
     </linearGradient>
-    <radialGradient id="blue" cx="42%" cy="36%" r="68%">
-      <stop offset="0%" stop-color="#64D2FF"/>
-      <stop offset="45%" stop-color="#0A84FF"/>
-      <stop offset="100%" stop-color="#0060C0"/>
+    <linearGradient id="rim" x1="300" y1="240" x2="700" y2="740" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#7AD7FF" stop-opacity="0.45"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#E8FCFF"/>
+      <stop offset="40%" stop-color="#5AC8FA"/>
+      <stop offset="100%" stop-color="#0A84FF"/>
     </radialGradient>
-    <filter id="depth" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1C252C" flood-opacity="0.3"/>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0A1238" flood-opacity="0.22"/>
     </filter>
   </defs>
+
+  <!-- Squircle canvas -->
   <rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
-  <rect width="1024" height="1024" rx="228" ry="228" fill="url(#sheen)"/>
-  <g filter="url(#depth)" fill="url(#brace)">
-    <path d="M430 188c-86 0-154 58-154 146v86c0 34-16 54-52 66 36 12 52 32 52 66v86c0 88 68 146 154 146h40v-80h-32c-46 0-74-30-74-74v-78c0-50-24-76-76-90 52-14 76-40 76-90v-78c0-44 28-74 74-74h32v-80h-40z"/>
-    <path d="M594 188c86 0 154 58 154 146v86c0 34 16 54 52 66-36 12-52 32-52 66v86c0 88-68 146-154 146h-40v-80h32c46 0 74-30 74-74v-78c0-50 24-76 76-90-52-14-76-40-76-90v-78c0-44-28-74-74-74h-32v-80h40z"/>
+
+  <!-- Stacked glass modules = multi-tool symbol (no letter) -->
+  <g filter="url(#soft)">
+    <!-- Back module -->
+    <rect x="380" y="210" width="360" height="360" rx="88" fill="url(#glassC)" stroke="url(#rim)" stroke-width="2.5" opacity="0.85"/>
+    <!-- Mid module -->
+    <rect x="300" y="280" width="400" height="400" rx="96" fill="url(#glassB)" stroke="url(#rim)" stroke-width="2.5" opacity="0.92"/>
+    <!-- Front module -->
+    <rect x="220" y="350" width="440" height="440" rx="108" fill="url(#glassA)" stroke="url(#rim)" stroke-width="3"/>
+    <!-- Soft sheen on front -->
+    <path
+      d="M260 430
+         C 320 380 420 360 520 380
+         C 600 396 660 440 680 480
+         L 680 420
+         C 680 380 650 360 610 360
+         L 330 360
+         C 280 360 260 390 260 430 Z"
+      fill="#FFFFFF"
+      fill-opacity="0.18"
+    />
   </g>
-  <circle cx="512" cy="512" r="56" fill="url(#blue)"/>
-  <circle cx="494" cy="494" r="18" fill="#FFFFFF" fill-opacity="0.32"/>
+
+  <!-- Cyan utility orb accent -->
+  <circle cx="690" cy="760" r="42" fill="url(#orb)"/>
+  <circle cx="678" cy="748" r="12" fill="#FFFFFF" fill-opacity="0.45"/>
 </svg>

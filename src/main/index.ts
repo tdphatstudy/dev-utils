@@ -5,6 +5,11 @@ import { createHash } from 'crypto'
 import { readFile, stat } from 'fs/promises'
 import { promises as dns } from 'dns'
 import { is } from './env'
+import { performHttpRequest } from './http-request'
+import type { HttpRequestPayload } from '../shared/http/types'
+import { registerPrivateBoxIpc } from './privatebox/ipc'
+import { registerPortsIpc } from './ports-ipc'
+import { ensureDefaultSecretBox } from './privatebox/vault'
 
 function resolveAppIcon(): string {
   const candidates = [
@@ -156,6 +161,13 @@ function registerIpc(): void {
     }
   )
 
+  ipcMain.handle('net:httpRequest', async (_event, payload: HttpRequestPayload) => {
+    return performHttpRequest(payload)
+  })
+
+  registerPrivateBoxIpc()
+  registerPortsIpc()
+
   ipcMain.handle('app:platform', () => process.platform)
   ipcMain.handle('app:version', () => app.getVersion())
 }
@@ -174,6 +186,9 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     registerIpc()
+    void ensureDefaultSecretBox().catch((e) => {
+      console.error('[DevUtils] ensureDefaultSecretBox failed', e)
+    })
     createWindow()
 
     app.on('activate', () => {

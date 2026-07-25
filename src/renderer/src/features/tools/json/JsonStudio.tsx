@@ -6,6 +6,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { formatJson, parseJson } from '@shared/json'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const SAMPLE = `{
   "name": "DevUtils",
@@ -87,6 +88,11 @@ export default function JsonStudio(): JSX.Element {
               { value: 'tree', label: 'Tree' },
               { value: 'raw', label: 'Raw' }
             ]}
+          />
+          <SaveToBoxButton
+            type="json"
+            content={result.ok ? outputText || input : input}
+            disabled={!result.ok && !!input.trim()}
           />
           <CopyButton text={view === 'raw' ? outputText : input} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>

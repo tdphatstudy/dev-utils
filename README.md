@@ -8,8 +8,10 @@ Privacy-first: all processing happens on your machine. macOS-like UI on Windows,
 
 | Group | Tools |
 |-------|--------|
-| JSON | Studio (format + **virtualized tree**), Diff, JSONPath |
-| YAML | Studio (format/tree/JSON), Diff |
+| JSON | Studio (format + virtualized tree), Diff (Lines + Tree), JSONPath |
+| YAML | Studio (format/tree), Diff (Lines + Tree) |
+| Convert | **Convert File Ext** — JSON ↔ YAML (extensible hub) |
+| Private Box | Encrypted vault (`.putl`) · device/portable 2-key · Finder-like explorer |
 | Base64 | Text encode/decode, Image ↔ Base64 |
 | Security | CSPRNG password/bytes/UUID, Hash, HMAC, JWT decode, AES-GCM |
 | Network | URL, IP/CIDR, **DNS lookup**, HTTP client (explicit only) |

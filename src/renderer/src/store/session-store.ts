@@ -5,7 +5,8 @@ export const NO_HISTORY_TOOLS = new Set([
   'security.hash',
   'security.hmac',
   'security.jwt',
-  'security.aes'
+  'security.aes',
+  'privatebox.home'
 ])
 
 export interface HistoryEntry {
