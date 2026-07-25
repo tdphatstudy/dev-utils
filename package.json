@@ -20,7 +20,7 @@
     "postinstall": "electron-builder install-app-deps",
     "pack": "pnpm run build && electron-builder --dir",
     "dist": "pnpm run build && electron-builder --win --linux",
-    "dist:win": "pnpm run build && electron-builder --win",
+    "dist:win": "pnpm run build && electron-builder --win -c.win.signAndEditExecutable=false",
     "dist:mac": "pnpm run build && electron-builder --mac",
     "dist:linux": "pnpm run build && electron-builder --linux",
     "dist:dir": "pnpm run build && electron-builder --dir"
