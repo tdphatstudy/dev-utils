@@ -1,7 +1,8 @@
-// Packed ciphertext: base64(salt[16] | iv[12] | ciphertext+tag)
+import { AES_GCM_IV_BYTES, AES_GCM_TAG_BYTES, SALT_BYTES } from '@shared/core/constants'
+
 const PBKDF2_ITERATIONS = 100_000
-const SALT_LEN = 16
-const IV_LEN = 12
+const SALT_LEN = SALT_BYTES
+const IV_LEN = AES_GCM_IV_BYTES
 
 function bufToB64(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
@@ -75,7 +76,7 @@ export async function aesGcmDecrypt(
   try {
     if (!password) return { ok: false, error: 'Password required' }
     const packed = b64ToBytes(ciphertextB64)
-    if (packed.length < SALT_LEN + IV_LEN + 16) {
+    if (packed.length < SALT_LEN + IV_LEN + AES_GCM_TAG_BYTES) {
       return { ok: false, error: 'Ciphertext too short' }
     }
     const salt = packed.slice(0, SALT_LEN)

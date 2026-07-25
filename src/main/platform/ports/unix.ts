@@ -1,4 +1,4 @@
-import { PORT_KILL_GRACE_MS } from '../../../shared/core/constants'
+import { PORT_KILL_GRACE_MS } from '@shared/core/constants'
 import { runCmd } from './exec'
 import type { PortScanner, ProcessInfo, RawListen } from './types'
 

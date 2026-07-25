@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { existsSync } from 'fs'
 import { mkdir, readFile, writeFile } from 'fs/promises'
-import { deviceSecretPath, userDataRoot } from '../secret-box/paths'
+import { deviceSecretPath, userDataRoot } from './paths'
 import { generateDeviceSecret } from './crypto'
 
 export async function loadOrCreateDeviceSecret(): Promise<string> {

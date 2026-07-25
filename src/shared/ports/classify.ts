@@ -1,4 +1,4 @@
-import { PRIVILEGED_PORT_MAX } from '../core/constants'
+import { PRIVILEGED_PORT_MAX } from '@shared/core/constants'
 import type { PortTier } from './types'
 
 const SYSTEM_PORTS = new Set([

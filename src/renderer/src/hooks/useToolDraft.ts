@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { NO_HISTORY_TOOLS, useSessionStore } from '@renderer/store/session-store'
 
+const DRAFT_DEBOUNCE_MS = 400
+const HISTORY_SNIPPET_MAX = 200
+
 export function useToolDraft(
   toolId: string,
   value: string,
@@ -24,7 +27,7 @@ export function useToolDraft(
 
   useEffect(() => {
     if (NO_HISTORY_TOOLS.has(toolId)) return
-    const t = window.setTimeout(() => setDraft(toolId, value), 400)
+    const t = window.setTimeout(() => setDraft(toolId, value), DRAFT_DEBOUNCE_MS)
     return () => window.clearTimeout(t)
   }, [toolId, value, setDraft])
 
@@ -35,7 +38,7 @@ export function useToolDraft(
         pushHistory({
           toolId,
           label: options.label ?? toolId,
-          snippet: value.slice(0, 200)
+          snippet: value.slice(0, HISTORY_SNIPPET_MAX)
         })
       }
     }

@@ -8,7 +8,7 @@ import {
   serializeEnvelope
 } from './crypto'
 
-describe('privatebox dual-layer crypto', () => {
+describe('secret-box dual-layer crypto', () => {
   it('derives different keys per layer', () => {
     const salt = generateSalt()
     const { keyA, keyB } = deriveLayerKeys('alpha', 'beta', salt)

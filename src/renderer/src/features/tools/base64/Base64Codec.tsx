@@ -5,6 +5,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { decodeBase64, encodeBase64, type Base64Variant } from '@shared/base64'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { ArrowDownUp } from 'lucide-react'
 
 type Mode = 'encode' | 'decode'
@@ -57,7 +58,8 @@ export default function Base64Codec(): JSX.Element {
           <ArrowDownUp className="h-3.5 w-3.5" />
           Swap
         </button>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <SaveToBoxButton type="text" content={output} defaultName="base64-output.txt" disabled={!result.ok} />
           <CopyButton text={output} />
         </div>
       </ToolToolbar>

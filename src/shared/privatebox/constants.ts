@@ -5,4 +5,4 @@ export {
   SCRYPT_PARAMS,
   IGNORED_EMPTY_NAMES,
   DEFAULT_BOX_RELATIVE
-} from '../secret-box/constants'
+} from '@shared/secret-box/constants'

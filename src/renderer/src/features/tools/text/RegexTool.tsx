@@ -17,6 +17,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn } from '@renderer/lib/utils'
 
 type Mode = 'test' | 'replace' | 'split' | 'explain' | 'cheatsheet'
@@ -106,6 +107,12 @@ export default function RegexTool(): JSX.Element {
           ]}
         />
         <div className="ml-auto flex items-center gap-2">
+          <SaveToBoxButton
+            type="json"
+            content={jsonOut}
+            defaultName="regex-matches.json"
+            disabled={!tested.ok || !jsonOut}
+          />
           <CopyButton text={pattern} label="Copy pattern" />
           <CopyButton text={jsonOut} label="Copy matches" />
         </div>

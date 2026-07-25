@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from 'path'
-import { normalizeRelative } from '../../shared/privatebox/path-utils'
+import { normalizeRelative } from '@shared/secret-box/path-utils'
 import { requireAccess } from './session'
 
 export function resolveVaultPath(relativePath: string): string {

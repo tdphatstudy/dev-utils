@@ -10,6 +10,7 @@ import {
   type FormatId
 } from '@shared/convert/formats'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const SAMPLE_JSON = `{
   "name": "DevUtils",
@@ -96,6 +97,12 @@ export default function ConvertFileExt(): JSX.Element {
         )}
 
         <div className="ml-auto flex gap-2">
+          <SaveToBoxButton
+            type={to === 'json' ? 'json' : 'text'}
+            content={output}
+            defaultName={to === 'json' ? undefined : `converted.${to === 'yaml' ? 'yaml' : 'txt'}`}
+            disabled={!result.ok}
+          />
           <CopyButton text={output} />
           <button
             type="button"

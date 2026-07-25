@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FolderPlus, UserPlus, Shield } from 'lucide-react'
-import type { VaultListItem, VaultMode } from '@shared/privatebox/types'
+import type { VaultListItem, VaultMode } from '@shared/secret-box/types'
 import { cn } from '@renderer/lib/utils'
 
 interface Props {

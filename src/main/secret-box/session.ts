@@ -1,4 +1,4 @@
-import type { VaultConfig, VaultMode } from '../../shared/privatebox/types'
+import type { VaultConfig, VaultMode } from '@shared/secret-box/types'
 
 export interface EphemeralAccess {
   rootPath: string

@@ -6,12 +6,12 @@ import type {
   ImportPlainInput,
   SaveDocumentInput,
   SaveDocumentResult
-} from '../../shared/secret-box/io-types'
-import { getContentKind } from '../../shared/secret-box/content-kinds'
-import type { DocType } from '../../shared/secret-box/types'
-import { ensureExtension, typeFromName } from '../../shared/secret-box/types'
-import * as fsOps from '../privatebox/fs-ops'
-import { getAccess } from '../privatebox/session'
+} from '@shared/secret-box/io-types'
+import { getContentKind } from '@shared/secret-box/content-kinds'
+import type { DocType } from '@shared/secret-box/types'
+import { ensureExtension, typeFromName } from '@shared/secret-box/types'
+import * as fsOps from './fs-ops'
+import { getAccess } from './session'
 import {
   accessVault,
   ensureDefaultSecretBox,
@@ -19,7 +19,7 @@ import {
   getDefaultVaultEntry,
   readVaultConfig,
   setActiveVault
-} from '../privatebox/vault'
+} from './vault'
 
 export async function exportDocPlain(relativePath: string): Promise<ExportPlainResult> {
   const doc = await fsOps.readDoc(relativePath)
@@ -95,10 +95,6 @@ export async function importPlainFromDisk(
   })
 }
 
-/**
- * Save a tool payload into the active box (or default box if none active with access).
- * Caller must have already accessed the box (keyB). If no access, throws NEEDS_ACCESS.
- */
 export async function saveDocument(input: SaveDocumentInput): Promise<SaveDocumentResult> {
   const access = getAccess()
   if (!access) {
@@ -122,7 +118,6 @@ export async function saveDocument(input: SaveDocumentInput): Promise<SaveDocume
   }
 }
 
-/** Prefer default box for tool saves when user has not selected another. */
 export async function prepareDefaultBoxForSave(): Promise<{
   boxId: string
   boxName: string

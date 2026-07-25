@@ -12,6 +12,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn, formatBytes } from '@renderer/lib/utils'
 
 type Mode = 'encode' | 'decode'
@@ -180,6 +181,12 @@ export default function QrTool(): JSX.Element {
               <CopyButton text={dataUrl} label="Copy data URL" />
             </>
           )}
+          <SaveToBoxButton
+            type="text"
+            content={mode === 'decode' ? decoded : text}
+            defaultName={mode === 'decode' ? 'qr-decoded.txt' : 'qr-payload.txt'}
+            disabled={!(mode === 'decode' ? decoded : text).trim()}
+          />
           <CopyButton
             text={mode === 'decode' ? decoded : text}
             label={mode === 'decode' ? 'Copy text' : 'Copy raw'}

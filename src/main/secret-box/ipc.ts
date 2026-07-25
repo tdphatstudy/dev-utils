@@ -2,9 +2,9 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type {
   ImportPlainInput,
   SaveDocumentInput
-} from '../../shared/secret-box/io-types'
-import type { AccessInput, DocType, SetupInput } from '../../shared/privatebox/types'
-import * as exportImport from '../secret-box/export-import'
+} from '@shared/secret-box/io-types'
+import type { AccessInput, DocType, SetupInput } from '@shared/secret-box/types'
+import * as exportImport from './export-import'
 import * as fsOps from './fs-ops'
 import {
   accessVault,
@@ -19,7 +19,7 @@ import {
   setupVault
 } from './vault'
 
-export function registerPrivateBoxIpc(): void {
+export function registerSecretBoxIpc(): void {
   ipcMain.handle('privateBox:getStatus', async () => {
     await ensureDefaultSecretBox()
     return getStatus()
@@ -151,3 +151,6 @@ export function registerPrivateBoxIpc(): void {
     await exportImport.accessDefaultBox(keyB)
   })
 }
+
+/** @deprecated use registerSecretBoxIpc */
+export const registerPrivateBoxIpc = registerSecretBoxIpc

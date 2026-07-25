@@ -6,10 +6,9 @@ import { readFile, stat } from 'fs/promises'
 import { promises as dns } from 'dns'
 import { is } from './env'
 import { performHttpRequest } from './http-request'
-import type { HttpRequestPayload } from '../shared/http/types'
-import { registerPrivateBoxIpc } from './privatebox/ipc'
+import type { HttpRequestPayload } from '@shared/http/types'
+import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
-import { ensureDefaultSecretBox } from './privatebox/vault'
 
 function resolveAppIcon(): string {
   const candidates = [
@@ -45,11 +44,13 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: true
+      webSecurity: true,
+      spellcheck: false,
+      backgroundThrottling: true
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
+  mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
 
@@ -165,7 +166,7 @@ function registerIpc(): void {
     return performHttpRequest(payload)
   })
 
-  registerPrivateBoxIpc()
+  registerSecretBoxIpc()
   registerPortsIpc()
 
   ipcMain.handle('app:platform', () => process.platform)
@@ -186,10 +187,11 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     registerIpc()
+    // Window first — do not block cold start on vault disk I/O
+    createWindow()
     void ensureDefaultSecretBox().catch((e) => {
       console.error('[DevUtils] ensureDefaultSecretBox failed', e)
     })
-    createWindow()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

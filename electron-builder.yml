@@ -4,14 +4,29 @@ copyright: Copyright © DevUtils
 directories:
   output: release
   buildResources: resources
+
+# Smaller app.asar + faster install/extract
+asar: true
+compression: maximum
+
+# Drop unused Chromium/Electron locales from the package
+electronLanguages:
+  - en-US
+
 files:
   - out/**/*
   - package.json
+  - '!**/*.{map,ts,tsx,md}'
+  - '!**/._*'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,readme.md,readme,test,tests,__tests__,docs}/**'
+  - '!**/node_modules/.bin/**'
+
 extraResources:
   - from: resources/icon.png
     to: icon.png
-asar: true
+
 icon: icon.png
+
 win:
   icon: icon.ico
   target:
@@ -19,20 +34,38 @@ win:
       arch:
         - x64
   artifactName: ${productName}-${version}-win-${arch}.${ext}
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  createStartMenuShortcut: true
   shortcutName: DevUtils
+  deleteAppDataOnUninstall: false
+
 mac:
   icon: icon.png
-  target:
-    - dmg
   category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # Signing / notarization require Apple certs — enable when available:
+  # hardenedRuntime: true
+  # gatekeeperAssess: false
+
 linux:
   icon: icon.png
-  target:
-    - AppImage
   category: Development
+  synopsis: Local developer toolbox
+  description: Offline developer utilities — JSON, YAML, crypto, HTTP, Secret Box, Keep.
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
   artifactName: ${productName}-${version}-linux-${arch}.${ext}

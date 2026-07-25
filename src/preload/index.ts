@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { HttpRequestPayload, HttpResponsePayload } from '../shared/http/types'
+import type { HttpRequestPayload, HttpResponsePayload } from '@shared/http/types'
 import type {
   AccessInput,
   DirEntry,
@@ -8,14 +8,14 @@ import type {
   SetupInput,
   VaultListItem,
   VaultStatus
-} from '../shared/privatebox/types'
+} from '@shared/secret-box/types'
 import type {
   ExportPlainResult,
   ImportPlainInput,
   SaveDocumentInput,
   SaveDocumentResult
-} from '../shared/secret-box/io-types'
-import type { PortKillResult, PortListResult } from '../shared/ports/types'
+} from '@shared/secret-box/io-types'
+import type { PortKillResult, PortListResult } from '@shared/ports/types'
 
 export type HashAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
 export type DnsRecordType = 'A' | 'AAAA' | 'MX' | 'TXT' | 'CNAME' | 'NS'

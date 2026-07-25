@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { VaultStatus } from '@shared/privatebox/types'
+import type { VaultStatus } from '@shared/secret-box/types'
 import { SetupWizard } from './SetupWizard'
 import { DesktopLogin } from './DesktopLogin'
 import { DesktopDesktop } from './DesktopDesktop'

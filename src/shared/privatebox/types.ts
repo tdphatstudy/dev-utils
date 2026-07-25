@@ -10,6 +10,6 @@ export type {
   SetupInput,
   AccessInput,
   DocContent
-} from '../secret-box/types'
+} from '@shared/secret-box/types'
 
-export { DOC_EXT, typeFromName, ensureExtension } from '../secret-box/types'
+export { DOC_EXT, typeFromName, ensureExtension } from '@shared/secret-box/types'

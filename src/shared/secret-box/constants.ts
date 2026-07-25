@@ -8,7 +8,7 @@ import {
   SCRYPT_N,
   SCRYPT_P,
   SCRYPT_R
-} from '../core/constants'
+} from '@shared/core/constants'
 
 /** @deprecated Prefer SECRET_BOX_META_DIR — kept for on-disk compat */
 export const VAULT_DIR = SECRET_BOX_META_DIR

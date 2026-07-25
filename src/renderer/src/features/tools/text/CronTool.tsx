@@ -9,6 +9,7 @@ import {
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn } from '@renderer/lib/utils'
 
 export default function CronTool(): JSX.Element {
@@ -50,6 +51,7 @@ export default function CronTool(): JSX.Element {
               onChange={(e) => setCount(Number(e.target.value) || 10)}
             />
           </label>
+          <SaveToBoxButton type="json" content={jsonOut} disabled={!parsed.ok} />
           <CopyButton text={parsed.ok ? expr : ''} label="Copy expr" />
           <CopyButton text={jsonOut} label="Copy JSON" />
         </div>

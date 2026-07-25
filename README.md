@@ -32,9 +32,23 @@ pnpm dev
 ```bash
 pnpm test
 pnpm typecheck
-pnpm pack    # unpacked dir
-pnpm dist    # installer (NSIS / dmg / AppImage)
+pnpm build       # production bundle → out/
+pnpm pack        # unpacked app dir (electron-builder --dir)
+pnpm dist:win    # Windows NSIS (x64)
+pnpm dist:linux  # AppImage + deb (x64)
+pnpm dist:mac    # DMG (x64 + arm64) — run on macOS
+pnpm dist        # win + linux installers
 ```
+
+### Performance packaging
+
+Production builds use:
+
+- **esbuild minify**, no sourcemaps, tree-shake
+- **manual vendor chunks** (react / codemirror / icons / yaml)
+- **React.lazy** tools — CodeMirror loads with tools that need it
+- **asar + compression: maximum**, Electron locales stripped to `en-US`
+- Cold start: window opens before default Secret Box disk setup
 
 ## Stack
 

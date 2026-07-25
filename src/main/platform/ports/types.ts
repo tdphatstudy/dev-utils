@@ -1,4 +1,4 @@
-import type { PortEntry, PortListResult, PortProtocol } from '../../../shared/ports/types'
+import type { PortEntry, PortListResult, PortProtocol } from '@shared/ports/types'
 
 export interface RawListen {
   port: number

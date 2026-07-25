@@ -1,4 +1,4 @@
-import type { HttpRequestPayload, HttpResponsePayload } from '../shared/http/types'
+import type { HttpRequestPayload, HttpResponsePayload } from '@shared/http/types'
 
 export async function performHttpRequest(
   payload: HttpRequestPayload

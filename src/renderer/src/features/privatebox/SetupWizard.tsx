@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FolderOpen, Shield, Smartphone, Globe2 } from 'lucide-react'
-import type { VaultMode } from '@shared/privatebox/types'
+import type { VaultMode } from '@shared/secret-box/types'
 import { cn } from '@renderer/lib/utils'
 
 interface Props {

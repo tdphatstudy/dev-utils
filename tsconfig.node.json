@@ -4,7 +4,8 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      "@main/*": ["src/main/*"]
     },
     "moduleResolution": "bundler",
     "module": "ESNext",

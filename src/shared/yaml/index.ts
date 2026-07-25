@@ -1,5 +1,5 @@
 import YAML from 'yaml'
-import type { JsonValue } from '../json'
+import type { JsonValue } from '@shared/json'
 
 export type YamlParseResult =
   | { ok: true; value: JsonValue; text?: string }

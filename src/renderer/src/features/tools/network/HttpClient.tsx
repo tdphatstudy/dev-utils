@@ -15,6 +15,7 @@ import type {
   KeyValueRow
 } from '@shared/http/types'
 import { cn, formatBytes } from '@renderer/lib/utils'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 type RequestTab = 'params' | 'headers' | 'body'
 type ResponseTab = 'body' | 'headers' | 'code'
@@ -299,10 +300,24 @@ export default function HttpClient(): JSX.Element {
                   <CopyButton text={snippet} label="Copy snippet" />
                 </>
               ) : (
-                <CopyButton
-                  text={responseTab === 'headers' ? responseHeadersJson : prettyBody}
-                  label="Copy"
-                />
+                <>
+                  <SaveToBoxButton
+                    type={
+                      responseTab === 'headers' || prettyBody.trimStart().startsWith('{')
+                        ? 'json'
+                        : 'text'
+                    }
+                    content={responseTab === 'headers' ? responseHeadersJson : prettyBody}
+                    defaultName={
+                      responseTab === 'headers' ? 'http-headers.json' : 'http-response.txt'
+                    }
+                    disabled={!response}
+                  />
+                  <CopyButton
+                    text={responseTab === 'headers' ? responseHeadersJson : prettyBody}
+                    label="Copy"
+                  />
+                </>
               )}
             </div>
           </div>

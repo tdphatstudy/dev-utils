@@ -2,21 +2,21 @@ import { existsSync } from 'fs'
 import { mkdir, readdir, readFile, writeFile } from 'fs/promises'
 import { basename, join, resolve } from 'path'
 import { randomUUID } from 'crypto'
-import { VAULT_CONFIG_VERSION } from '../../shared/core/constants'
-import { PUTL_EXT, SCRYPT_PARAMS, VAULT_CONFIG, VAULT_DIR } from '../../shared/privatebox/constants'
-import { isIgnorableName } from '../../shared/privatebox/path-utils'
+import { VAULT_CONFIG_VERSION } from '@shared/core/constants'
+import { PUTL_EXT, SCRYPT_PARAMS, VAULT_CONFIG, VAULT_DIR } from '@shared/secret-box/constants'
+import { isIgnorableName } from '@shared/secret-box/path-utils'
 import type {
   AccessInput,
   SetupInput,
   VaultConfig,
   VaultListItem,
   VaultStatus
-} from '../../shared/privatebox/types'
+} from '@shared/secret-box/types'
 import {
   defaultSecretBoxPath,
   secretBoxRegistryPath,
   userDataRoot
-} from '../secret-box/paths'
+} from './paths'
 import { deriveLayerKeys, generateSalt } from './crypto'
 import { loadOrCreateDeviceSecret } from './device-secret'
 import { clearAccess, getAccess, setAccess } from './session'
@@ -314,10 +314,6 @@ export function isPutlFile(name: string): boolean {
   return name.toLowerCase().endsWith(PUTL_EXT)
 }
 
-/**
- * Ensure the app default Secret Box exists (device mode, only-PC keyA).
- * Does not open access — user still provides keyB on first use (Keep / save).
- */
 export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
   const root = defaultSecretBoxPath()
   await mkdir(root, { recursive: true })

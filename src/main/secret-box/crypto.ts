@@ -7,9 +7,9 @@ import {
   KDF_DOMAIN_LAYER_B,
   PUTL_ENVELOPE_VERSION,
   SALT_BYTES
-} from '../../shared/core/constants'
-import { SCRYPT_PARAMS } from '../../shared/secret-box/constants'
-import type { DocPayload, PutlEnvelope, VaultMode } from '../../shared/secret-box/types'
+} from '@shared/core/constants'
+import { SCRYPT_PARAMS } from '@shared/secret-box/constants'
+import type { DocPayload, PutlEnvelope, VaultMode } from '@shared/secret-box/types'
 
 export function normalizeKeyPart(s: string): string {
   return s.normalize('NFKC')

@@ -1,4 +1,4 @@
-import type { DocType } from '@shared/privatebox/types'
+import type { DocType } from '@shared/secret-box/types'
 import { resolveContentEditor } from '@renderer/content/editors/registry'
 
 interface Props {

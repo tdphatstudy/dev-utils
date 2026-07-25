@@ -15,9 +15,9 @@ export {
   generateSalt,
   generateDeviceSecret,
   normalizeKeyPart
-} from '../privatebox/crypto'
+} from './crypto'
 
-export { loadOrCreateDeviceSecret } from '../privatebox/device-secret'
+export { loadOrCreateDeviceSecret } from './device-secret'
 
 export {
   getStatus,
@@ -30,10 +30,13 @@ export {
   readRegistry,
   getActiveEntry,
   ensureDefaultSecretBox,
-  getDefaultVaultEntry
-} from '../privatebox/vault'
+  getDefaultVaultEntry,
+  isPutlFile,
+  readVaultConfig
+} from './vault'
 
-export { clearAccess, getAccess, requireAccess, setAccess } from '../privatebox/session'
+export { clearAccess, getAccess, requireAccess, setAccess } from './session'
 
-export * as boxFs from '../privatebox/fs-ops'
+export * as boxFs from './fs-ops'
 export * as boxIo from './export-import'
+export { registerSecretBoxIpc, registerPrivateBoxIpc } from './ipc'

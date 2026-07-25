@@ -1,6 +1,7 @@
-import { PORT_MAX, PORT_MIN, PROTECTED_PIDS } from '../../../shared/core/constants'
-import { classifyPort } from '../../../shared/ports/classify'
-import type { PortEntry, PortKillResult, PortListResult } from '../../../shared/ports/types'
+import { PORT_MAX, PORT_MIN, PROTECTED_PIDS } from '@shared/core/constants'
+import { classifyPort } from '@shared/ports/classify'
+import type { PortEntry, PortKillResult, PortListResult } from '@shared/ports/types'
+import { runCmd } from './exec'
 import { unixPortScanner } from './unix'
 import type { PortScanner, RawListen } from './types'
 import { windowsPortScanner } from './windows'
@@ -43,7 +44,6 @@ export async function listListeningPorts(): Promise<PortListResult> {
   const missing = [...new Set(raw.filter((r) => !r.processName && !procMap.has(r.pid)).map((r) => r.pid))]
   if (missing.length > 0 && scanner.id === 'unix') {
     try {
-      const { runCmd } = await import('./exec')
       const out = await runCmd('ps', ['-o', 'pid=,comm=', '-p', missing.join(',')])
       for (const line of out.split(/\r?\n/)) {
         const m = /^\s*(\d+)\s+(.+)$/.exec(line.trim())

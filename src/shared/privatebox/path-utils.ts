@@ -1,1 +1,1 @@
-export { isIgnorableName, normalizeRelative, joinRelative } from '../secret-box/path-utils'
+export { isIgnorableName, normalizeRelative, joinRelative } from '@shared/secret-box/path-utils'

@@ -1,4 +1,4 @@
-import { PUTL_ENVELOPE_VERSION, VAULT_CONFIG_VERSION } from '../core/constants'
+import { PUTL_ENVELOPE_VERSION, VAULT_CONFIG_VERSION } from '@shared/core/constants'
 import { CONTENT_KIND_IDS, type ContentKindId, getContentKind } from './content-kinds'
 
 export type VaultMode = 'device' | 'portable'

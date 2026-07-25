@@ -3,6 +3,7 @@ import { hashText, type TextHashAlgorithm } from '@shared/crypto/hash'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const ALGOS: TextHashAlgorithm[] = ['SHA-256', 'SHA-512', 'SHA-1', 'MD5']
 
@@ -57,7 +58,8 @@ export default function HashTool(): JSX.Element {
             Not recommended for security-sensitive use
           </span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <SaveToBoxButton type="text" content={digest} defaultName={`hash-${algo}.txt`} disabled={!digest} />
           <CopyButton text={digest} />
         </div>
       </ToolToolbar>

@@ -7,7 +7,7 @@ import {
   Save,
   X
 } from 'lucide-react'
-import type { DirEntry, DocContent, DocType, VaultStatus } from '@shared/privatebox/types'
+import type { DirEntry, DocContent, DocType, VaultStatus } from '@shared/secret-box/types'
 import { NameDialog } from './NameDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TypeFileEditor } from './editors/TypeFileEditor'

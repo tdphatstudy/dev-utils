@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { HardDrive } from 'lucide-react'
-import type { DocType } from '@shared/privatebox/types'
+import type { DocType } from '@shared/secret-box/types'
 import { cn } from '@renderer/lib/utils'
 
 interface Props {

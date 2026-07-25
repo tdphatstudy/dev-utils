@@ -8,7 +8,7 @@ import {
   LogOut,
   Palette
 } from 'lucide-react'
-import type { DirEntry, DocContent } from '@shared/privatebox/types'
+import type { DirEntry, DocContent } from '@shared/secret-box/types'
 import {
   KEEP_COLORS,
   KEEP_FOLDER,
