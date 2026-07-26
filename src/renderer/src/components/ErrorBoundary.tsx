@@ -70,15 +70,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-4 bg-mac-bg p-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mac-danger/10 text-mac-danger">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mac-danger/10 text-mac-danger shadow-[var(--mac-shadow-sm)]">
           <AlertTriangle className="h-7 w-7" strokeWidth={1.6} />
         </div>
         <div className="max-w-md">
-          <h2 className="text-[16px] font-semibold text-mac-label">Something went wrong</h2>
-          <p className="mt-1.5 text-[13px] text-mac-label-secondary">
-            A tool or page crashed. You can retry or return to Home — the rest of the app is fine.
+          <h2 className="text-[16px] font-semibold tracking-tight text-mac-label">
+            Something went wrong
+          </h2>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">
+            A tool or page crashed. Retry or return to Home — the rest of the app is fine.
           </p>
-          <pre className="mt-3 max-h-28 overflow-auto rounded-mac border border-mac-separator bg-mac-surface px-3 py-2 text-left font-mono text-[11px] text-mac-danger">
+          <pre className="mt-3 max-h-28 overflow-auto rounded-mac border border-mac-separator bg-mac-surface px-3 py-2 text-left font-mono text-[11px] text-mac-danger shadow-[var(--mac-shadow-sm)]">
             {error.message || String(error)}
           </pre>
         </div>

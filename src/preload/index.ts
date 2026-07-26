@@ -32,6 +32,10 @@ export interface DnsLookupResult {
   hostname: string
   type: DnsRecordType
   records: unknown
+  /** True when the query succeeded but returned no RRs (ENODATA) or NXDOMAIN (ENOTFOUND) */
+  empty?: boolean
+  code?: string
+  message?: string
 }
 
 const api = {

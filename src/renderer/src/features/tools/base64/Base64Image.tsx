@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { parseImageBase64, imageBytesToDataUrl } from '@shared/base64/image'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -79,7 +80,7 @@ export default function Base64Image(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 p-3">
+      <SplitPane>
         <CodeEditor
           value={text}
           onChange={setText}
@@ -102,7 +103,7 @@ export default function Base64Image(): JSX.Element {
             </div>
           )}
         </div>
-      </div>
+      </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : preview ? 'success' : 'neutral'}>

@@ -24,12 +24,15 @@ import {
   QrCode,
   Radio,
   StickyNote,
+  Code2,
+  FileType2,
   type LucideIcon
 } from 'lucide-react'
 
 export type ToolGroupId =
   | 'json'
   | 'yaml'
+  | 'markup'
   | 'convert'
   | 'base64'
   | 'security'
@@ -59,14 +62,15 @@ export interface ToolDefinition {
 export const toolGroups: ToolGroup[] = [
   { id: 'json', name: 'JSON', icon: Braces, order: 0 },
   { id: 'yaml', name: 'YAML', icon: FileCode2, order: 1 },
-  { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 2 },
-  { id: 'base64', name: 'Base64', icon: Binary, order: 3 },
-  { id: 'security', name: 'Security', icon: Shield, order: 4 },
-  { id: 'network', name: 'Network', icon: Network, order: 5 },
-  { id: 'file', name: 'File', icon: File, order: 6 },
-  { id: 'text', name: 'Text / Dev', icon: Regex, order: 7 },
-  { id: 'privatebox', name: 'Private Box', icon: Vault, order: 8 },
-  { id: 'app', name: 'App', icon: Info, order: 9 }
+  { id: 'markup', name: 'HTML / XML', icon: Code2, order: 2 },
+  { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 3 },
+  { id: 'base64', name: 'Base64', icon: Binary, order: 4 },
+  { id: 'security', name: 'Security', icon: Shield, order: 5 },
+  { id: 'network', name: 'Network', icon: Network, order: 6 },
+  { id: 'file', name: 'File', icon: File, order: 7 },
+  { id: 'text', name: 'Text / Dev', icon: Regex, order: 8 },
+  { id: 'privatebox', name: 'Private Box', icon: Vault, order: 9 },
+  { id: 'app', name: 'App', icon: Info, order: 10 }
 ]
 
 export const tools: ToolDefinition[] = [
@@ -116,6 +120,24 @@ export const tools: ToolDefinition[] = [
     component: lazy(() => import('@renderer/features/tools/yaml/YamlDiff'))
   },
   {
+    id: 'markup.html',
+    group: 'markup',
+    name: 'HTML Studio',
+    description: 'Format, minify, and structurally check HTML',
+    keywords: ['html', 'format', 'beautify', 'minify', 'validate', 'markup'],
+    icon: Code2,
+    component: lazy(() => import('@renderer/features/tools/markup/HtmlStudio'))
+  },
+  {
+    id: 'markup.xml',
+    group: 'markup',
+    name: 'XML Studio',
+    description: 'Format, minify, and validate well-formed XML',
+    keywords: ['xml', 'format', 'beautify', 'minify', 'validate', 'well-formed'],
+    icon: FileType2,
+    component: lazy(() => import('@renderer/features/tools/markup/XmlStudio'))
+  },
+  {
     id: 'convert.file-ext',
     group: 'convert',
     name: 'Convert File Ext',
@@ -132,6 +154,26 @@ export const tools: ToolDefinition[] = [
     ],
     icon: ArrowLeftRight,
     component: lazy(() => import('@renderer/features/tools/convert/ConvertFileExt'))
+  },
+  {
+    id: 'convert.image',
+    group: 'convert',
+    name: 'Image Convert',
+    description: 'PNG / JPEG / WebP convert, resize, and quality',
+    keywords: [
+      'image',
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'resize',
+      'scale',
+      'compress',
+      'convert',
+      'picture'
+    ],
+    icon: ImageIcon,
+    component: lazy(() => import('@renderer/features/tools/convert/ImageConvert'))
   },
   {
     id: 'base64.codec',

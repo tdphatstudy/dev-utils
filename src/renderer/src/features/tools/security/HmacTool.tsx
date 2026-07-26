@@ -79,7 +79,7 @@ export default function HmacTool(): JSX.Element {
             autoComplete="off"
           />
         </div>
-        <div className="grid min-h-0 grid-cols-2 gap-3">
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 [&>*]:min-h-[160px] md:[&>*]:min-h-0">
           <div className="flex min-h-0 flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
               Message

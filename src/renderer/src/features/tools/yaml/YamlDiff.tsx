@@ -88,14 +88,14 @@ export default function YamlDiff(): JSX.Element {
       </ToolToolbar>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)] gap-3 p-3">
-        <div className="grid min-h-0 grid-cols-2 gap-3">
-          <div className="flex min-h-0 flex-col gap-1">
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="flex min-h-[140px] min-w-0 flex-col gap-1 md:min-h-0">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
               Left (A)
             </span>
             <CodeEditor value={left} onChange={setLeft} language="yaml" />
           </div>
-          <div className="flex min-h-0 flex-col gap-1">
+          <div className="flex min-h-[140px] min-w-0 flex-col gap-1 md:min-h-0">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
               Right (B)
             </span>

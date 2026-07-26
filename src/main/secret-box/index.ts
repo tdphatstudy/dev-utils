@@ -17,7 +17,14 @@ export {
   normalizeKeyPart
 } from './crypto'
 
-export { loadOrCreateDeviceSecret } from './device-secret'
+export {
+  loadOrCreateDeviceSecret,
+  resolveDeviceKeyA,
+  listDeviceKeyCandidates,
+  resolveDeviceKeyAForSetup
+} from './device-secret'
+export { resolveHardwareDeviceSecret, collectMachineIdParts } from './machine-id'
+export { atomicWriteFile } from './atomic-write'
 
 export {
   getStatus,

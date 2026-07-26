@@ -244,7 +244,7 @@ export default function QrTool(): JSX.Element {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-2">
         {/* Left */}
         <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
           <div className="border-b border-mac-separator px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">

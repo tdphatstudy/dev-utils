@@ -1,35 +1,27 @@
 import { cn } from '@renderer/lib/utils'
-import logoUrl from '@renderer/assets/logo.png'
 import logoSvg from '@renderer/assets/logo.svg'
 
 interface Props {
   size?: number
   className?: string
   showWordmark?: boolean
-  /**
-   * `auto` — PNG for large (rich lighting), SVG for tiny (crisp glyph)
-   * `png` / `svg` — force a specific asset
-   */
-  variant?: 'auto' | 'svg' | 'png'
+  /** Prefer svg (default) — avoids decoding a ~500KB PNG into GPU/RAM for chrome */
+  variant?: 'svg' | 'png'
+  /** Optional PNG url when variant=png (import only on About / large surfaces) */
+  pngSrc?: string
 }
 
-/**
- * Apple-like continuous corner radius ≈ 22.37% of side
- * (matches macOS / iOS icon mask proportion).
- */
 const APPLE_CORNER = 0.2237
 
 export function AppLogo({
   size = 28,
   className,
   showWordmark = false,
-  variant = 'auto'
+  variant = 'svg',
+  pngSrc
 }: Props): JSX.Element {
-  // PNG master already includes squircle + lighting (use for ≥40px / About / dock-like)
-  // SVG is a crisp flat match for tiny chrome (title bar, sidebar)
-  const usePng = variant === 'png' || (variant === 'auto' && size >= 40)
-  const src = usePng ? logoUrl : logoSvg
-  // SVG is square full art; light continuous-corner clip. PNG already has alpha squircle.
+  const usePng = variant === 'png' && !!pngSrc
+  const src = usePng ? pngSrc! : logoSvg
   const radius = usePng ? 0 : Math.round(size * APPLE_CORNER * 10) / 10
 
   return (
@@ -42,11 +34,11 @@ export function AppLogo({
         aria-hidden
         draggable={false}
         className="shrink-0 select-none"
+        decoding="async"
         style={{
           width: size,
           height: size,
           borderRadius: radius,
-          // Soft modern lift (no heavy plastic shadow)
           boxShadow:
             size >= 48
               ? '0 4px 14px rgba(30, 50, 120, 0.16)'

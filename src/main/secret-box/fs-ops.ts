@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { existsSync } from 'fs'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, rename, rm } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import { getContentKind } from '@shared/secret-box/content-kinds'
 import { PUTL_EXT, VAULT_DIR } from '@shared/secret-box/constants'
@@ -11,6 +11,7 @@ import { openDoc, parseEnvelope, sealDoc, serializeEnvelope } from './crypto'
 import { resolveVaultPath, toRelativeFromRoot } from './vault-paths'
 import { requireAccess } from './session'
 import { isPutlFile } from './vault'
+import { atomicWriteFile } from './atomic-write'
 
 function defaultContentFor(type: DocType): string {
   if (type === 'markdown') {
@@ -117,7 +118,7 @@ export async function writeDoc(relativePath: string, content: string): Promise<D
     content
   }
   const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-  await writeFile(resolveVaultPath(relativePath), serializeEnvelope(envelope), 'utf8')
+  await atomicWriteFile(resolveVaultPath(relativePath), serializeEnvelope(envelope), 'utf8')
   return {
     id: relativePath,
     name: payload.name,
@@ -161,7 +162,7 @@ export async function createFileWithContent(
     content
   }
   const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-  await writeFile(resolveVaultPath(rel), serializeEnvelope(envelope), 'utf8')
+  await atomicWriteFile(resolveVaultPath(rel), serializeEnvelope(envelope), 'utf8')
   return {
     id: rel,
     name: payload.name,
@@ -198,7 +199,7 @@ export async function renameEntry(relativePath: string, newName: string): Promis
       updatedAt: now
     }
     const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-    await writeFile(abs, serializeEnvelope(envelope), 'utf8')
+    await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8')
     return {
       id: relativePath,
       name: logical,

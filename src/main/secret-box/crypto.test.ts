@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createKeyVerifiers,
   deriveLayerKeys,
   generateSalt,
   openDoc,
   parseEnvelope,
   sealDoc,
-  serializeEnvelope
+  serializeEnvelope,
+  verifyKeyVerifiers
 } from './crypto'
 
 describe('secret-box dual-layer crypto', () => {
@@ -36,7 +38,7 @@ describe('secret-box dual-layer crypto', () => {
     expect(doc.content).toBe('hello dual layer')
   })
 
-  it('wrong keys fail at decrypt (no stored verifier)', () => {
+  it('wrong keys fail at decrypt', () => {
     const salt = generateSalt()
     const good = deriveLayerKeys('a', 'b', salt)
     const sealed = sealDoc(good.keyA, good.keyB, 'portable', {
@@ -52,4 +54,18 @@ describe('secret-box dual-layer crypto', () => {
     const badA = deriveLayerKeys('wrong', 'b', salt)
     expect(() => openDoc(badA.keyA, good.keyB, sealed)).toThrow(/Cannot decrypt/)
   })
+
+  it('key verifiers accept good keys and reject bad', () => {
+    const salt = generateSalt()
+    const good = deriveLayerKeys('alpha', 'beta', salt)
+    const auth = createKeyVerifiers(good.keyA, good.keyB)
+    expect(auth.hashA).toBeTruthy()
+    expect(auth.hashB).toBeTruthy()
+    expect(Buffer.from(auth.hashA, 'base64').length).toBe(64)
+    expect(Buffer.from(auth.hashB, 'base64').length).toBe(64)
+    expect(verifyKeyVerifiers(good.keyA, good.keyB, auth)).toBe(true)
+    const bad = deriveLayerKeys('alpha', 'nope', salt)
+    expect(verifyKeyVerifiers(bad.keyA, bad.keyB, auth)).toBe(false)
+  })
 })
+

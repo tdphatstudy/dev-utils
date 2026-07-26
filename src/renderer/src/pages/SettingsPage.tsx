@@ -16,17 +16,22 @@ export function SettingsPage(): JSX.Element {
   const navigate = useNavigate()
 
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-4 sm:p-6">
       <div className="mx-auto max-w-xl space-y-6">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">Settings</h1>
-          <p className="mt-0.5 text-[12px] text-mac-label-secondary">
-            Preferences are stored locally. Session history never includes security tools.
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mac-label-tertiary">
+            Preferences
+          </p>
+          <h1 className="mt-0.5 text-[20px] font-semibold tracking-[-0.02em] text-mac-label">
+            Settings
+          </h1>
+          <p className="mt-1 text-[13px] text-mac-label-secondary">
+            Stored locally on this device. Session history never includes security tools.
           </p>
         </div>
 
-        <section className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
-          <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
             Appearance
           </h2>
           <div className="flex items-center justify-between gap-4">
@@ -53,8 +58,8 @@ export function SettingsPage(): JSX.Element {
           </div>
         </section>
 
-        <section className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
-          <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
             On launch
           </h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -76,9 +81,9 @@ export function SettingsPage(): JSX.Element {
           </div>
         </section>
 
-        <section className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[12px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
               Session history
             </h2>
             <button
@@ -120,16 +125,14 @@ export function SettingsPage(): JSX.Element {
           )}
         </section>
 
-        <section className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
-          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
             Shortcuts
           </h2>
-          <ul className="space-y-1.5 text-[13px] text-mac-label-secondary">
-            <li>
-              <kbd className="rounded border border-mac-separator bg-mac-control px-1.5 font-mono text-[11px]">
-                ⌘/Ctrl+K
-              </kbd>{' '}
-              Open command palette
+          <ul className="space-y-2 text-[13px] text-mac-label-secondary">
+            <li className="flex items-center gap-2">
+              <kbd className="mac-kbd">⌘/Ctrl+K</kbd>
+              <span>Open command palette</span>
             </li>
             <li>Click tree keys to copy JSONPath</li>
             <li>Tree filter box searches path & values</li>

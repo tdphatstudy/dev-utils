@@ -174,7 +174,7 @@ export default function RegexTool(): JSX.Element {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
         {/* Input panel */}
         <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between border-b border-mac-separator px-3 py-1.5">

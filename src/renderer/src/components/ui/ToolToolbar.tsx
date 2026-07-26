@@ -10,7 +10,7 @@ export function ToolToolbar({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-2 border-b border-mac-separator bg-mac-surface/50 px-4 py-2',
+        'flex min-h-[40px] flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-mac-separator bg-mac-surface px-3 py-2 sm:px-4',
         className
       )}
     >
@@ -21,10 +21,12 @@ export function ToolToolbar({
 
 export function ToolStatus({
   children,
-  tone = 'neutral'
+  tone = 'neutral',
+  className
 }: {
   children: React.ReactNode
   tone?: 'neutral' | 'success' | 'danger' | 'warning'
+  className?: string
 }): JSX.Element {
   const color =
     tone === 'success'
@@ -34,5 +36,20 @@ export function ToolStatus({
         : tone === 'warning'
           ? 'text-mac-warning'
           : 'text-mac-label-secondary'
-  return <span className={cn('text-[12px]', color)}>{children}</span>
+
+  const dot =
+    tone === 'success'
+      ? 'bg-mac-success'
+      : tone === 'danger'
+        ? 'bg-mac-danger'
+        : tone === 'warning'
+          ? 'bg-mac-warning'
+          : 'bg-mac-label-tertiary/50'
+
+  return (
+    <span className={cn('inline-flex items-center gap-2 text-[12px] leading-snug', color, className)}>
+      <span className={cn('mac-status-dot', dot)} aria-hidden />
+      <span className={tone === 'neutral' ? 'text-mac-label-secondary' : undefined}>{children}</span>
+    </span>
+  )
 }

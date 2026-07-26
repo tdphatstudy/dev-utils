@@ -69,7 +69,7 @@ export default function AesTool(): JSX.Element {
             Output packs salt + IV + ciphertext as Base64. Use the same password to decrypt.
           </p>
         </div>
-        <div className="grid min-h-0 grid-cols-2 gap-3">
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 [&>*]:min-h-[160px] md:[&>*]:min-h-0">
           <CodeEditor
             value={input}
             onChange={setInput}

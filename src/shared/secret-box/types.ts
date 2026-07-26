@@ -4,6 +4,23 @@ import { CONTENT_KIND_IDS, type ContentKindId, getContentKind } from './content-
 export type VaultMode = 'device' | 'portable'
 export type DocType = ContentKindId
 
+/** Stored key verifiers — never raw keys/passwords */
+export interface VaultAuthConfig {
+  kdf: 'scrypt'
+  params: {
+    N: number
+    r: number
+    p: number
+    keyLen: number
+  }
+  saltA: string
+  saltB: string
+  /** scrypt(layerA || domain, saltA) base64 — 64 bytes */
+  hashA: string
+  /** scrypt(layerB || domain, saltB) base64 — 64 bytes */
+  hashB: string
+}
+
 export interface VaultConfig {
   version: typeof VAULT_CONFIG_VERSION
   mode: VaultMode
@@ -16,6 +33,8 @@ export interface VaultConfig {
   }
   salt: string
   createdAt: string
+  /** Required for new vaults; migrated on first successful unlock for legacy */
+  auth?: VaultAuthConfig
 }
 
 export interface PutlEnvelope {

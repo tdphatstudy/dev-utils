@@ -10,14 +10,34 @@ import type { HttpRequestPayload } from '@shared/http/types'
 import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
 
-function resolveAppIcon(): string {
+/**
+ * Chromium/V8 switches must run before app.ready.
+ * Goal: trim idle footprint for a single-window local toolkit (not a browser).
+ */
+function applyMemorySwitches(): void {
+  // Tiny disk/HTTP caches — toolkit rarely needs multi-MB Chromium caches
+  app.commandLine.appendSwitch('disk-cache-size', String(8 * 1024 * 1024))
+  app.commandLine.appendSwitch('media-cache-size', '1')
+  // Prefer slightly smaller codegen when idle; tools still work normally
+  app.commandLine.appendSwitch('js-flags', '--optimize-for-size')
+  // Single-window app: no benefit from site isolation multi-process bloat
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,SpareRendererForSitePerProcess')
+}
+
+applyMemorySwitches()
+
+function resolveAppIcon(): string | undefined {
+  // Packaged: extraResources → process.resourcesPath
+  // Dev: project resources/ next to out/
   const candidates = [
+    join(process.resourcesPath, 'icon.ico'),
     join(process.resourcesPath, 'icon.png'),
+    join(app.getAppPath(), 'resources', 'icon.ico'),
     join(app.getAppPath(), 'resources', 'icon.png'),
-    join(__dirname, '../../resources/icon.png'),
-    join(__dirname, '../../resources/icon.ico')
+    join(__dirname, '../../resources/icon.ico'),
+    join(__dirname, '../../resources/icon.png')
   ]
-  return candidates.find((p) => existsSync(p)) ?? candidates[2]!
+  return candidates.find((p) => existsSync(p))
 }
 
 function createWindow(): void {
@@ -25,8 +45,8 @@ function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1180,
     height: 760,
-    minWidth: 900,
-    minHeight: 600,
+    minWidth: 720,
+    minHeight: 500,
     show: false,
     title: 'DevUtils',
     icon,
@@ -46,7 +66,11 @@ function createWindow(): void {
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: false,
-      backgroundThrottling: true
+      backgroundThrottling: true,
+      // Code caching improves warm start; default can retain more bytecode
+      v8CacheOptions: 'code',
+      // No extra Blink features / no background network
+      autoplayPolicy: 'user-gesture-required'
     }
   })
 
@@ -130,34 +154,62 @@ function registerIpc(): void {
         throw new Error('Invalid hostname')
       }
       const cleaned = host.replace(/^https?:\/\//i, '').split('/')[0]!.split(':')[0]!
+      const type = payload.recordType
 
-      switch (payload.recordType) {
-        case 'A': {
-          const r = await dns.resolve4(cleaned)
-          return { hostname: cleaned, type: 'A', records: r }
+      /** ENODATA = no records of this type; ENOTFOUND = NXDOMAIN — not app failures */
+      const emptyResult = (code: string, message: string) => ({
+        hostname: cleaned,
+        type,
+        records: [] as unknown[],
+        empty: true as const,
+        code,
+        message
+      })
+
+      try {
+        switch (type) {
+          case 'A': {
+            const r = await dns.resolve4(cleaned)
+            return { hostname: cleaned, type, records: r }
+          }
+          case 'AAAA': {
+            const r = await dns.resolve6(cleaned)
+            return { hostname: cleaned, type, records: r }
+          }
+          case 'MX': {
+            const r = await dns.resolveMx(cleaned)
+            return { hostname: cleaned, type, records: r }
+          }
+          case 'TXT': {
+            const r = await dns.resolveTxt(cleaned)
+            return {
+              hostname: cleaned,
+              type,
+              records: r.map((x) => x.join(''))
+            }
+          }
+          case 'CNAME': {
+            const r = await dns.resolveCname(cleaned)
+            return { hostname: cleaned, type, records: r }
+          }
+          case 'NS': {
+            const r = await dns.resolveNs(cleaned)
+            return { hostname: cleaned, type, records: r }
+          }
+          default:
+            throw new Error('Unsupported record type')
         }
-        case 'AAAA': {
-          const r = await dns.resolve6(cleaned)
-          return { hostname: cleaned, type: 'AAAA', records: r }
+      } catch (e) {
+        const err = e as NodeJS.ErrnoException
+        const code = err.code ?? 'DNS_ERROR'
+        if (code === 'ENODATA' || code === 'ENOTFOUND') {
+          const message =
+            code === 'ENODATA'
+              ? `No ${type} records for ${cleaned}`
+              : `Host not found: ${cleaned}`
+          return emptyResult(code, message)
         }
-        case 'MX': {
-          const r = await dns.resolveMx(cleaned)
-          return { hostname: cleaned, type: 'MX', records: r }
-        }
-        case 'TXT': {
-          const r = await dns.resolveTxt(cleaned)
-          return { hostname: cleaned, type: 'TXT', records: r.map((x) => x.join('')) }
-        }
-        case 'CNAME': {
-          const r = await dns.resolveCname(cleaned)
-          return { hostname: cleaned, type: 'CNAME', records: r }
-        }
-        case 'NS': {
-          const r = await dns.resolveNs(cleaned)
-          return { hostname: cleaned, type: 'NS', records: r }
-        }
-        default:
-          throw new Error('Unsupported record type')
+        throw e
       }
     }
   )

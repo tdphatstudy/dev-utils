@@ -24,12 +24,18 @@ files:
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
 
+# Root icon for all platforms (buildResources = resources/)
 icon: icon.png
+
+# Embed custom icon into .exe without winCodeSign (see scripts/after-pack.mjs)
+afterPack: scripts/after-pack.mjs
 
 win:
   icon: icon.ico
-  # Unsigned local builds: skip winCodeSign (needs symlink privilege / Developer Mode on Windows)
+  # Skip winCodeSign rcedit (symlink privilege on Windows); icon applied in afterPack
   signAndEditExecutable: false
   target:
     - target: nsis

@@ -1,15 +1,33 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual
+} from 'crypto'
 import {
   AES_GCM_IV_BYTES,
   AES_GCM_TAG_BYTES,
   DEVICE_SECRET_BYTES,
   KDF_DOMAIN_LAYER_A,
   KDF_DOMAIN_LAYER_B,
+  KDF_DOMAIN_VERIFY_A,
+  KDF_DOMAIN_VERIFY_B,
   PUTL_ENVELOPE_VERSION,
-  SALT_BYTES
+  SALT_BYTES,
+  VERIFY_HASH_LEN,
+  VERIFY_SCRYPT_MAXMEM,
+  VERIFY_SCRYPT_N,
+  VERIFY_SCRYPT_P,
+  VERIFY_SCRYPT_R
 } from '@shared/core/constants'
 import { SCRYPT_PARAMS } from '@shared/secret-box/constants'
-import type { DocPayload, PutlEnvelope, VaultMode } from '@shared/secret-box/types'
+import type {
+  DocPayload,
+  PutlEnvelope,
+  VaultAuthConfig,
+  VaultMode
+} from '@shared/secret-box/types'
 
 export function normalizeKeyPart(s: string): string {
   return s.normalize('NFKC')
@@ -62,6 +80,8 @@ export function sealDoc(
   mode: VaultMode,
   payload: DocPayload
 ): PutlEnvelope {
+  // `salt` on the envelope is reserved/unused for key derivation (keys come from vault salt).
+  // Kept for envelope shape compatibility with existing .putl files.
   const fileSalt = generateSalt()
   const plain = Buffer.from(JSON.stringify(payload), 'utf8')
   const layer1 = encryptBuffer(keyA, plain)
@@ -112,4 +132,80 @@ export function parseEnvelope(text: string): PutlEnvelope {
 
 export function generateDeviceSecret(): string {
   return randomBytes(DEVICE_SECRET_BYTES).toString('base64')
+}
+
+function verifyHash(layerKey: Buffer, domain: string, salt: Buffer): Buffer {
+  const material = Buffer.concat([layerKey, Buffer.from(`\0${domain}`, 'utf8')])
+  return scryptSync(material, salt, VERIFY_HASH_LEN, {
+    N: VERIFY_SCRYPT_N,
+    r: VERIFY_SCRYPT_R,
+    p: VERIFY_SCRYPT_P,
+    maxmem: VERIFY_SCRYPT_MAXMEM
+  })
+}
+
+/** Build disk verifiers from derived layer keys (never store layer keys). */
+export function createKeyVerifiers(layerA: Buffer, layerB: Buffer): VaultAuthConfig {
+  const saltA = generateSalt()
+  const saltB = generateSalt()
+  const hashA = verifyHash(layerA, KDF_DOMAIN_VERIFY_A, saltA)
+  const hashB = verifyHash(layerB, KDF_DOMAIN_VERIFY_B, saltB)
+  return {
+    kdf: 'scrypt',
+    params: {
+      N: VERIFY_SCRYPT_N,
+      r: VERIFY_SCRYPT_R,
+      p: VERIFY_SCRYPT_P,
+      keyLen: VERIFY_HASH_LEN
+    },
+    saltA: saltA.toString('base64'),
+    saltB: saltB.toString('base64'),
+    hashA: hashA.toString('base64'),
+    hashB: hashB.toString('base64')
+  }
+}
+
+export function verifyKeyVerifiers(
+  layerA: Buffer,
+  layerB: Buffer,
+  auth: VaultAuthConfig
+): boolean {
+  try {
+    const saltA = Buffer.from(auth.saltA, 'base64')
+    const saltB = Buffer.from(auth.saltB, 'base64')
+    const expectA = Buffer.from(auth.hashA, 'base64')
+    const expectB = Buffer.from(auth.hashB, 'base64')
+    if (expectA.length !== VERIFY_HASH_LEN || expectB.length !== VERIFY_HASH_LEN) return false
+
+    const n = auth.params?.N ?? VERIFY_SCRYPT_N
+    const r = auth.params?.r ?? VERIFY_SCRYPT_R
+    const p = auth.params?.p ?? VERIFY_SCRYPT_P
+    const keyLen = auth.params?.keyLen ?? VERIFY_HASH_LEN
+
+    const scryptOpts = { N: n, r, p, maxmem: VERIFY_SCRYPT_MAXMEM }
+    const gotA = scryptSync(
+      Buffer.concat([layerA, Buffer.from(`\0${KDF_DOMAIN_VERIFY_A}`, 'utf8')]),
+      saltA,
+      keyLen,
+      scryptOpts
+    )
+    const gotB = scryptSync(
+      Buffer.concat([layerB, Buffer.from(`\0${KDF_DOMAIN_VERIFY_B}`, 'utf8')]),
+      saltB,
+      keyLen,
+      scryptOpts
+    )
+    if (gotA.length !== expectA.length || gotB.length !== expectB.length) return false
+    const okA = timingSafeEqual(gotA, expectA)
+    const okB = timingSafeEqual(gotB, expectB)
+    return okA && okB
+  } catch {
+    return false
+  }
+}
+
+export function authError(name: string, message: string): Error {
+  const e = new Error(message)
+  e.name = name
+  return e
 }

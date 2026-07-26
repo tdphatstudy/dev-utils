@@ -15,3 +15,16 @@ export const VAULT_CONFIG_VERSION = 1 as const
 
 export const KDF_DOMAIN_LAYER_A = 'putl-layer-a'
 export const KDF_DOMAIN_LAYER_B = 'putl-layer-b'
+export const KDF_DOMAIN_VERIFY_A = 'putl-verify-a'
+export const KDF_DOMAIN_VERIFY_B = 'putl-verify-b'
+
+/** Second-pass scrypt on derived layer keys — heavier than file-key scrypt (N=2^14) */
+export const VERIFY_SCRYPT_N = 131_072 // 2^17
+export const VERIFY_SCRYPT_R = 8
+export const VERIFY_SCRYPT_P = 1
+export const VERIFY_HASH_LEN = 64 // 512-bit verifier output
+/** OpenSSL default maxmem is too low for high-N scrypt */
+export const VERIFY_SCRYPT_MAXMEM = 256 * 1024 * 1024
+
+export const MAX_AUTH_FAILURES = 5
+export const AUTH_LOCKOUT_MS = 5 * 60 * 1000

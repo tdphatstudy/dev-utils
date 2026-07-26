@@ -9,9 +9,10 @@ import {
   tools,
   type ToolDefinition
 } from '@renderer/registry/tools'
-import { cn } from '@renderer/lib/utils'
+import { cn, modShortcut } from '@renderer/lib/utils'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import { CrashBanner } from '@renderer/components/CrashBanner'
+import { LoadingState } from '@renderer/components/ui/LoadingState'
 
 const LAUNCH_FLAG = 'devutils-session-launched'
 
@@ -24,9 +25,12 @@ export function HomePage(): JSX.Element {
   const setCommandOpen = useAppStore((s) => s.setCommandOpen)
   const [query, setQuery] = useState('')
   const [ready, setReady] = useState(false)
+  const [platform, setPlatform] = useState('win32')
 
-  // Once per app session: if launchMode is "last", resume previous tool.
-  // Manual visits to Home later stay on Home.
+  useEffect(() => {
+    window.devutils?.platform().then(setPlatform).catch(() => undefined)
+  }, [])
+
   useEffect(() => {
     try {
       if (sessionStorage.getItem(LAUNCH_FLAG) === '1') {
@@ -77,29 +81,33 @@ export function HomePage(): JSX.Element {
       .filter((g) => g.tools.length > 0)
   }, [filtered])
 
+  const shortcut = modShortcut('K', platform === 'darwin' ? 'Mac' : platform)
+
   if (!ready) {
-    return (
-      <div className="flex h-full items-center justify-center text-[13px] text-mac-label-tertiary">
-        Loading…
-      </div>
-    )
+    return <LoadingState label="Starting…" />
   }
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto max-w-3xl px-6 py-10">
-        <div className="mb-8 flex items-start gap-4">
-          <AppLogo size={56} variant="png" />
-          <div className="min-w-0 pt-1">
-            <h1 className="text-[22px] font-semibold tracking-tight text-mac-label">DevUtils</h1>
-            <p className="mt-1 text-[13px] text-mac-label-secondary">
-              Local developer tools — pick a tool or press{' '}
+      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 xl:max-w-5xl">
+        <div className="mb-6 flex items-start gap-3 sm:mb-8 sm:gap-4">
+          <AppLogo size={56} className="hidden sm:flex" />
+          <AppLogo size={40} className="sm:hidden" />
+          <div className="min-w-0 pt-0.5 sm:pt-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mac-label-tertiary">
+              Local toolbox
+            </p>
+            <h1 className="mt-0.5 text-[24px] font-semibold tracking-[-0.02em] text-mac-label sm:text-[26px]">
+              DevUtils
+            </h1>
+            <p className="mt-1 text-[13px] leading-relaxed text-mac-label-secondary">
+              Everything runs on this device — pick a tool or press{' '}
               <button
                 type="button"
-                className="rounded border border-mac-separator bg-mac-control px-1.5 font-mono text-[11px] hover:bg-mac-control-hover"
+                className="mac-kbd align-middle transition-colors hover:border-mac-accent/40"
                 onClick={() => setCommandOpen(true)}
               >
-                ⌘K
+                {shortcut}
               </button>
             </p>
           </div>
@@ -108,10 +116,10 @@ export function HomePage(): JSX.Element {
         <CrashBanner />
 
         <div className="relative mb-8">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mac-label-tertiary" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mac-label-tertiary" />
           <input
             autoFocus
-            className="mac-input !h-11 pl-10 text-[15px]"
+            className="mac-input !h-12 rounded-mac-xl pl-10 pr-16 text-[15px] shadow-[var(--mac-shadow-sm)]"
             placeholder="Search tools… JSON, regex, JWT, QR, HTTP…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -119,15 +127,28 @@ export function HomePage(): JSX.Element {
               if (e.key === 'Enter' && filtered[0]) openTool(filtered[0].id)
             }}
           />
+          {query ? (
+            <button
+              type="button"
+              className="mac-btn-ghost absolute right-1.5 top-1/2 h-8 -translate-y-1/2 !px-2 text-[12px]"
+              onClick={() => setQuery('')}
+            >
+              Clear
+            </button>
+          ) : (
+            <kbd className="mac-kbd pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              {shortcut}
+            </kbd>
+          )}
         </div>
 
         {!query && recent.length > 0 && (
           <section className="mb-8">
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
+            <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
               <Clock3 className="h-3.5 w-3.5" />
               Recent
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {recent.map((tool) => (
                 <ToolCard key={tool.id} tool={tool} onOpen={openTool} recent />
               ))}
@@ -137,13 +158,22 @@ export function HomePage(): JSX.Element {
 
         {query ? (
           <section>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
+            <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
               Results · {filtered.length}
             </div>
             {filtered.length === 0 ? (
-              <p className="text-[13px] text-mac-label-tertiary">No tools match “{query}”</p>
+              <div className="flex flex-col items-center justify-center rounded-mac-xl border border-dashed border-mac-separator px-6 py-14 text-center">
+                <Search className="mb-3 h-8 w-8 text-mac-label-tertiary opacity-50" strokeWidth={1.4} />
+                <p className="text-[14px] font-medium text-mac-label">No tools match “{query}”</p>
+                <p className="mt-1 text-[12px] text-mac-label-secondary">
+                  Try another keyword or clear the search.
+                </p>
+                <button type="button" className="mac-btn-secondary mt-4" onClick={() => setQuery('')}>
+                  Clear search
+                </button>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {filtered.map((tool) => (
                   <ToolCard key={tool.id} tool={tool} onOpen={openTool} />
                 ))}
@@ -156,11 +186,11 @@ export function HomePage(): JSX.Element {
               const Icon = g.icon
               return (
                 <section key={g.id}>
-                  <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
+                  <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
                     <Icon className="h-3.5 w-3.5" />
                     {g.name}
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {g.tools.map((tool) => (
                       <ToolCard key={tool.id} tool={tool} onOpen={openTool} />
                     ))}
@@ -173,8 +203,7 @@ export function HomePage(): JSX.Element {
 
         <p className="mt-10 flex items-start gap-1.5 text-[11px] leading-relaxed text-mac-label-tertiary">
           <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Default on launch is Home (best for multi-tool workflows). Prefer always resuming your last
-          tool? Settings → On launch.
+          Default on launch is Home. Prefer resuming your last tool? Settings → On launch.
         </p>
       </div>
     </div>
@@ -192,24 +221,14 @@ function ToolCard({
 }): JSX.Element {
   const Icon = tool.icon
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(tool.id)}
-      className={cn(
-        'flex items-start gap-3 rounded-mac-xl border border-mac-separator bg-mac-surface px-3.5 py-3 text-left shadow-sm transition-all',
-        'hover:border-mac-accent/30 hover:bg-mac-accent-soft/40 hover:shadow-mac'
-      )}
-    >
-      <span
-        className={cn(
-          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-mac',
-          recent ? 'bg-mac-accent/15 text-mac-accent' : 'bg-mac-control text-mac-label-secondary'
-        )}
-      >
+    <button type="button" onClick={() => onOpen(tool.id)} className="mac-card flex items-start gap-3 px-3.5 py-3">
+      <span className={cn(recent ? 'mac-icon-tile-accent' : 'mac-icon-tile')}>
         <Icon className="h-4 w-4" strokeWidth={1.75} />
       </span>
       <span className="min-w-0">
-        <span className="block text-[13px] font-semibold text-mac-label">{tool.name}</span>
+        <span className="block text-[13px] font-semibold tracking-tight text-mac-label">
+          {tool.name}
+        </span>
         <span className="mt-0.5 line-clamp-2 block text-[11px] leading-snug text-mac-label-secondary">
           {tool.description}
         </span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Shield, Keyboard, WifiOff } from 'lucide-react'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
+import logoPng from '@renderer/assets/logo.png'
 
 export function AboutPage(): JSX.Element {
   const [version, setVersion] = useState('0.1.0')
@@ -12,10 +13,11 @@ export function AboutPage(): JSX.Element {
   }, [])
 
   return (
-    <div className="h-full overflow-auto p-8">
+    <div className="h-full overflow-auto p-4 sm:p-8">
       <div className="mx-auto max-w-xl">
-        <div className="flex items-center gap-4">
-          <AppLogo size={64} />
+        <div className="flex items-center gap-3 sm:gap-4">
+          <AppLogo size={64} variant="png" pngSrc={logoPng} className="hidden sm:flex" />
+          <AppLogo size={48} variant="png" pngSrc={logoPng} className="sm:hidden" />
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-mac-label">DevUtils</h1>
             <p className="mt-1 text-[13px] text-mac-label-secondary">
@@ -34,7 +36,7 @@ export function AboutPage(): JSX.Element {
           <Card
             icon={<Shield className="h-4 w-4 text-mac-success" />}
             title="Secure defaults"
-            body="Passwords and random values use Web Crypto CSPRNG. Secrets stay local and are not written to disk. JWT can decode, verify (HS/RS/ES), and sign HS tokens on-device."
+            body="Passwords and random values use Web Crypto CSPRNG. JWT can decode, verify (HS/RS/ES), and sign HS tokens on-device. Secret Box uses dual-layer AES-GCM; device mode binds key A to this machine’s hardware id (board/CPU/UUID) so reinstalling the OS on the same PC can still unlock — portable mode uses two passwords you choose."
           />
           <Card
             icon={<Keyboard className="h-4 w-4 text-mac-warning" />}

@@ -7,8 +7,9 @@
   --mac-surface: #ffffff;
   --mac-raised: #ffffff;
   --mac-overlay: rgba(255, 255, 255, 0.72);
-  --mac-sidebar: rgba(246, 246, 246, 0.85);
-  --mac-separator: rgba(0, 0, 0, 0.1);
+  --mac-sidebar: #f0f0f2;
+  --mac-separator: rgba(0, 0, 0, 0.09);
+  --mac-hairline: rgba(0, 0, 0, 0.06);
   --mac-label: #1d1d1f;
   --mac-label-secondary: #6e6e73;
   --mac-label-tertiary: #86868b;
@@ -20,7 +21,14 @@
   --mac-danger: #ff3b30;
   --mac-success: #34c759;
   --mac-warning: #ff9f0a;
+  --mac-focus-ring: rgba(0, 122, 255, 0.35);
+  --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --mac-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --mac-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
   --titlebar-height: 48px;
+  --ease-mac: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
 }
 
 .dark {
@@ -28,19 +36,24 @@
   --mac-surface: #2c2c2e;
   --mac-raised: #3a3a3c;
   --mac-overlay: rgba(44, 44, 46, 0.78);
-  --mac-sidebar: rgba(28, 28, 30, 0.92);
-  --mac-separator: rgba(255, 255, 255, 0.08);
+  --mac-sidebar: #1c1c1e;
+  --mac-separator: rgba(255, 255, 255, 0.1);
+  --mac-hairline: rgba(255, 255, 255, 0.06);
   --mac-label: #f5f5f7;
   --mac-label-secondary: #a1a1a6;
   --mac-label-tertiary: #6e6e73;
   --mac-accent: #0a84ff;
   --mac-accent-hover: #409cff;
-  --mac-accent-soft: rgba(10, 132, 255, 0.18);
+  --mac-accent-soft: rgba(10, 132, 255, 0.2);
   --mac-control: rgba(255, 255, 255, 0.08);
   --mac-control-hover: rgba(255, 255, 255, 0.12);
   --mac-danger: #ff453a;
   --mac-success: #30d158;
   --mac-warning: #ffd60a;
+  --mac-focus-ring: rgba(10, 132, 255, 0.45);
+  --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --mac-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --mac-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -61,7 +74,9 @@ body {
   background: var(--mac-bg);
   color: var(--mac-label);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   user-select: none;
+  letter-spacing: -0.01em;
 }
 
 .selectable,
@@ -83,25 +98,25 @@ pre,
   app-region: no-drag;
 }
 
+/* Overlay-style scrollbars (macOS-like) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.35);
+  background: rgba(128, 128, 128, 0.28);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.55);
+  background: rgba(128, 128, 128, 0.48);
   background-clip: content-box;
 }
 
-/* Notion-like empty block placeholder (browsers often leave a lone <br>) */
 [contenteditable][data-placeholder]:empty:before,
 [contenteditable][data-placeholder]:has(> br:only-child):before {
   content: attr(data-placeholder);
@@ -112,28 +127,188 @@ pre,
 
 @layer components {
   .mac-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-mac px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 ease-mac;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-mac px-3 py-1.5 text-[13px] font-medium;
+    transition:
+      background-color var(--duration-fast) var(--ease-mac),
+      color var(--duration-fast) var(--ease-mac),
+      box-shadow var(--duration-fast) var(--ease-mac),
+      transform var(--duration-fast) var(--ease-mac),
+      opacity var(--duration-fast) var(--ease-mac);
   }
+  .mac-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .mac-btn:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+  .mac-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--mac-focus-ring);
+  }
+
   .mac-btn-primary {
     @apply mac-btn bg-mac-accent text-white hover:bg-mac-accent-hover;
+    box-shadow: 0 1px 2px rgba(0, 122, 255, 0.25);
   }
+  .dark .mac-btn-primary {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+
   .mac-btn-secondary {
     @apply mac-btn bg-mac-control text-mac-label hover:bg-mac-control-hover;
   }
+
   .mac-btn-ghost {
     @apply mac-btn bg-transparent text-mac-label-secondary hover:bg-mac-control hover:text-mac-label;
   }
+
   .mac-input {
-    @apply w-full rounded-mac border border-mac-separator bg-mac-control px-3 py-1.5 text-[13px] text-mac-label outline-none transition-shadow placeholder:text-mac-label-tertiary focus:border-mac-accent focus:ring-2;
-    --tw-ring-color: var(--mac-accent-soft);
+    @apply w-full rounded-mac border border-mac-separator bg-mac-control px-3 py-1.5 text-[13px] text-mac-label outline-none placeholder:text-mac-label-tertiary;
+    transition:
+      border-color var(--duration-fast) var(--ease-mac),
+      box-shadow var(--duration-fast) var(--ease-mac),
+      background-color var(--duration-fast) var(--ease-mac);
   }
+  .mac-input:focus {
+    border-color: var(--mac-accent);
+    box-shadow: 0 0 0 3px var(--mac-accent-soft);
+    background: var(--mac-surface);
+  }
+
   .mac-segment {
     @apply inline-flex rounded-mac bg-mac-control p-0.5;
   }
   .mac-segment-item {
-    @apply rounded-[6px] px-3 py-1 text-[12px] font-medium text-mac-label-secondary transition-all;
+    @apply rounded-[6px] px-3 py-1 text-[12px] font-medium text-mac-label-secondary;
+    transition:
+      background-color var(--duration-fast) var(--ease-mac),
+      color var(--duration-fast) var(--ease-mac),
+      box-shadow var(--duration-fast) var(--ease-mac);
   }
   .mac-segment-item[data-active='true'] {
-    @apply bg-mac-surface text-mac-label shadow-sm dark:bg-mac-raised;
+    @apply bg-mac-surface text-mac-label dark:bg-mac-raised;
+    box-shadow: var(--mac-shadow-sm);
+  }
+  .mac-segment-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--mac-focus-ring);
+  }
+
+  /* Surface cards (Home, dialogs) */
+  .mac-card {
+    @apply rounded-mac-xl border border-mac-separator bg-mac-surface text-left;
+    box-shadow: var(--mac-shadow-sm);
+    transition:
+      border-color var(--duration-fast) var(--ease-mac),
+      box-shadow var(--duration-normal) var(--ease-mac),
+      transform var(--duration-fast) var(--ease-mac),
+      background-color var(--duration-fast) var(--ease-mac);
+  }
+  .mac-card:hover {
+    border-color: color-mix(in srgb, var(--mac-accent) 28%, var(--mac-separator));
+    box-shadow: var(--mac-shadow-md);
+  }
+  .mac-card:active {
+    transform: scale(0.99);
+  }
+  .mac-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--mac-focus-ring);
+  }
+
+  /* Sidebar / nav rows */
+  .mac-nav-item {
+    @apply flex items-center gap-2.5 rounded-mac px-2.5 py-[7px] text-[13px];
+    transition:
+      background-color var(--duration-fast) var(--ease-mac),
+      color var(--duration-fast) var(--ease-mac);
+  }
+  .mac-nav-item:hover {
+    @apply bg-mac-control text-mac-label;
+  }
+  .mac-nav-item[data-active='true'],
+  .mac-nav-item-active {
+    @apply bg-mac-accent-soft font-medium text-mac-accent;
+  }
+  .mac-nav-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--mac-focus-ring);
+  }
+
+  .mac-icon-tile {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-mac-control text-mac-label-secondary;
+  }
+  .mac-icon-tile-accent {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-mac-accent-soft text-mac-accent;
+  }
+
+  .mac-kbd {
+    @apply rounded border border-mac-separator bg-mac-surface px-1.5 py-0.5 font-mono text-[10px] text-mac-label-secondary;
+    box-shadow: 0 1px 0 var(--mac-hairline);
+  }
+
+  .mac-chip {
+    @apply inline-flex items-center rounded-full bg-mac-control px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mac-label-secondary;
+  }
+
+  .mac-status-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  /* Spotlight / sheet enter */
+  .mac-sheet-enter {
+    animation: mac-sheet-in var(--duration-normal) var(--ease-mac) both;
+  }
+  .mac-overlay-enter {
+    animation: mac-fade-in var(--duration-fast) var(--ease-mac) both;
+  }
+}
+
+@keyframes mac-sheet-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes mac-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mac-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--mac-separator);
+  border-top-color: var(--mac-accent);
+  border-radius: 50%;
+  animation: mac-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .mac-btn:active:not(:disabled),
+  .mac-card:active {
+    transform: none;
   }
 }

@@ -133,43 +133,46 @@ export default function HttpClient(): JSX.Element {
 
   return (
     <div className="flex h-full flex-col">
-      <ToolToolbar className="!flex-nowrap gap-2">
-        <select
-          className={cn(
-            'mac-input !w-[110px] shrink-0 !py-1.5 font-mono text-[12px] font-semibold',
-            methodColor(method)
-          )}
-          value={method}
-          onChange={(e) => onMethodChange(e.target.value as HttpMethod)}
-        >
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <input
-          className="mac-input min-w-0 flex-1 font-mono text-[13px]"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://api.example.com/v1/…"
-          spellCheck={false}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send()
-          }}
-        />
-        <button
-          type="button"
-          className="mac-btn-primary shrink-0 !px-4"
-          disabled={busy || !url.trim()}
-          onClick={() => void send()}
-        >
-          <Send className="h-3.5 w-3.5" />
-          {busy ? 'Sending…' : 'Send'}
-        </button>
+      <ToolToolbar className="gap-2">
+        <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
+          <select
+            className={cn(
+              'mac-input !w-[100px] shrink-0 !py-1.5 font-mono text-[12px] font-semibold sm:!w-[110px]',
+              methodColor(method)
+            )}
+            value={method}
+            onChange={(e) => onMethodChange(e.target.value as HttpMethod)}
+          >
+            {METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <input
+            className="mac-input min-w-0 flex-1 basis-[12rem] font-mono text-[13px]"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://api.example.com/v1/…"
+            spellCheck={false}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send()
+            }}
+          />
+          <button
+            type="button"
+            className="mac-btn-primary shrink-0 !px-3 sm:!px-4"
+            disabled={busy || !url.trim()}
+            onClick={() => void send()}
+          >
+            <Send className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{busy ? 'Sending…' : 'Send'}</span>
+            <span className="sm:hidden">{busy ? '…' : 'Go'}</span>
+          </button>
+        </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-mac-separator">
+      <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-mac-separator md:min-h-0">
         <section className="flex min-h-0 flex-col">
           <div className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
             <TabBtn active={requestTab === 'params'} onClick={() => setRequestTab('params')}>
@@ -185,7 +188,7 @@ export default function HttpClient(): JSX.Element {
             >
               Body
             </TabBtn>
-            <span className="ml-auto pr-2 text-[11px] text-mac-label-tertiary">
+            <span className="ml-auto hidden pr-2 text-[11px] text-mac-label-tertiary sm:inline">
               ⌘/Ctrl+Enter to send
             </span>
           </div>

@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { mkdir, readdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile } from 'fs/promises'
 import { basename, join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { VAULT_CONFIG_VERSION } from '@shared/core/constants'
@@ -17,8 +17,26 @@ import {
   secretBoxRegistryPath,
   userDataRoot
 } from './paths'
-import { deriveLayerKeys, generateSalt } from './crypto'
-import { loadOrCreateDeviceSecret } from './device-secret'
+import {
+  assertNotLocked,
+  clearAuthFailures,
+  recordAuthFailure
+} from './auth-rate'
+import {
+  authError,
+  createKeyVerifiers,
+  deriveLayerKeys,
+  generateSalt,
+  openDoc,
+  parseEnvelope,
+  verifyKeyVerifiers
+} from './crypto'
+import {
+  listDeviceKeyCandidates,
+  loadOrCreateDeviceSecret,
+  cacheDeviceSecretHint
+} from './device-secret'
+import { atomicWriteFile, backupFile } from './atomic-write'
 import { clearAccess, getAccess, setAccess } from './session'
 
 interface VaultRegistryEntry {
@@ -82,7 +100,7 @@ export async function readRegistry(): Promise<VaultRegistry> {
 
 async function writeRegistry(reg: VaultRegistry): Promise<void> {
   await mkdir(userDataRoot(), { recursive: true })
-  await writeFile(registryPath(), JSON.stringify(reg, null, 2), 'utf8')
+  await atomicWriteFile(registryPath(), JSON.stringify(reg, null, 2), 'utf8')
 }
 
 export async function isDirectoryEmpty(dir: string): Promise<boolean> {
@@ -176,6 +194,7 @@ export async function setupVault(input: SetupInput): Promise<void> {
   }
 
   const keys = deriveLayerKeys(keyA, input.keyB, salt)
+  const auth = createKeyVerifiers(keys.keyA, keys.keyB)
   const config: VaultConfig = {
     version: VAULT_CONFIG_VERSION,
     mode: input.mode,
@@ -187,11 +206,12 @@ export async function setupVault(input: SetupInput): Promise<void> {
       keyLen: SCRYPT_PARAMS.keyLen
     },
     salt: salt.toString('base64'),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    auth
   }
 
   await mkdir(join(root, VAULT_DIR), { recursive: true })
-  await writeFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8')
+  await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8')
 
   const reg = await readRegistry()
   const existing = reg.vaults.find((v) => resolve(v.rootPath) === root)
@@ -209,6 +229,7 @@ export async function setupVault(input: SetupInput): Promise<void> {
     reg.activeId = entry.id
   }
   await writeRegistry(reg)
+  await clearAuthFailures(root)
 
   setAccess({
     rootPath: root,
@@ -219,29 +240,173 @@ export async function setupVault(input: SetupInput): Promise<void> {
   })
 }
 
+async function vaultHasPutlFiles(root: string): Promise<boolean> {
+  async function walk(dir: string): Promise<boolean> {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    for (const ent of entries) {
+      if (ent.name === VAULT_DIR || ent.name.startsWith('.')) continue
+      const full = join(dir, ent.name)
+      if (ent.isDirectory()) {
+        if (await walk(full)) return true
+      } else if (ent.isFile() && isPutlFile(ent.name)) {
+        return true
+      }
+    }
+    return false
+  }
+  return walk(root)
+}
+
+/** Collect up to `limit` .putl paths for key proof. */
+async function collectPutlPaths(root: string, limit = 5): Promise<string[]> {
+  const found: string[] = []
+  async function walk(dir: string): Promise<void> {
+    if (found.length >= limit) return
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const ent of entries) {
+      if (found.length >= limit) return
+      if (ent.name === VAULT_DIR || ent.name.startsWith('.')) continue
+      const full = join(dir, ent.name)
+      if (ent.isDirectory()) await walk(full)
+      else if (ent.isFile() && isPutlFile(ent.name)) found.push(full)
+    }
+  }
+  await walk(root)
+  return found
+}
+
+/**
+ * Fail-closed: every sampled .putl must decrypt (avoids mixed-key false positive).
+ * Zero files → false (caller handles empty vault).
+ */
+async function canDecryptSamplePutls(
+  root: string,
+  keyA: Buffer,
+  keyB: Buffer
+): Promise<boolean> {
+  const paths = await collectPutlPaths(root, 5)
+  if (paths.length === 0) return false
+  for (const full of paths) {
+    try {
+      const text = await readFile(full, 'utf8')
+      openDoc(keyA, keyB, parseEnvelope(text))
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+async function writeConfig(root: string, config: VaultConfig): Promise<void> {
+  await mkdir(join(root, VAULT_DIR), { recursive: true })
+  const path = vaultConfigPath(root)
+  await backupFile(path, '.bak')
+  await atomicWriteFile(path, JSON.stringify(config, null, 2), 'utf8')
+}
+
 export async function accessVault(input: AccessInput): Promise<void> {
   const active = await getActiveEntry()
   if (!active) throw new Error('No vault selected')
   const root = resolve(active.rootPath)
-  const config = await readVaultConfig(root)
+  if (!existsSync(root)) {
+    throw authError('INVALID_VAULT', 'Vault folder is missing on disk')
+  }
+
+  await assertNotLocked(root)
+
+  let config = await readVaultConfig(root)
   if (!config) throw new Error('Vault metadata missing')
 
-  let keyA = input.keyA ?? ''
-  if (config.mode === 'device') {
-    keyA = await loadOrCreateDeviceSecret()
-  } else if (!keyA.trim()) {
-    throw new Error('Key A is required')
-  }
   if (!input.keyB.trim()) throw new Error('Key B / password is required')
 
   const salt = Buffer.from(config.salt, 'base64')
-  const keys = deriveLayerKeys(keyA, input.keyB, salt)
+
+  /** keyA string candidates (device: hardware + legacy; portable: user keyA) */
+  let keyAList: string[] = []
+  if (config.mode === 'device') {
+    const candidates = await listDeviceKeyCandidates()
+    keyAList = candidates.map((c) => c.keyA)
+  } else {
+    const keyA = input.keyA ?? ''
+    if (!keyA.trim()) throw new Error('Key A is required')
+    keyAList = [keyA]
+  }
+
+  const hasAuth = !!(config.auth?.hashA && config.auth?.hashB)
+  const hasFiles = await vaultHasPutlFiles(root)
+
+  let accepted: { keyA: Buffer; keyB: Buffer } | null = null
+
+  for (const keyAStr of keyAList) {
+    const keys = deriveLayerKeys(keyAStr, input.keyB, salt)
+
+    if (hasAuth) {
+      if (verifyKeyVerifiers(keys.keyA, keys.keyB, config.auth!)) {
+        accepted = keys
+        break
+      }
+      continue
+    }
+
+    // Legacy vault without verifiers — prove by decrypting existing .putl files
+    if (hasFiles) {
+      if (await canDecryptSamplePutls(root, keys.keyA, keys.keyB)) {
+        accepted = keys
+        break
+      }
+      continue
+    }
+
+    // Empty legacy vault: bind first successful password (one-time migration)
+    accepted = keys
+    break
+  }
+
+  if (!accepted) {
+    await recordAuthFailure(root)
+    throw authError(
+      'INVALID_KEYS',
+      'Wrong password / keys. Access denied — no session started. Data on disk was not modified.'
+    )
+  }
+
+  // Migrate legacy → verifiers only after proof (or empty bind)
+  if (!hasAuth) {
+    config = {
+      ...config,
+      auth: createKeyVerifiers(accepted.keyA, accepted.keyB)
+    }
+    await writeConfig(root, config)
+  }
+
+  if (config.mode === 'device') {
+    // Cache material that worked (best-effort; hardware remains preferred source)
+    for (const keyAStr of keyAList) {
+      const trial = deriveLayerKeys(keyAStr, input.keyB, salt)
+      if (trial.keyA.equals(accepted.keyA)) {
+        void cacheDeviceSecretHint(keyAStr)
+        break
+      }
+    }
+  }
+
+  await clearAuthFailures(root)
   setAccess({
     rootPath: root,
     mode: config.mode,
     config,
-    keyA: keys.keyA,
-    keyB: keys.keyB
+    keyA: accepted.keyA,
+    keyB: accepted.keyB
   })
 }
 
@@ -320,6 +485,7 @@ export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
 
   let config = await readVaultConfig(root)
   if (!config) {
+    // Probe device key material early (hardware-bound) so default box is OS-reinstall safe
     await loadOrCreateDeviceSecret()
     const salt = generateSalt()
     config = {
@@ -336,7 +502,7 @@ export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
       createdAt: new Date().toISOString()
     }
     await mkdir(join(root, VAULT_DIR), { recursive: true })
-    await writeFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8')
+    await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8')
     await mkdir(join(root, 'keep'), { recursive: true })
     await mkdir(join(root, 'saves'), { recursive: true })
   }

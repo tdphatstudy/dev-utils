@@ -14,15 +14,35 @@ export default function DnsLookup(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [statusTone, setStatusTone] = useState<'neutral' | 'success' | 'danger' | 'warning'>(
+    'neutral'
+  )
+
   const lookup = async (): Promise<void> => {
     setBusy(true)
     setError(null)
+    setStatusMsg(null)
     try {
       const result = await window.devutils.net.dnsLookup(host, type)
       setOutput(JSON.stringify(result, null, 2))
+      if (result.empty) {
+        setStatusTone(result.code === 'ENOTFOUND' ? 'warning' : 'neutral')
+        setStatusMsg(
+          result.message ??
+            (result.code === 'ENOTFOUND'
+              ? `Host not found (${result.code})`
+              : `No ${result.type} records (${result.code ?? 'ENODATA'})`)
+        )
+      } else {
+        setStatusTone('success')
+        setStatusMsg('Resolved via OS DNS · user-initiated')
+      }
     } catch (e) {
       setOutput('')
       setError(e instanceof Error ? e.message : 'DNS lookup failed')
+      setStatusTone('danger')
+      setStatusMsg(null)
     } finally {
       setBusy(false)
     }
@@ -65,11 +85,10 @@ export default function DnsLookup(): JSX.Element {
       </div>
 
       <footer className="border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : output ? 'success' : 'neutral'}>
+        <ToolStatus tone={error ? 'danger' : statusMsg ? statusTone : 'neutral'}>
           {error ??
-            (output
-              ? 'Resolved via OS DNS · user-initiated'
-              : 'Uses system resolver · only runs when you click Lookup')}
+            statusMsg ??
+            'Uses system resolver · only runs when you click Lookup · empty types return ENODATA (not an error)'}
         </ToolStatus>
       </footer>
     </div>

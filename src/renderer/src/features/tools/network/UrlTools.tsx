@@ -5,6 +5,7 @@ import {
   parseUrl
 } from '@shared/url'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -60,10 +61,10 @@ export default function UrlTools(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 p-3">
+      <SplitPane>
         <CodeEditor value={input} onChange={setInput} language="text" placeholder="URL or component…" />
         <CodeEditor value={output} language={mode === 'parse' ? 'json' : 'text'} readOnly />
-      </div>
+      </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>

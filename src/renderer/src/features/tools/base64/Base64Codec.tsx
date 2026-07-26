@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -64,7 +65,7 @@ export default function Base64Codec(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 p-3">
+      <SplitPane>
         <CodeEditor
           value={input}
           onChange={setInput}
@@ -72,7 +73,7 @@ export default function Base64Codec(): JSX.Element {
           placeholder={mode === 'encode' ? 'Plain text…' : 'Base64…'}
         />
         <CodeEditor value={output} language="text" readOnly />
-      </div>
+      </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={result.ok ? 'success' : 'danger'}>

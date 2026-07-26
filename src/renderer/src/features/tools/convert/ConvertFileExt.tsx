@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeftRight } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import {
@@ -118,7 +119,7 @@ export default function ConvertFileExt(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 p-3">
+      <SplitPane>
         <div className="flex min-h-0 flex-col gap-1">
           <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
             Input · {fromMeta.label}
@@ -136,7 +137,7 @@ export default function ConvertFileExt(): JSX.Element {
           </span>
           <CodeEditor value={output} language={toMeta.language} readOnly />
         </div>
-      </div>
+      </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={result.ok ? 'success' : 'danger'}>
