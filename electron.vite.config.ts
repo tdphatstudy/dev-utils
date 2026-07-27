@@ -26,6 +26,13 @@ function vendorChunk(id: string): string | undefined {
   }
   if (norm.includes('/lucide-react/')) return 'vendor-icons'
   if (norm.includes('/yaml/') || norm.includes('/js-yaml/')) return 'vendor-yaml'
+  if (
+    norm.includes('/sql-formatter/') ||
+    norm.includes('/node-sql-parser/') ||
+    norm.includes('/sql-parser-cst/')
+  ) {
+    return 'vendor-sql'
+  }
   return undefined
 }
 

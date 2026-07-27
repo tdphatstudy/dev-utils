@@ -97,7 +97,7 @@ export default function HtmlStudio(): JSX.Element {
         <CodeEditor
           value={input}
           onChange={setInput}
-          language="text"
+          language="html"
           placeholder="Paste HTML…"
         />
       </div>

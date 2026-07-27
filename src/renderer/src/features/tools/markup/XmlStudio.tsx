@@ -89,7 +89,7 @@ export default function XmlStudio(): JSX.Element {
         <CodeEditor
           value={input}
           onChange={setInput}
-          language="text"
+          language="xml"
           placeholder="Paste XML…"
         />
       </div>

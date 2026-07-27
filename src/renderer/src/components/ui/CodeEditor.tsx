@@ -1,17 +1,33 @@
+import { useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { json } from '@codemirror/lang-json'
 import { yaml } from '@codemirror/lang-yaml'
+import { html } from '@codemirror/lang-html'
+import { xml } from '@codemirror/lang-xml'
+import {
+  sql,
+  StandardSQL,
+  MySQL,
+  PostgreSQL,
+  MSSQL,
+  SQLite,
+  MariaSQL,
+  type SQLDialect
+} from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import { useAppStore } from '@renderer/store/app-store'
 import { cn } from '@renderer/lib/utils'
+import type { SqlDialectId } from '@shared/sql'
 
-type Lang = 'json' | 'yaml' | 'text'
+export type EditorLang = 'json' | 'yaml' | 'text' | 'html' | 'xml' | 'sql'
 
 interface Props {
   value: string
   onChange?: (value: string) => void
-  language?: Lang
+  language?: EditorLang
+  /** Keyword dialect when language=sql */
+  sqlDialect?: SqlDialectId
   readOnly?: boolean
   className?: string
   placeholder?: string
@@ -36,10 +52,49 @@ const baseTheme = EditorView.theme({
   }
 })
 
+function sqlDialectExtension(id: SqlDialectId | undefined): SQLDialect {
+  switch (id) {
+    case 'mysql':
+      return MySQL
+    case 'mariadb':
+      return MariaSQL
+    case 'postgresql':
+      return PostgreSQL
+    case 'sqlserver':
+      return MSSQL
+    case 'sqlite':
+      return SQLite
+    case 'plsql':
+    case 'bigquery':
+    case 'snowflake':
+    case 'generic':
+    default:
+      return StandardSQL
+  }
+}
+
+function languageExtension(language: EditorLang, sqlDialect?: SqlDialectId) {
+  switch (language) {
+    case 'json':
+      return json()
+    case 'yaml':
+      return yaml()
+    case 'html':
+      return html()
+    case 'xml':
+      return xml()
+    case 'sql':
+      return sql({ dialect: sqlDialectExtension(sqlDialect) })
+    default:
+      return []
+  }
+}
+
 export function CodeEditor({
   value,
   onChange,
   language = 'text',
+  sqlDialect,
   readOnly,
   className,
   placeholder
@@ -47,11 +102,10 @@ export function CodeEditor({
   const theme = useAppStore((s) => s.theme)
   const isDark = theme !== 'light'
 
-  const extensions = [
-    baseTheme,
-    EditorView.lineWrapping,
-    language === 'json' ? json() : language === 'yaml' ? yaml() : []
-  ].flat()
+  const extensions = useMemo(
+    () => [baseTheme, EditorView.lineWrapping, languageExtension(language, sqlDialect)].flat(),
+    [language, sqlDialect]
+  )
 
   return (
     <div

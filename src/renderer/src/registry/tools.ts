@@ -26,6 +26,7 @@ import {
   StickyNote,
   Code2,
   FileType2,
+  Database,
   type LucideIcon
 } from 'lucide-react'
 
@@ -33,6 +34,7 @@ export type ToolGroupId =
   | 'json'
   | 'yaml'
   | 'markup'
+  | 'sql'
   | 'convert'
   | 'base64'
   | 'security'
@@ -63,14 +65,15 @@ export const toolGroups: ToolGroup[] = [
   { id: 'json', name: 'JSON', icon: Braces, order: 0 },
   { id: 'yaml', name: 'YAML', icon: FileCode2, order: 1 },
   { id: 'markup', name: 'HTML / XML', icon: Code2, order: 2 },
-  { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 3 },
-  { id: 'base64', name: 'Base64', icon: Binary, order: 4 },
-  { id: 'security', name: 'Security', icon: Shield, order: 5 },
-  { id: 'network', name: 'Network', icon: Network, order: 6 },
-  { id: 'file', name: 'File', icon: File, order: 7 },
-  { id: 'text', name: 'Text / Dev', icon: Regex, order: 8 },
-  { id: 'privatebox', name: 'Private Box', icon: Vault, order: 9 },
-  { id: 'app', name: 'App', icon: Info, order: 10 }
+  { id: 'sql', name: 'SQL', icon: Database, order: 3 },
+  { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 4 },
+  { id: 'base64', name: 'Base64', icon: Binary, order: 5 },
+  { id: 'security', name: 'Security', icon: Shield, order: 6 },
+  { id: 'network', name: 'Network', icon: Network, order: 7 },
+  { id: 'file', name: 'File', icon: File, order: 8 },
+  { id: 'text', name: 'Text / Dev', icon: Regex, order: 9 },
+  { id: 'privatebox', name: 'Private Box', icon: Vault, order: 10 },
+  { id: 'app', name: 'App', icon: Info, order: 11 }
 ]
 
 export const tools: ToolDefinition[] = [
@@ -136,6 +139,29 @@ export const tools: ToolDefinition[] = [
     keywords: ['xml', 'format', 'beautify', 'minify', 'validate', 'well-formed'],
     icon: FileType2,
     component: lazy(() => import('@renderer/features/tools/markup/XmlStudio'))
+  },
+  {
+    id: 'sql.studio',
+    group: 'sql',
+    name: 'SQL Studio',
+    description: 'Format & validate SQL — MySQL, PostgreSQL, SQL Server, SQLite, …',
+    keywords: [
+      'sql',
+      'mysql',
+      'postgres',
+      'postgresql',
+      'tsql',
+      'mssql',
+      'sqlite',
+      'format',
+      'validate',
+      'beautify',
+      'query',
+      'mariadb',
+      'bigquery'
+    ],
+    icon: Database,
+    component: lazy(() => import('@renderer/features/tools/sql/SqlStudio'))
   },
   {
     id: 'convert.file-ext',
