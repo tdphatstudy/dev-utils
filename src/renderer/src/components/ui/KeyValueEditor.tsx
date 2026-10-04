@@ -9,6 +9,7 @@ interface Props {
   keyPlaceholder?: string
   valuePlaceholder?: string
   className?: string
+  labelPrefix?: string
 }
 
 export function KeyValueEditor({
@@ -16,7 +17,8 @@ export function KeyValueEditor({
   onChange,
   keyPlaceholder = 'Key',
   valuePlaceholder = 'Value',
-  className
+  className,
+  labelPrefix = 'Row'
 }: Props): JSX.Element {
   const update = (id: string, patch: Partial<KeyValueRow>): void => {
     onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)))
@@ -43,11 +45,12 @@ export function KeyValueEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <tr key={row.id} className="border-b border-mac-separator/70 hover:bg-mac-control/40">
                 <td className="px-2 py-1 text-center">
                   <input
                     type="checkbox"
+                    aria-label={`Enable ${labelPrefix} ${index + 1}`}
                     checked={row.enabled}
                     onChange={(e) => update(row.id, { enabled: e.target.checked })}
                     className="accent-mac-accent"
@@ -57,6 +60,7 @@ export function KeyValueEditor({
                   <input
                     className="mac-input !rounded-md !border-transparent !bg-transparent !px-2 !py-1 font-mono focus:!border-mac-separator focus:!bg-mac-control"
                     value={row.key}
+                    aria-label={`${labelPrefix} ${index + 1} key`}
                     placeholder={keyPlaceholder}
                     onChange={(e) => update(row.id, { key: e.target.value })}
                     spellCheck={false}
@@ -66,6 +70,7 @@ export function KeyValueEditor({
                   <input
                     className="mac-input !rounded-md !border-transparent !bg-transparent !px-2 !py-1 font-mono focus:!border-mac-separator focus:!bg-mac-control"
                     value={row.value}
+                    aria-label={`${labelPrefix} ${index + 1} value`}
                     placeholder={valuePlaceholder}
                     onChange={(e) => update(row.id, { value: e.target.value })}
                     spellCheck={false}
@@ -77,6 +82,7 @@ export function KeyValueEditor({
                     className="mac-btn-ghost !p-1 text-mac-label-tertiary hover:text-mac-danger"
                     onClick={() => remove(row.id)}
                     title="Remove"
+                    aria-label={`Remove ${labelPrefix} ${index + 1}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

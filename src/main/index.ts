@@ -1,12 +1,13 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
-import { createHash } from 'crypto'
-import { readFile, stat } from 'fs/promises'
+import { stat } from 'fs/promises'
+import { validateFilePath } from './file-hash'
+import { registerFileHashIpc } from './file-hash-ipc'
+import { assertTrustedIpc } from './ipc-trust'
 import { lookupDns } from './dns-lookup'
 import { is } from './env'
-import { performHttpRequest } from './http-request'
-import type { HttpRequestPayload } from '@shared/http/types'
+import { registerHttpIpc } from './http-ipc'
 import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
 import { registerCryptoAndSshIpc } from './ssh/ipc'
@@ -111,19 +112,11 @@ function registerIpc(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
   })
 
-  ipcMain.handle(
-    'file:hash',
-    async (
-      _event,
-      payload: { path: string; algorithm: 'md5' | 'sha1' | 'sha256' | 'sha512' }
-    ) => {
-      const data = await readFile(payload.path)
-      const hash = createHash(payload.algorithm).update(data).digest('hex')
-      return hash
-    }
-  )
+  registerFileHashIpc()
 
-  ipcMain.handle('file:info', async (_event, filePath: string) => {
+  ipcMain.handle('file:info', async (event, filePath: string) => {
+    assertTrustedIpc(event)
+    validateFilePath(filePath)
     const s = await stat(filePath)
     return {
       path: filePath,
@@ -135,6 +128,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('dialog:openFile', async (event) => {
+    assertTrustedIpc(event)
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = await dialog.showOpenDialog(win!, {
       properties: ['openFile'],
@@ -144,19 +138,23 @@ function registerIpc(): void {
     return result.filePaths[0]
   })
 
+  const dnsInFlight = new Set<number>()
   ipcMain.handle(
     'net:dnsLookup',
     async (
-      _event,
-      payload: { hostname: string; recordType: 'A' | 'AAAA' | 'MX' | 'TXT' | 'CNAME' | 'NS' }
+      event,
+      payload: unknown
     ) => {
-      return lookupDns(payload)
+      assertTrustedIpc(event)
+      const ownerId = event.sender.id
+      if (dnsInFlight.has(ownerId)) throw new Error('A DNS lookup is already running. Wait for completion.')
+      dnsInFlight.add(ownerId)
+      try { return await lookupDns(payload) }
+      finally { dnsInFlight.delete(ownerId) }
     }
   )
 
-  ipcMain.handle('net:httpRequest', async (_event, payload: HttpRequestPayload) => {
-    return performHttpRequest(payload)
-  })
+  registerHttpIpc()
 
   registerSecretBoxIpc()
   registerPortsIpc()

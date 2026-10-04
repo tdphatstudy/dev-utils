@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, type KeyObject } from 'crypto'
+import { createHash, generateKeyPair as nodeGenerateKeyPair, type KeyObject } from 'crypto'
 import type { KeygenAlgorithm, KeygenRequest, KeygenResult } from '@shared/crypto/keygen-types'
 
 function fingerprintFromPublic(publicKey: KeyObject): {
@@ -100,49 +100,29 @@ function asPemString(exported: string | Buffer): string {
   return typeof exported === 'string' ? exported : exported.toString('utf8')
 }
 
-export function generateKeyPair(req: KeygenRequest): KeygenResult {
+export async function generateKeyPair(req: KeygenRequest): Promise<KeygenResult> {
+  if (!req || typeof req !== 'object') throw new Error('Invalid key generation request.')
+  if (req.comment !== undefined && (typeof req.comment !== 'string' || req.comment.length > 256 || /[\r\n\0]/.test(req.comment))) {
+    throw new Error('OpenSSH comment must be a single line of at most 256 characters.')
+  }
   const algorithm = req.algorithm
   const comment = req.comment?.trim() || ''
-  let privateKey: KeyObject
-  let publicKey: KeyObject
-  let modulusLength = req.modulusLength ?? 2048
-
-  switch (algorithm) {
-    case 'rsa': {
-      if (![2048, 3072, 4096].includes(modulusLength)) modulusLength = 2048
-      const pair = generateKeyPairSync('rsa', {
-        modulusLength,
-        publicExponent: 0x10001
-      })
-      privateKey = pair.privateKey
-      publicKey = pair.publicKey
-      break
+  const modulusLength = req.modulusLength ?? 2048
+  if (algorithm === 'rsa' && ![2048, 3072, 4096].includes(modulusLength)) throw new Error('RSA size must be 2048, 3072 or 4096 bits.')
+  const { publicKey, privateKey } = await new Promise<{ publicKey: KeyObject; privateKey: KeyObject }>((resolve, reject) => {
+    const done = (error: Error | null, publicKey: KeyObject, privateKey: KeyObject): void => {
+      if (error) reject(error)
+      else resolve({ publicKey, privateKey })
     }
-    case 'ec-p256':
-    case 'ec-p384':
-    case 'ec-p521': {
-      const namedCurve =
-        algorithm === 'ec-p256' ? 'P-256' : algorithm === 'ec-p384' ? 'P-384' : 'P-521'
-      const pair = generateKeyPairSync('ec', { namedCurve })
-      privateKey = pair.privateKey
-      publicKey = pair.publicKey
-      break
+    switch (algorithm) {
+      case 'rsa': nodeGenerateKeyPair('rsa', { modulusLength, publicExponent: 0x10001 }, done); break
+      case 'ec-p256': case 'ec-p384': case 'ec-p521':
+        nodeGenerateKeyPair('ec', { namedCurve: algorithm === 'ec-p256' ? 'P-256' : algorithm === 'ec-p384' ? 'P-384' : 'P-521' }, done); break
+      case 'ed25519': nodeGenerateKeyPair('ed25519', {}, done); break
+      case 'x25519': nodeGenerateKeyPair('x25519', {}, done); break
+      default: reject(new Error('Unsupported key algorithm.'))
     }
-    case 'ed25519': {
-      const pair = generateKeyPairSync('ed25519')
-      privateKey = pair.privateKey
-      publicKey = pair.publicKey
-      break
-    }
-    case 'x25519': {
-      const pair = generateKeyPairSync('x25519')
-      privateKey = pair.privateKey
-      publicKey = pair.publicKey
-      break
-    }
-    default:
-      throw new Error(`Unsupported algorithm: ${algorithm as string}`)
-  }
+  })
 
   const privateKeyPem = asPemString(
     privateKey.export({ type: 'pkcs8', format: 'pem' })
@@ -157,6 +137,7 @@ export function generateKeyPair(req: KeygenRequest): KeygenResult {
     privateKeyPem,
     publicKeyPem,
     publicKeyOpenSsh,
+    fingerprintOpenSshSha256: publicKeyOpenSsh ? `SHA256:${createHash('sha256').update(Buffer.from(publicKeyOpenSsh.split(' ')[1]!, 'base64')).digest('base64').replace(/=+$/, '')}` : null,
     fingerprintSha256: fp.fingerprintSha256,
     fingerprintHex: fp.fingerprintHex,
     label: labelFor(algorithm, modulusLength)

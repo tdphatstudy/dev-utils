@@ -17,17 +17,11 @@ export function applyQueryToUrl(url: string, query: KeyValueRow[]): string {
   if (pairs.length === 0) return url.trim()
   try {
     const u = new URL(url.trim())
-    for (const [k, v] of pairs) {
-      u.searchParams.set(k, v)
-    }
+    for (const k of new Set(pairs.map(([key]) => key))) u.searchParams.delete(k)
+    for (const [k, v] of pairs) u.searchParams.append(k, v)
     return u.toString()
   } catch {
-    const base = url.trim()
-    const qs = pairs
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-      .join('&')
-    if (!qs) return base
-    return base.includes('?') ? `${base}&${qs}` : `${base}?${qs}`
+    return url.trim() // Validation explains the invalid URL; typing cannot throw.
   }
 }
 
@@ -51,18 +45,21 @@ export function buildBody(
       }
     case 'urlencoded': {
       const params = new URLSearchParams()
-      for (const [k, v] of enabledPairs(formRows)) params.set(k, v)
+      for (const [k, v] of enabledPairs(formRows)) params.append(k, v)
       return {
         body: params.toString(),
         contentType: 'application/x-www-form-urlencoded'
       }
     }
     case 'form': {
-      const params = new URLSearchParams()
-      for (const [k, v] of enabledPairs(formRows)) params.set(k, v)
+      const pairs = enabledPairs(formRows)
+      let boundary: string
+      do { boundary = `devutils-${crypto.randomUUID()}` } while (pairs.some(([key, value]) => (key + value).includes(boundary)))
+      const quoteName = (name: string): string => name.replace(/\r/g, '%0D').replace(/\n/g, '%0A').replace(/"/g, '%22')
+      const parts = pairs.map(([key, value]) => `--${boundary}\r\nContent-Disposition: form-data; name="${quoteName(key)}"\r\n\r\n${value}\r\n`)
       return {
-        body: params.toString(),
-        contentType: 'application/x-www-form-urlencoded'
+        body: parts.join('') + `--${boundary}--\r\n`,
+        contentType: `multipart/form-data; boundary=${boundary}`
       }
     }
     default:
@@ -73,8 +70,10 @@ export function buildBody(
 export function buildHttpPayload(model: HttpRequestModel): HttpRequestPayload {
   const method = model.method
   const url = applyQueryToUrl(model.url, model.query)
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = Object.create(null)
   for (const [k, v] of enabledPairs(model.headers)) {
+    const existing = Object.keys(headers).find((name) => name.toLowerCase() === k.toLowerCase())
+    if (existing) delete headers[existing]
     headers[k] = v
   }
 
@@ -84,7 +83,10 @@ export function buildHttpPayload(model: HttpRequestModel): HttpRequestPayload {
     body = built.body
     if (built.contentType) {
       const hasCt = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')
-      if (!hasCt) headers['Content-Type'] = built.contentType
+      if (model.bodyMode === 'form') {
+        for (const key of Object.keys(headers)) if (key.toLowerCase() === 'content-type') delete headers[key]
+        headers['Content-Type'] = built.contentType
+      } else if (!hasCt) headers['Content-Type'] = built.contentType
     }
   }
 

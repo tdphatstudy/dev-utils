@@ -151,7 +151,7 @@ export async function createSshKey(
     throw new Error(`Key “${base}” already exists — enable overwrite or pick another name`)
   }
 
-  const generated = generateKeyPair({
+  const generated = await generateKeyPair({
     algorithm: input.algorithm === 'rsa' ? 'rsa' : 'ed25519',
     modulusLength: input.modulusLength ?? 4096,
     comment: input.comment ?? `${base}@devutils`
@@ -161,8 +161,14 @@ export async function createSshKey(
     throw new Error('Could not produce OpenSSH public key')
   }
 
-  await writeFile(privatePath, generated.privateKeyPem, 'utf8')
-  await writeFile(publicPath, generated.publicKeyOpenSsh + '\n', 'utf8')
+  // Async generation allows other work between the existence check and writes.
+  // Exclusive creation keeps a concurrently created key from being overwritten.
+  await writeFile(privatePath, generated.privateKeyPem, { encoding: 'utf8', flag: input.overwrite ? 'w' : 'wx', mode: 0o600 })
+  try {
+    await writeFile(publicPath, generated.publicKeyOpenSsh + '\n', { encoding: 'utf8', flag: input.overwrite ? 'w' : 'wx', mode: 0o644 })
+  } catch {
+    throw new Error(`Private key saved at ${privatePath}, but the public key could not be saved. Keep the private key for recovery; check the public path before retrying.`)
+  }
   try {
     chmodSync(privatePath, 0o600)
     chmodSync(publicPath, 0o644)
@@ -174,7 +180,7 @@ export async function createSshKey(
     privatePath,
     publicPath,
     publicKeyOpenSsh: generated.publicKeyOpenSsh,
-    fingerprintSha256: generated.fingerprintSha256
+    fingerprintSha256: generated.fingerprintOpenSshSha256 ?? generated.fingerprintSha256
   }
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Send, Code2 } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -6,6 +6,9 @@ import { KeyValueEditor } from '@renderer/components/ui/KeyValueEditor'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { buildHttpPayload, methodAllowsBody, newRow } from '@shared/http/build-request'
+import { validateHttpPayload } from '@shared/http/validation'
+import { parseJson } from '@shared/json'
+import { formatJsonText } from '@shared/json/format-text'
 import { generateSnippet, SNIPPETS, type SnippetId } from '@shared/http/snippets'
 import type {
   BodyMode,
@@ -50,6 +53,19 @@ export default function HttpClient(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [response, setResponse] = useState<HttpResponsePayload | null>(null)
+  const [timeout, setTimeoutValue] = useState(30000)
+  const [pretty, setPretty] = useState(false)
+  const [canceling, setCanceling] = useState(false)
+  const [canceled, setCanceled] = useState(false)
+  const running = useRef(false)
+  const request = useRef(0)
+  const job = useRef<string | null>(null)
+  const cancellation = useRef(false)
+  const available = !!window.devutils?.net?.httpRequest
+  useEffect(() => () => {
+    request.current++
+    if (job.current) void window.devutils.net.cancelHttpRequest(job.current).catch(() => {})
+  }, [])
 
   const model: HttpRequestModel = useMemo(
     () => ({
@@ -64,24 +80,32 @@ export default function HttpClient(): JSX.Element {
     [method, url, headers, query, bodyMode, bodyText, formRows]
   )
 
-  const payload = useMemo(() => buildHttpPayload(model), [model])
-  const snippet = useMemo(() => generateSnippet(snippetId, payload), [snippetId, payload])
+  const payload = useMemo(() => ({ ...buildHttpPayload(model), timeoutMs: timeout }), [model, timeout])
+  const snippet = useMemo(() => responseTab === 'code' ? generateSnippet(snippetId, payload) : '', [responseTab, snippetId, payload])
+  const bodyIssue = model.bodyMode === 'json' ? parseJson(bodyText) : null
+  const validationError = validateHttpPayload(payload) ?? (bodyIssue && !bodyIssue.ok ? `JSON body: ${bodyIssue.error}${bodyIssue.line ? ` · line ${bodyIssue.line}, column ${bodyIssue.column}` : ''}. Select Raw to intentionally send malformed JSON.` : null)
+  useEffect(() => { setResponse(null); setError(null); setCanceled(false) }, [payload])
 
   const prettyBody = useMemo(() => {
     if (!response?.bodyText) return ''
-    try {
-      return JSON.stringify(JSON.parse(response.bodyText), null, 2)
-    } catch {
-      return response.bodyText
-    }
-  }, [response])
+    return pretty && response.bodyEncoding === 'utf8' ? formatJsonText(response.bodyText) : response.bodyText
+  }, [response, pretty])
 
   const responseHeadersJson = useMemo(
     () => (response ? JSON.stringify(response.headers, null, 2) : ''),
     [response]
   )
+  const responseIsJson = useMemo(() => !!response && response.bodyEncoding === 'utf8' && parseJson(response.bodyText).ok, [response])
 
   const send = async (): Promise<void> => {
+    if (running.current || !available || validationError) return
+    running.current = true
+    const version = ++request.current
+    const id = crypto.randomUUID()
+    job.current = id
+    cancellation.current = false
+    setCanceling(false)
+    setCanceled(false)
     setBusy(true)
     setError(null)
     setResponse(null)
@@ -89,9 +113,10 @@ export default function HttpClient(): JSX.Element {
       if (!window.devutils?.net?.httpRequest) {
         throw new Error('HTTP bridge unavailable — restart the app')
       }
-      const res = await window.devutils.net.httpRequest(payload)
-      setResponse(res)
-      setResponseTab('body')
+      const res = await window.devutils.net.httpRequest(payload, id)
+      if (version !== request.current) return
+      if (cancellation.current) setCanceled(true)
+      else { setResponse(res); setPretty(false); setResponseTab('body') }
     } catch (e) {
       const message =
         e instanceof Error
@@ -99,9 +124,26 @@ export default function HttpClient(): JSX.Element {
           : typeof e === 'object' && e && 'message' in e
             ? String((e as { message: unknown }).message)
             : 'Request failed'
-      setError(message)
+      if (version === request.current) {
+        if (cancellation.current) setCanceled(true)
+        else setError(message)
+      }
     } finally {
-      setBusy(false)
+      running.current = false
+      job.current = null
+      if (version === request.current) setBusy(false)
+    }
+  }
+
+  const cancel = async (): Promise<void> => {
+    const id = job.current
+    if (!id || cancellation.current) return
+    cancellation.current = true
+    setCanceling(true)
+    try { await window.devutils.net.cancelHttpRequest(id) }
+    catch (e) {
+      cancellation.current = false
+      if (job.current === id) { setCanceling(false); setError(e instanceof Error ? e.message : 'Could not cancel this request.') }
     }
   }
 
@@ -115,7 +157,7 @@ export default function HttpClient(): JSX.Element {
     }
   }
 
-  const statusTone: StatusTone = error
+  const statusTone: StatusTone = error || validationError
     ? 'danger'
     : response
       ? response.ok
@@ -123,19 +165,21 @@ export default function HttpClient(): JSX.Element {
         : 'warning'
       : 'neutral'
 
-  const statusText = error
-    ? error
+  const statusText = error || validationError
+    ? error ?? validationError
     : busy
-      ? 'Sending…'
+      ? canceling ? 'Canceling request…' : `Sending… timeout ${timeout / 1000}s`
       : response
         ? `${response.status} ${response.statusText} · ${response.timeMs}ms · ${formatBytes(response.size)}`
-        : 'Requests run in the main process (no CORS) · user-initiated only'
+        : canceled ? 'Canceled · no response retained' : !available ? 'Open the desktop app to send HTTP requests.' : 'User-initiated · 5 MB response limit · redirects returned for inspection'
 
   return (
     <div className="flex h-full flex-col">
       <ToolToolbar className="gap-2">
         <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
           <select
+            aria-label="HTTP method"
+            disabled={busy}
             className={cn(
               'mac-input !w-[100px] shrink-0 !py-1.5 font-mono text-[12px] font-semibold sm:!w-[110px]',
               methodColor(method)
@@ -150,6 +194,9 @@ export default function HttpClient(): JSX.Element {
             ))}
           </select>
           <input
+            aria-label="HTTP request URL"
+            aria-invalid={!!validateHttpPayload(payload)}
+            disabled={busy}
             className="mac-input min-w-0 flex-1 basis-[12rem] font-mono text-[13px]"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -162,18 +209,23 @@ export default function HttpClient(): JSX.Element {
           <button
             type="button"
             className="mac-btn-primary shrink-0 !px-3 sm:!px-4"
-            disabled={busy || !url.trim()}
+            disabled={busy || !!validationError || !available}
             onClick={() => void send()}
           >
             <Send className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{busy ? 'Sending…' : 'Send'}</span>
             <span className="sm:hidden">{busy ? '…' : 'Go'}</span>
           </button>
+          {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : 'Cancel'}</button>}
         </div>
       </ToolToolbar>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-3 py-2 text-[11px] text-mac-label-secondary">
+        <label>Timeout <select aria-label="HTTP timeout" className="mac-input !w-auto !py-1" disabled={busy} value={timeout} onChange={(e) => setTimeoutValue(Number(e.target.value))}>{[5000, 15000, 30000, 60000].map((value) => <option key={value} value={value}>{value / 1000}s</option>)}</select></label>
+        <span>Redirects are shown as responses. Follow the Location header with a new request.</span>
+      </div>
 
-      <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-mac-separator md:min-h-0">
-        <section className="flex min-h-0 flex-col">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(220px,1fr)] overflow-auto divide-y divide-mac-separator">
+        <fieldset disabled={busy} className="flex min-h-[280px] min-w-0 flex-col">
           <div className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
             <TabBtn active={requestTab === 'params'} onClick={() => setRequestTab('params')}>
               Params
@@ -197,6 +249,7 @@ export default function HttpClient(): JSX.Element {
               <div className="h-full overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
                 <KeyValueEditor
                   rows={query}
+                  labelPrefix="Query"
                   onChange={setQuery}
                   keyPlaceholder="query"
                   valuePlaceholder="value"
@@ -207,6 +260,7 @@ export default function HttpClient(): JSX.Element {
               <div className="h-full overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
                 <KeyValueEditor
                   rows={headers}
+                  labelPrefix="Header"
                   onChange={setHeaders}
                   keyPlaceholder="Header"
                   valuePlaceholder="Value"
@@ -227,11 +281,13 @@ export default function HttpClient(): JSX.Element {
                           : 'bg-mac-control text-mac-label-secondary hover:bg-mac-control-hover'
                       )}
                       onClick={() => setBodyMode(m.value)}
+                      aria-pressed={bodyMode === m.value}
                     >
                       {m.label}
                     </button>
                   ))}
                 </div>
+                {bodyMode === 'form' && <p className="text-[11px] text-mac-label-secondary">Multipart text fields; Content-Type boundary is generated automatically. File uploads are not available here.</p>}
                 <div className="min-h-0 flex-1">
                   {bodyMode === 'none' && (
                     <div className="flex h-full items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
@@ -243,6 +299,9 @@ export default function HttpClient(): JSX.Element {
                       value={bodyText}
                       onChange={setBodyText}
                       language={bodyMode === 'json' ? 'json' : 'text'}
+                      label="HTTP request body"
+                      readOnly={busy}
+                      onRun={() => void send()}
                       placeholder={bodyMode === 'json' ? '{ }' : 'Raw body…'}
                     />
                   )}
@@ -250,6 +309,7 @@ export default function HttpClient(): JSX.Element {
                     <div className="h-full overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
                       <KeyValueEditor
                         rows={formRows}
+                        labelPrefix="Form field"
                         onChange={setFormRows}
                         keyPlaceholder="field"
                         valuePlaceholder="value"
@@ -260,10 +320,10 @@ export default function HttpClient(): JSX.Element {
               </div>
             )}
           </div>
-        </section>
+        </fieldset>
 
-        <section className="flex min-h-0 flex-col">
-          <div className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
+        <section className="flex min-h-[220px] min-w-0 flex-col">
+          <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-mac-separator px-2">
             <TabBtn active={responseTab === 'body'} onClick={() => setResponseTab('body')}>
               Response
             </TabBtn>
@@ -290,6 +350,7 @@ export default function HttpClient(): JSX.Element {
               {responseTab === 'code' ? (
                 <>
                   <select
+                    aria-label="HTTP code language"
                     className="mac-input !w-auto !py-1 text-[12px]"
                     value={snippetId}
                     onChange={(e) => setSnippetId(e.target.value as SnippetId)}
@@ -300,47 +361,52 @@ export default function HttpClient(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                  <CopyButton text={snippet} label="Copy snippet" />
+                  <CopyButton text={validationError ? '' : snippet} label="Copy snippet" />
                 </>
               ) : (
                 <>
                   <SaveToBoxButton
                     type={
-                      responseTab === 'headers' || prettyBody.trimStart().startsWith('{')
+                      responseTab === 'headers' || responseIsJson
                         ? 'json'
                         : 'text'
                     }
                     content={responseTab === 'headers' ? responseHeadersJson : prettyBody}
                     defaultName={
-                      responseTab === 'headers' ? 'http-headers.json' : 'http-response.txt'
+                      responseTab === 'headers' ? 'http-headers.json' : response?.bodyEncoding === 'base64' ? 'http-response.b64' : responseIsJson ? 'http-response.json' : 'http-response.txt'
                     }
                     disabled={!response}
                   />
                   <CopyButton
                     text={responseTab === 'headers' ? responseHeadersJson : prettyBody}
-                    label="Copy"
+                    label={response?.bodyEncoding === 'base64' && responseTab === 'body' ? 'Copy Base64' : 'Copy'}
                   />
                 </>
               )}
             </div>
           </div>
+          {response && responseTab === 'body' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-1 text-[11px] text-mac-label-secondary">
+            {response.bodyEncoding === 'base64' ? <span>Binary or non-UTF-8 bytes · lossless Base64 view</span> : <label><input type="checkbox" disabled={!responseIsJson} checked={pretty} onChange={(e) => setPretty(e.target.checked)} /> Format JSON layout</label>}
+            {!response.bodyText && <span>Empty response body ({method === 'HEAD' ? 'HEAD' : response.status})</span>}
+          </div>}
           <div className="min-h-0 flex-1 overflow-hidden p-2">
             {responseTab === 'code' ? (
-              <CodeEditor value={snippet} language="text" readOnly />
+              <CodeEditor value={snippet} language="text" label="HTTP code snippet" readOnly />
             ) : !response && !error ? (
               <div className="flex h-full flex-col items-center justify-center gap-1 rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
                 <Send className="mb-1 h-6 w-6 opacity-40" strokeWidth={1.5} />
-                Send a request to see the response
+                {busy ? 'Waiting for response…' : canceled ? 'Request canceled. Send again to retry.' : !available ? 'Desktop app required to send requests' : 'Send a request to see the response'}
               </div>
             ) : error && !response ? (
               <div className="flex h-full items-center justify-center rounded-mac-lg border border-mac-danger/30 bg-mac-danger/5 px-4 text-center text-[13px] text-mac-danger">
                 {error}
               </div>
             ) : responseTab === 'headers' ? (
-              <CodeEditor value={responseHeadersJson} language="json" readOnly />
+              <CodeEditor value={responseHeadersJson} language="json" label="HTTP response headers" readOnly />
             ) : (
               <CodeEditor
                 value={prettyBody}
+                label={response?.bodyEncoding === 'base64' ? 'HTTP response Base64' : 'HTTP response body'}
                 language={looksLikeJson(prettyBody) ? 'json' : 'text'}
                 readOnly
               />
@@ -349,7 +415,7 @@ export default function HttpClient(): JSX.Element {
         </section>
       </div>
 
-      <footer className="flex items-center border-t border-mac-separator px-4 py-2">
+      <footer className="flex shrink-0 flex-wrap items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={statusTone}>{statusText}</ToolStatus>
         {response?.finalUrl && response.finalUrl !== payload.url && (
           <span className="ml-3 truncate font-mono text-[11px] text-mac-label-tertiary">

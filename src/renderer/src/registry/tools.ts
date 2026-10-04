@@ -320,8 +320,8 @@ export const tools: ToolDefinition[] = [
     id: 'network.dns',
     group: 'network',
     name: 'DNS Lookup',
-    description: 'Resolve A/AAAA/MX/TXT via system DNS',
-    keywords: ['dns', 'resolve', 'a', 'aaaa', 'mx', 'lookup'],
+    description: 'DNS records, address TTL and reverse IP lookup',
+    keywords: ['dns', 'resolve', 'a', 'aaaa', 'mx', 'txt', 'srv', 'soa', 'ptr', 'ttl', 'reverse', 'lookup'],
     icon: Server,
     component: lazy(() => import('@renderer/features/tools/network/DnsLookup'))
   },

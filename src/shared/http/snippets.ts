@@ -1,4 +1,6 @@
 import type { HttpRequestPayload } from './types'
+import { encodeBase64 } from '../base64'
+import { validateHttpPayload } from './validation'
 
 export type SnippetId =
   | 'curl'
@@ -17,10 +19,10 @@ export interface SnippetDef {
 }
 
 export const SNIPPETS: SnippetDef[] = [
-  { id: 'curl', label: 'cURL', language: 'bash' },
-  { id: 'powershell', label: 'PowerShell', language: 'powershell' },
+  { id: 'curl', label: 'cURL (Bash)', language: 'bash' },
+  { id: 'powershell', label: 'PowerShell 7', language: 'powershell' },
   { id: 'fetch', label: 'JavaScript fetch', language: 'javascript' },
-  { id: 'axios', label: 'Axios', language: 'javascript' },
+  { id: 'axios', label: 'Axios (Node.js)', language: 'javascript' },
   { id: 'python', label: 'Python requests', language: 'python' },
   { id: 'httpie', label: 'HTTPie', language: 'bash' },
   { id: 'go', label: 'Go net/http', language: 'go' },
@@ -28,6 +30,10 @@ export const SNIPPETS: SnippetDef[] = [
 ]
 
 export function generateSnippet(id: SnippetId, req: HttpRequestPayload): string {
+  if (validateHttpPayload(req)) return ''
+  const url = new URL(req.url)
+  url.hash = ''
+  req = { ...req, url: url.href }
   switch (id) {
     case 'curl':
       return toCurl(req)
@@ -51,11 +57,16 @@ export function generateSnippet(id: SnippetId, req: HttpRequestPayload): string 
 }
 
 function esc(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, `'\\''`)
+  return s.replace(/'/g, `'\\''`)
 }
 
-function escDq(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+function psLiteral(s: string): string {
+  if (/[\u2018\u2019\u201c\u201d\r\n]/.test(s)) return `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodeBase64(s)}'))`
+  return `'${s.replace(/'/g, "''")}'`
+}
+
+function hasBody(req: HttpRequestPayload): boolean {
+  return req.body !== undefined && req.method !== 'GET' && req.method !== 'HEAD'
 }
 
 function headerEntries(headers: Record<string, string>): [string, string][] {
@@ -63,12 +74,16 @@ function headerEntries(headers: Record<string, string>): [string, string][] {
 }
 
 function toCurl(req: HttpRequestPayload): string {
-  const parts = [`curl -X ${req.method} '${esc(req.url)}'`]
+  const parts = [`curl -X ${req.method} '${esc(req.url)}' --max-time ${(req.timeoutMs ?? 30000) / 1000}`]
   for (const [k, v] of headerEntries(req.headers)) {
     parts.push(`  -H '${esc(`${k}: ${v}`)}'`)
   }
-  if (req.body) {
-    parts.push(`  -d '${esc(req.body)}'`)
+  if (hasBody(req)) {
+    if (req.body!.includes('\0')) {
+      parts.push('  --data-binary @-')
+      return `# GNU base64; on macOS replace --decode with -D\nprintf '%s' '${encodeBase64(req.body!)}' | base64 --decode | ${parts.join(' \\\n')}`
+    }
+    parts.push(`  --data-raw '${esc(req.body!)}'`)
   }
   return parts.join(' \\\n')
 }
@@ -77,28 +92,29 @@ function toPowerShell(req: HttpRequestPayload): string {
   const headers =
     Object.keys(req.headers).length > 0
       ? `@{\n${headerEntries(req.headers)
-          .map(([k, v]) => `  "${escDq(k)}" = "${escDq(v)}"`)
+          .map(([k, v]) => `  ${psLiteral(k)} = ${psLiteral(v)}`)
           .join('\n')}\n}`
       : `@{}`
   const lines = [
+    '# PowerShell 7',
     `$headers = ${headers}`,
-    `$uri = "${escDq(req.url)}"`
+    `$uri = ${psLiteral(req.url)}`
   ]
-  if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
-    lines.push(`$body = @'\n${req.body}\n'@`)
+  if (hasBody(req)) {
+    lines.push(`$body = [Convert]::FromBase64String('${encodeBase64(req.body!)}')`)
     lines.push(
-      `Invoke-RestMethod -Method ${req.method} -Uri $uri -Headers $headers -Body $body`
+      `Invoke-RestMethod -Method ${req.method} -Uri $uri -Headers $headers -Body $body -TimeoutSec ${Math.ceil((req.timeoutMs ?? 30000) / 1000)} -MaximumRedirection 0 -SkipHttpErrorCheck`
     )
   } else {
-    lines.push(`Invoke-RestMethod -Method ${req.method} -Uri $uri -Headers $headers`)
+    lines.push(`Invoke-RestMethod -Method ${req.method} -Uri $uri -Headers $headers -TimeoutSec ${Math.ceil((req.timeoutMs ?? 30000) / 1000)} -MaximumRedirection 0 -SkipHttpErrorCheck`)
   }
   return lines.join('\n')
 }
 
 function toFetch(req: HttpRequestPayload): string {
-  const headersJson = JSON.stringify(req.headers, null, 2)
-  const opts: string[] = [`  method: '${req.method}'`, `  headers: ${headersJson}`]
-  if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
+  const headersJson = `JSON.parse(${JSON.stringify(JSON.stringify(req.headers))})`
+  const opts: string[] = [`  method: '${req.method}'`, `  headers: ${headersJson}`, "  redirect: 'manual'", `  signal: AbortSignal.timeout(${req.timeoutMs ?? 30000})`]
+  if (hasBody(req)) {
     opts.push(`  body: ${JSON.stringify(req.body)}`)
   }
   return `const res = await fetch(${JSON.stringify(req.url)}, {\n${opts.join(',\n')}\n})\nconst data = await res.text()\nconsole.log(res.status, data)`
@@ -110,28 +126,31 @@ function toAxios(req: HttpRequestPayload): string {
     url: req.url,
     headers: req.headers
   }
-  if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
+  cfg.timeout = req.timeoutMs ?? 30000
+  cfg.maxRedirects = 0
+  if (hasBody(req)) {
     cfg.data = req.body
   }
-  return `import axios from 'axios'\n\nconst res = await axios(${JSON.stringify(cfg, null, 2)})\nconsole.log(res.status, res.data)`
+  return `import axios from 'axios'\n\nconst config = JSON.parse(${JSON.stringify(JSON.stringify(cfg))})\nconst res = await axios({ ...config, validateStatus: () => true })\nconsole.log(res.status, res.data)`
 }
 
 function toPython(req: HttpRequestPayload): string {
   const headers = JSON.stringify(req.headers, null, 2)
   const lines = [
     'import requests',
+    ...(hasBody(req) ? ['import base64'] : []),
     '',
     `url = ${JSON.stringify(req.url)}`,
     `headers = ${headers}`
   ]
-  if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
-    lines.push(`data = ${JSON.stringify(req.body)}`)
+  if (hasBody(req)) {
+    lines.push(`data = base64.b64decode('${encodeBase64(req.body!)}')`)
     lines.push(
-      `res = requests.request(${JSON.stringify(req.method)}, url, headers=headers, data=data)`
+      `res = requests.request(${JSON.stringify(req.method)}, url, headers=headers, data=data, allow_redirects=False, timeout=${(req.timeoutMs ?? 30000) / 1000})`
     )
   } else {
     lines.push(
-      `res = requests.request(${JSON.stringify(req.method)}, url, headers=headers)`
+      `res = requests.request(${JSON.stringify(req.method)}, url, headers=headers, allow_redirects=False, timeout=${(req.timeoutMs ?? 30000) / 1000})`
     )
   }
   lines.push('print(res.status_code)', 'print(res.text)')
@@ -139,16 +158,13 @@ function toPython(req: HttpRequestPayload): string {
 }
 
 function toHttpie(req: HttpRequestPayload): string {
-  const parts = [`http ${req.method} ${req.url}`]
+  const parts = [`http --timeout=${(req.timeoutMs ?? 30000) / 1000} ${req.method} '${esc(req.url)}'`]
   for (const [k, v] of headerEntries(req.headers)) {
-    parts.push(`${k}:"${v.replace(/"/g, '\\"')}"`)
+    parts.push(`'${esc(`${k}:${v}`)}'`)
   }
-  if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
-    const ct = Object.entries(req.headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1]
-    if (ct?.includes('json')) {
-      return `${parts.join(' ')}\n<<< '${esc(req.body)}'`
-    }
-    return `${parts.join(' ')}\n<<< '${esc(req.body)}'`
+  if (hasBody(req)) {
+    if (req.body!.includes('\0')) return `# GNU base64; on macOS replace --decode with -D\nprintf '%s' '${encodeBase64(req.body!)}' | base64 --decode | ${parts.join(' ')}`
+    return `printf '%s' '${esc(req.body!)}' | ${parts.join(' ')}`
   }
   return parts.join(' \\\n  ')
 }
@@ -158,8 +174,8 @@ function toGo(req: HttpRequestPayload): string {
     .map(([k, v]) => `\treq.Header.Set(${JSON.stringify(k)}, ${JSON.stringify(v)})`)
     .join('\n')
   const bodySetup =
-    req.body && req.method !== 'GET' && req.method !== 'HEAD'
-      ? `body := strings.NewReader(${JSON.stringify(req.body)})\n\treq, err := http.NewRequest(${JSON.stringify(req.method)}, ${JSON.stringify(req.url)}, body)`
+    hasBody(req)
+      ? `body, err := base64.StdEncoding.DecodeString("${encodeBase64(req.body!)}")\n\tif err != nil { panic(err) }\n\treq, err := http.NewRequest(${JSON.stringify(req.method)}, ${JSON.stringify(req.url)}, bytes.NewReader(body))`
       : `req, err := http.NewRequest(${JSON.stringify(req.method)}, ${JSON.stringify(req.url)}, nil)`
 
   return `package main
@@ -168,7 +184,7 @@ import (
 \t"fmt"
 \t"io"
 \t"net/http"
-\t"strings"
+${hasBody(req) ? '\t"bytes"\n\t"encoding/base64"\n' : ''}\t"time"
 )
 
 func main() {
@@ -177,7 +193,8 @@ func main() {
 \t\tpanic(err)
 \t}
 ${headerLines}
-\tres, err := http.DefaultClient.Do(req)
+\tclient := &http.Client{Timeout: ${req.timeoutMs ?? 30000} * time.Millisecond, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+\tres, err := client.Do(req)
 \tif err != nil {
 \t\tpanic(err)
 \t}
@@ -195,17 +212,20 @@ function toJava(req: HttpRequestPayload): string {
     )
     .join('\n')
   const bodyPart =
-    req.body && req.method !== 'GET' && req.method !== 'HEAD'
-      ? `.method("${req.method}", HttpRequest.BodyPublishers.ofString(${JSON.stringify(req.body)}))`
+    hasBody(req)
+      ? `.method("${req.method}", HttpRequest.BodyPublishers.ofByteArray(Base64.getDecoder().decode("${encodeBase64(req.body!)}")))`
       : `.method("${req.method}", HttpRequest.BodyPublishers.noBody())`
 
   return `import java.net.URI;
 import java.net.http.*;
+import java.time.Duration;
+${hasBody(req) ? 'import java.util.Base64;\n' : ''}
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        HttpClient client = HttpClient.newHttpClient();
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpRequest request = HttpRequest.newBuilder()
+            .timeout(Duration.ofMillis(${req.timeoutMs ?? 30000}))
             .uri(URI.create(${JSON.stringify(req.url)}))
 ${headerLines}
             ${bodyPart}

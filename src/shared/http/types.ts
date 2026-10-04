@@ -33,6 +33,7 @@ export interface HttpResponsePayload {
   ok: boolean
   headers: Record<string, string>
   bodyText: string
+  bodyEncoding: 'utf8' | 'base64'
   size: number
   timeMs: number
   finalUrl: string

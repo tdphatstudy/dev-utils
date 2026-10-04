@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { normalizeDnsHost, DNS_RECORD_TYPES, type DnsRecordType } from '@shared/network/dns'
+import { normalizeDnsInput, DNS_RECORD_TYPES, DNS_RECORD_HELP, type DnsRecordType } from '@shared/network/dns'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -12,7 +12,8 @@ export default function DnsLookup(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
-  const normalized = normalizeDnsHost(host)
+  const running = useRef(false)
+  const normalized = normalizeDnsInput(host, type)
   const available = !!window.devutils?.net
   useEffect(() => () => { request.current++ }, [])
   const invalidate = (): void => { request.current++; setBusy(false); setOutput(''); setError(null); setStatusMsg(null) }
@@ -23,7 +24,8 @@ export default function DnsLookup(): JSX.Element {
   )
 
   const lookup = async (): Promise<void> => {
-    if (busy || !normalized.ok || !available) return
+    if (running.current || !normalized.ok || !available) return
+    running.current = true
     const version = ++request.current
     setBusy(true)
     setError(null)
@@ -43,7 +45,7 @@ export default function DnsLookup(): JSX.Element {
         )
       } else {
         setStatusTone('success')
-        setStatusMsg(`${result.hostname} · ${result.type} resolved via configured DNS servers`)
+        setStatusMsg(`${result.hostname} · ${result.type} · ${Array.isArray(result.records) ? result.records.length : 1} record(s) · ${result.durationMs ?? '—'} ms`)
       }
     } catch (e) {
       if (version !== request.current) return
@@ -52,6 +54,7 @@ export default function DnsLookup(): JSX.Element {
       setStatusTone('danger')
       setStatusMsg(null)
     } finally {
+      running.current = false
       if (version === request.current) setBusy(false)
     }
   }
@@ -62,11 +65,12 @@ export default function DnsLookup(): JSX.Element {
         <input
           aria-label="DNS hostname or URL"
           aria-invalid={!!host.trim() && !normalized.ok}
+          aria-describedby="dns-input-help"
           disabled={busy}
           className="mac-input max-w-xs font-mono"
           value={host}
           onChange={(e) => { invalidate(); setHost(e.target.value) }}
-          placeholder="hostname"
+          placeholder={type === 'PTR' ? 'IPv4 or IPv6 address' : 'Hostname or https:// URL'}
           spellCheck={false}
           onKeyDown={(e) => {
             if (e.key === 'Enter') void lookup()
@@ -88,18 +92,25 @@ export default function DnsLookup(): JSX.Element {
         <button type="button" className="mac-btn-primary" disabled={busy || !normalized.ok || !available} onClick={lookup}>
           {busy ? 'Looking up…' : 'Lookup'}
         </button>
+        <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => { invalidate(); setHost(type === 'PTR' ? '1.1.1.1' : type === 'SRV' ? '_sip._tcp.example.com' : 'example.com') }}>Sample</button>
+        <button type="button" className="mac-btn-secondary" disabled={busy || (!host && !output)} onClick={() => { invalidate(); setHost('') }}>Clear</button>
         <div className="ml-auto">
-          <CopyButton text={output} />
+          <CopyButton text={output} label="Copy response" />
         </div>
       </ToolToolbar>
+      <div id="dns-input-help" className="shrink-0 border-b border-mac-separator px-4 py-2 text-[12px] text-mac-label-secondary">
+        <p>{DNS_RECORD_HELP[type]}</p>
+        {normalized.ok && normalized.hostname !== host.trim() && <p className="break-all font-mono">Query: {normalized.hostname}</p>}
+        <p className="mt-1 text-[11px] text-mac-label-tertiary">Queries configured DNS servers when you run Lookup. Local hosts-file entries are not used.</p>
+      </div>
 
       <div className="min-h-0 flex-1 p-3">
         <CodeEditor value={output} language="json" label="DNS response" placeholder={busy ? 'Resolving…' : 'Run Lookup to see DNS records'} readOnly />
       </div>
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : statusMsg ? statusTone : 'neutral'}>
-          {!available ? 'DNS Lookup requires the DevUtils desktop app.' : !normalized.ok ? normalized.error : busy ? `Resolving ${normalized.hostname} · timeout 5 seconds…` : error ??
+        <ToolStatus tone={error || (!normalized.ok && !!host.trim()) ? 'danger' : statusMsg ? statusTone : 'neutral'}>
+          {!normalized.ok ? normalized.error : !available ? 'DNS Lookup requires the DevUtils desktop app.' : busy ? `Resolving ${normalized.hostname} · timeout 5 seconds…` : error ??
             statusMsg ??
             `Ready to query ${normalized.hostname} · click Lookup or press Enter · no records is a valid response`}
         </ToolStatus>

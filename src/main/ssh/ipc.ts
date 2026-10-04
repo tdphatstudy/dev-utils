@@ -8,6 +8,7 @@ import type {
   SshLocation
 } from '@shared/ssh/types'
 import { generateKeyPair } from '../crypto-keys'
+import { assertTrustedIpc } from '../ipc-trust'
 import {
   createSshKey,
   deleteHost,
@@ -24,8 +25,13 @@ import {
 import { resolveSshPaths } from './paths'
 
 export function registerCryptoAndSshIpc(): void {
-  ipcMain.handle('crypto:generateKeyPair', (_e, req: KeygenRequest) => {
-    return generateKeyPair(req)
+  let generating = false
+  ipcMain.handle('crypto:generateKeyPair', async (event, req: KeygenRequest) => {
+    assertTrustedIpc(event)
+    if (generating) throw new Error('Key generation is already running. Wait for completion.')
+    generating = true
+    try { return await generateKeyPair(req) }
+    finally { generating = false }
   })
 
   ipcMain.handle('ssh:list', async (_e, location?: SshLocation | null) =>

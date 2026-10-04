@@ -70,6 +70,37 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 | UI tokens/components | `styles/globals.css`, `components/ui`, `tailwind.config.js` | các đường dẫn đầu tiên thuộc `src/renderer/src` |
 | Bundle/installer | `electron.vite.config.ts`, `electron-builder.yml` | `scripts/after-pack.mjs`, `resources` |
 
+File Hash dùng `src/main/file-hash.ts` để đọc từng khối 64 KB. Registrar
+`file-hash-ipc.ts` giữ một job trên mỗi cửa sổ, gửi tiến độ theo request ID và
+hủy bằng AbortSignal khi user hủy hoặc cửa sổ đóng. Preload chỉ cung cấp named
+methods `hash`, `cancelHash`, `onHashProgress`; unsubscribe gỡ đúng listener.
+File/hash/dialog và crypto key generation kiểm tra main frame + URL renderer qua
+`ipc-trust.ts`; DNS cũng dùng guard này và giới hạn một query trên mỗi cửa sổ.
+Các registrar khác còn nằm trong checklist review.
+
+DNS Lookup nhận A/AAAA/MX/TXT/CNAME/NS/SRV/SOA/PTR. A/AAAA trả address + TTL;
+PTR dùng complete IP và `Resolver.reverse`. Shared normalization giữ nguyên nhãn
+DNS dạng số, xử lý IDNA và giới hạn tên; main dùng deadline 5 giây độc lập với
+resolver cancellation. Truy vấn dùng DNS server đã cấu hình, không dùng hosts file
+(xem [Node DNS API](https://nodejs.org/api/dns.html)).
+
+HTTP dùng `http-ipc.ts` để giữ một request trên mỗi cửa sổ và hủy theo request ID.
+Service validate payload tại runtime, đọc response từng khối với giới hạn 5 MB,
+giữ binary/non-UTF-8 bằng `bodyEncoding: 'base64'`. Redirect trả về để user kiểm tra
+Location và chạy request mới, không tự chuyển payload sang URL khác. Timeout bao
+gồm thời gian đọc body. Request có duplicate params/form fields được giữ nguyên;
+form mode là multipart text fields, chưa hỗ trợ upload file. HTTP response mặc định
+hiện raw; format JSON dùng `format-text.ts` để giữ nguyên số, key trùng và escapes.
+Code export ghi rõ shell/runtime, timeout và redirect policy; private request data
+không lưu vào generic history/drafts. PowerShell body mã hóa base64 để giữ byte và
+tránh phụ thuộc quoting/here-string (tham khảo [quy tắc PowerShell](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules)).
+
+Key Generator dùng Node crypto bất đồng bộ. `fingerprintSha256`/`fingerprintHex`
+là SHA-256 của SPKI DER; `fingerprintOpenSshSha256` là SHA-256 của payload OpenSSH,
+null cho X25519. Không đổi nghĩa hai field SPKI cũ. SSH key mới dùng fingerprint
+OpenSSH trong kết quả tạo key. Renderer giữ key trong state của tool và có reveal,
+copy, clear; generic history/drafts không lưu private key.
+
 `src/shared/privatebox/*` re-export compatibility từ `secret-box/*`. Tên UI
 Private Box, service Secret Box và IPC `privateBox:*` cùng chỉ một domain. Không
 tạo thêm một engine vault vì thấy tên khác nhau.

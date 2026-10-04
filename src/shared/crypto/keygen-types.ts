@@ -20,6 +20,8 @@ export interface KeygenResult {
   publicKeyPem: string
   /** OpenSSH one-line public key when supported; null for X25519 */
   publicKeyOpenSsh: string | null
+  /** SHA-256 of the OpenSSH wire payload; distinct from the SPKI fingerprints below. */
+  fingerprintOpenSshSha256: string | null
   fingerprintSha256: string
   fingerprintHex: string
   /** Human label e.g. RSA 2048, Ed25519 */

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RefreshCw, AlertTriangle } from 'lucide-react'
 import type { KeygenAlgorithm, KeygenResult } from '@shared/crypto/keygen-types'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -22,8 +22,19 @@ export default function KeygenTool(): JSX.Element {
   const [result, setResult] = useState<KeygenResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPrivate, setShowPrivate] = useState(false)
+  const request = useRef(0)
+  const running = useRef(false)
+  const available = !!window.devutils?.crypto
+  const commentError = comment.length > 256 || /[\r\n\0]/.test(comment) ? 'Comment must be one line, at most 256 characters.' : null
+  useEffect(() => () => { request.current++ }, [])
+  const clear = (): void => { setResult(null); setShowPrivate(false); setError(null) }
 
   const generate = async (): Promise<void> => {
+    if (running.current || !available || commentError) return
+    running.current = true
+    const version = ++request.current
+    clear()
     setBusy(true)
     setError(null)
     try {
@@ -32,12 +43,15 @@ export default function KeygenTool(): JSX.Element {
         modulusLength: algorithm === 'rsa' ? modulus : undefined,
         comment
       })
-      setResult(r)
+      if (version === request.current) setResult(r)
     } catch (e) {
-      setResult(null)
-      setError(e instanceof Error ? e.message : 'Key generation failed')
+      if (version === request.current) {
+        setResult(null)
+        setError(e instanceof Error ? e.message : 'Key generation failed')
+      }
     } finally {
-      setBusy(false)
+      running.current = false
+      if (version === request.current) setBusy(false)
     }
   }
 
@@ -49,7 +63,8 @@ export default function KeygenTool(): JSX.Element {
           <select
             className="mac-input !w-auto max-w-[11rem] !py-1"
             value={algorithm}
-            onChange={(e) => setAlgorithm(e.target.value as KeygenAlgorithm)}
+            disabled={busy}
+            onChange={(e) => { clear(); setAlgorithm(e.target.value as KeygenAlgorithm) }}
           >
             {ALGS.map((a) => (
               <option key={a.id} value={a.id}>
@@ -65,7 +80,8 @@ export default function KeygenTool(): JSX.Element {
             <select
               className="mac-input !w-auto !py-1"
               value={modulus}
-              onChange={(e) => setModulus(Number(e.target.value) as 2048 | 3072 | 4096)}
+              disabled={busy}
+              onChange={(e) => { clear(); setModulus(Number(e.target.value) as 2048 | 3072 | 4096) }}
             >
               <option value={2048}>2048</option>
               <option value={3072}>3072</option>
@@ -79,7 +95,9 @@ export default function KeygenTool(): JSX.Element {
           <input
             className="mac-input !w-36 !py-1 font-mono text-[12px]"
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            disabled={busy}
+            maxLength={256}
+            onChange={(e) => { clear(); setComment(e.target.value) }}
             placeholder="user@host"
             spellCheck={false}
           />
@@ -88,12 +106,13 @@ export default function KeygenTool(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
-          disabled={busy}
+          disabled={busy || !available || !!commentError}
           onClick={() => void generate()}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
           {busy ? 'Generating…' : 'Generate'}
         </button>
+        {result && <button type="button" className="mac-btn-secondary" onClick={clear}>Clear keys</button>}
 
         {result && (
           <div className="ml-auto flex flex-wrap gap-2">
@@ -109,33 +128,33 @@ export default function KeygenTool(): JSX.Element {
       <div className="flex items-start gap-2 border-b border-mac-separator bg-mac-warning/10 px-4 py-2 text-[12px] text-mac-label-secondary">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mac-warning" />
         <span>
-          Keys are generated locally in the main process and are <strong>not</strong> written to disk
-          unless you copy/save them. Treat the private key as secret. X25519 is for key agreement only
+          Keys are generated locally and stay in memory until you clear them or leave this tool.
+          Copy private PEM only when you need it. X25519 is for key agreement only
           (no OpenSSH public line).
         </span>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto" aria-busy={busy}>
       {result ? (
         <>
           <div className="flex flex-wrap gap-3 border-b border-mac-separator px-4 py-2 text-[12px]">
             <span className="font-medium text-mac-label">{result.label}</span>
-            <span className="font-mono text-mac-label-secondary">{result.fingerprintSha256}</span>
-            <span className="font-mono text-[11px] text-mac-label-tertiary">
-              hex {result.fingerprintHex.slice(0, 16)}…
-            </span>
+            <span className="break-all font-mono text-mac-label-secondary">SPKI {result.fingerprintSha256}</span>
+            {result.fingerprintOpenSshSha256 && <span className="break-all font-mono text-mac-label-secondary">OpenSSH {result.fingerprintOpenSshSha256}</span>}
           </div>
-          <SplitPane>
+          <SplitPane className="min-h-[320px] shrink-0">
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-danger">
                 Private (PKCS#8 PEM)
               </span>
-              <CodeEditor value={result.privateKeyPem} language="text" readOnly className="min-h-0 flex-1" />
+              <button type="button" className="mac-btn-secondary self-start" aria-pressed={showPrivate} onClick={() => setShowPrivate(!showPrivate)}>{showPrivate ? 'Hide private key' : 'Reveal private key'}</button>
+              {showPrivate ? <CodeEditor value={result.privateKeyPem} label="Private PKCS#8 key" language="text" readOnly className="min-h-0 flex-1" /> : <div className="flex min-h-24 flex-1 items-center justify-center rounded-mac border border-mac-separator text-[12px] text-mac-label-secondary">Private key hidden. Use Reveal or Copy private PEM.</div>}
             </div>
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-success">
                 Public (SPKI PEM)
               </span>
-              <CodeEditor value={result.publicKeyPem} language="text" readOnly className="min-h-0 flex-1" />
+              <CodeEditor value={result.publicKeyPem} label="Public SPKI key" language="text" readOnly className="min-h-0 flex-1" />
             </div>
           </SplitPane>
           {result.publicKeyOpenSsh && (
@@ -151,16 +170,18 @@ export default function KeygenTool(): JSX.Element {
         </>
       ) : (
         <div className="flex flex-1 items-center justify-center text-[13px] text-mac-label-tertiary">
-          Choose an algorithm and click Generate
+          {busy ? `Generating ${algorithm === 'rsa' ? `RSA ${modulus}; this may take a moment` : algorithm}…` : available ? 'Choose an algorithm and click Generate' : 'Open the desktop app to generate keys locally.'}
         </div>
       )}
+      </div>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : result ? 'success' : 'neutral'}>
-          {error ??
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
+        <ToolStatus tone={error || commentError ? 'danger' : result ? 'success' : 'neutral'}>
+          {error ?? commentError ??
+            (busy ? 'Generating locally; controls unlock when complete.' : !available ? 'Desktop app required' :
             (result
               ? `Generated ${result.label} · fingerprint ready · user-initiated`
-              : 'RSA · ECDSA · Ed25519 · X25519 · local Node crypto')}
+              : 'RSA · ECDSA · Ed25519 · X25519 · local Node crypto'))}
         </ToolStatus>
       </footer>
     </div>

@@ -31,7 +31,8 @@ import type {
   SshLocation
 } from '@shared/ssh/types'
 
-export type HashAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
+import type { HashAlgorithm, FileHashProgress } from '@shared/file/hash'
+export type { HashAlgorithm } from '@shared/file/hash'
 
 export interface FileInfo {
   path: string
@@ -53,8 +54,14 @@ const api = {
   },
 
   file: {
-    hash: (path: string, algorithm: HashAlgorithm): Promise<string> =>
-      ipcRenderer.invoke('file:hash', { path, algorithm }),
+    hash: (path: string, algorithm: HashAlgorithm, requestId: string): Promise<string> =>
+      ipcRenderer.invoke('file:hash', { path, algorithm, requestId }),
+    cancelHash: (requestId: string): Promise<boolean> => ipcRenderer.invoke('file:cancelHash', requestId),
+    onHashProgress: (callback: (progress: FileHashProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: FileHashProgress): void => callback(progress)
+      ipcRenderer.on('file:hashProgress', listener)
+      return () => ipcRenderer.removeListener('file:hashProgress', listener)
+    },
     info: (path: string): Promise<FileInfo> => ipcRenderer.invoke('file:info', path),
     openDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile')
   },
@@ -62,8 +69,9 @@ const api = {
   net: {
     dnsLookup: (hostname: string, recordType: DnsRecordType): Promise<DnsLookupResult> =>
       ipcRenderer.invoke('net:dnsLookup', { hostname, recordType }),
-    httpRequest: (payload: HttpRequestPayload): Promise<HttpResponsePayload> =>
-      ipcRenderer.invoke('net:httpRequest', payload)
+    httpRequest: (payload: HttpRequestPayload, requestId: string): Promise<HttpResponsePayload> =>
+      ipcRenderer.invoke('net:httpRequest', payload, requestId),
+    cancelHttpRequest: (requestId: string): Promise<boolean> => ipcRenderer.invoke('net:cancelHttpRequest', requestId)
   },
 
   ports: {
