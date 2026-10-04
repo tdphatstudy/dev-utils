@@ -1,3 +1,5 @@
+import { diagnoseJson } from './diagnostics'
+
 export type JsonValue =
   | null
   | boolean
@@ -16,6 +18,8 @@ export type ParseResult =
       error: string
       line?: number
       column?: number
+      offset?: number
+      hint?: string
     }
 
 export function parseJson(input: string): ParseResult {
@@ -24,17 +28,7 @@ export function parseJson(input: string): ParseResult {
     return { ok: true, value }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Invalid JSON'
-    const match = /position\s+(\d+)/i.exec(message)
-    let line: number | undefined
-    let column: number | undefined
-    if (match) {
-      const pos = Number(match[1])
-      const before = input.slice(0, pos)
-      const lines = before.split(/\n/)
-      line = lines.length
-      column = (lines[lines.length - 1]?.length ?? 0) + 1
-    }
-    return { ok: false, error: message, line, column }
+    return { ok: false, ...diagnoseJson(input, message) }
   }
 }
 
@@ -58,7 +52,7 @@ function sortKeysDeep(value: JsonValue): JsonValue {
     return value.map(sortKeysDeep)
   }
   if (value !== null && typeof value === 'object') {
-    const sorted: Record<string, JsonValue> = {}
+    const sorted: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>
     for (const key of Object.keys(value).sort()) {
       sorted[key] = sortKeysDeep((value as Record<string, JsonValue>)[key])
     }

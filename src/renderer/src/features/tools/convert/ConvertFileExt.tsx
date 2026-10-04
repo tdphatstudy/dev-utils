@@ -12,6 +12,7 @@ import {
 } from '@shared/convert/formats'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 
 const SAMPLE_JSON = `{
   "name": "DevUtils",
@@ -63,7 +64,7 @@ export default function ConvertFileExt(): JSX.Element {
           </select>
         </label>
 
-        <button type="button" className="mac-btn-secondary" onClick={swap} title="Swap formats">
+        <button type="button" className="mac-btn-secondary" disabled={!result.ok} onClick={swap} title="Use the converted output as input and reverse formats">
           <ArrowLeftRight className="h-3.5 w-3.5" />
           Swap
         </button>
@@ -104,7 +105,7 @@ export default function ConvertFileExt(): JSX.Element {
             defaultName={to === 'json' ? undefined : `converted.${to === 'yaml' ? 'yaml' : 'txt'}`}
             disabled={!result.ok}
           />
-          <CopyButton text={output} />
+          <CopyButton text={output} label="Copy output" />
           <button
             type="button"
             className="mac-btn-ghost"
@@ -117,6 +118,7 @@ export default function ConvertFileExt(): JSX.Element {
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted.${to}`} accept=".json,.yaml,.yml,.txt" />
       </ToolToolbar>
 
       <SplitPane>
@@ -129,6 +131,7 @@ export default function ConvertFileExt(): JSX.Element {
             onChange={setInput}
             language={fromMeta.language}
             placeholder={`Paste ${fromMeta.label}…`}
+            label={`${fromMeta.label} input`}
           />
         </div>
         <div className="flex min-h-0 flex-col gap-1">
@@ -140,7 +143,7 @@ export default function ConvertFileExt(): JSX.Element {
       </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={result.ok ? 'success' : 'danger'}>
+        <ToolStatus tone={!input.trim() ? 'neutral' : result.ok ? 'success' : 'danger'}>
           {result.ok
             ? `${fromMeta.label} → ${toMeta.label} · ${output.length.toLocaleString()} chars`
             : result.error}

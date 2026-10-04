@@ -1,5 +1,6 @@
 import { format as formatSqlLib, type SqlLanguage } from 'sql-formatter'
 import { Parser } from 'node-sql-parser'
+import { compactSql } from './compact'
 
 export type SqlDialectId =
   | 'generic'
@@ -37,8 +38,8 @@ export const SQL_DIALECTS: SqlDialectMeta[] = [
     id: 'plsql',
     label: 'Oracle (PL/SQL)',
     formatter: 'plsql',
-    parserDb: 'MySQL',
-    validateNote: 'validate ≈ MySQL (format uses PL/SQL)'
+    parserDb: null,
+    validateNote: 'Formatting supported; Oracle syntax is not fully validated'
   },
   {
     id: 'bigquery',
@@ -60,7 +61,7 @@ export function getSqlDialect(id: SqlDialectId): SqlDialectMeta {
 
 export type SqlResult =
   | { ok: true; text: string; note?: string }
-  | { ok: false; error: string; line?: number; note?: string }
+  | { ok: false; error: string; line?: number; column?: number; offset?: number; note?: string }
 
 export interface FormatSqlOptions {
   dialect?: SqlDialectId
@@ -86,10 +87,7 @@ export function formatSql(input: string, options: FormatSqlOptions = {}): SqlRes
       denseOperators: !!options.minify
     })
     const out = options.minify
-      ? text
-          .replace(/\s*\n\s*/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
+      ? compactSql(text)
       : text.endsWith('\n')
         ? text
         : `${text}\n`
@@ -125,13 +123,15 @@ export function validateSql(
     return { ok: true, text: input, note: dialect.validateNote }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Invalid SQL'
-    // node-sql-parser often embeds location in message
+    const location = (e as { location?: { start?: { line?: number; column?: number; offset?: number } } })?.location?.start
     const lineMatch = /line\s+(\d+)/i.exec(message) ?? /L(\d+):/i.exec(message)
-    const line = lineMatch ? Number(lineMatch[1]) : undefined
+    const line = location?.line ?? (lineMatch ? Number(lineMatch[1]) : undefined)
     return {
       ok: false,
       error: message.replace(/^Error:\s*/i, ''),
       line,
+      column: location?.column,
+      offset: location?.offset,
       note: dialect.validateNote
     }
   }

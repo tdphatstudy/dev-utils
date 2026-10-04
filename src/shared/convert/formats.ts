@@ -1,5 +1,6 @@
 import YAML from 'yaml'
-import type { JsonValue } from '@shared/json'
+import { parseJson, type JsonValue } from '@shared/json'
+import { formatYaml, parseYaml, yamlToJson } from '@shared/yaml'
 
 export type FormatId = 'json' | 'yaml'
 
@@ -17,13 +18,7 @@ const jsonAdapter: FormatAdapter = {
   label: 'JSON',
   extensions: ['.json'],
   language: 'json',
-  parse: (text) => {
-    try {
-      return { ok: true, value: JSON.parse(text) as JsonValue }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : 'Invalid JSON' }
-    }
-  },
+  parse: parseJson,
   stringify: (value, options) => JSON.stringify(value, null, options?.indent ?? 2)
 }
 
@@ -32,13 +27,7 @@ const yamlAdapter: FormatAdapter = {
   label: 'YAML',
   extensions: ['.yaml', '.yml'],
   language: 'yaml',
-  parse: (text) => {
-    try {
-      return { ok: true, value: YAML.parse(text) as JsonValue }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : 'Invalid YAML' }
-    }
-  },
+  parse: parseYaml,
   stringify: (value) => YAML.stringify(value, { indent: 2, lineWidth: 0 })
 }
 
@@ -56,14 +45,23 @@ export function convertFormat(
   to: FormatId,
   options?: { indent?: number }
 ): { ok: true; text: string; value: JsonValue } | { ok: false; error: string } {
+  if (!text.trim()) return { ok: false, error: 'Paste text or open a file to convert.' }
+  if (from === 'yaml' && to === 'json') {
+    const result = yamlToJson(text, options?.indent)
+    return result.ok ? { ok: true, value: result.value, text: result.text ?? '' } : result
+  }
+  if (from === 'yaml' && to === 'yaml') {
+    const result = formatYaml(text)
+    return result.ok ? { ok: true, value: result.value, text: result.text ?? '' } : result
+  }
   const source = getFormat(from)
   const target = getFormat(to)
   const parsed = source.parse(text)
   if (!parsed.ok) return parsed
-  return {
-    ok: true,
-    value: parsed.value,
-    text: target.stringify(parsed.value, options)
+  try {
+    return { ok: true, value: parsed.value, text: target.stringify(parsed.value, options) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not convert this document.' }
   }
 }
 
@@ -76,14 +74,7 @@ export function detectFormat(text: string, filename?: string): FormatId | null {
   }
   const t = text.trim()
   if (!t) return null
-  if (t.startsWith('{') || t.startsWith('[')) {
-    try {
-      JSON.parse(t)
-      return 'json'
-    } catch {
-      /* try yaml */
-    }
-  }
+  if (parseJson(t).ok) return 'json'
   try {
     YAML.parse(t)
     return 'yaml'

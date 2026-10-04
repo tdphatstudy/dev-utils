@@ -2,11 +2,15 @@ import { create } from 'zustand'
 
 export const NO_HISTORY_TOOLS = new Set([
   'security.random',
+  'security.keygen',
   'security.hash',
   'security.hmac',
   'security.jwt',
   'security.aes',
-  'privatebox.home'
+  'privatebox.home',
+  'privatebox.keep',
+  'network.ssh',
+  'network.http'
 ])
 
 export interface HistoryEntry {

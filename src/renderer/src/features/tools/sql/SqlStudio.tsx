@@ -10,6 +10,7 @@ import {
   type SqlDialectId
 } from '@shared/sql'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const SAMPLES: Record<SqlDialectId, string> = {
@@ -85,7 +86,7 @@ export default function SqlStudio(): JSX.Element {
     : validated.ok
       ? {
           tone: 'success' as const,
-          text: `Valid · ${input.length.toLocaleString()} chars${
+          text: `${dialect === 'plsql' ? 'Formatted' : 'Syntax checked'} · ${input.length.toLocaleString()} chars${
             validated.note ? ` · ${validated.note}` : ''
           }`
         }
@@ -102,6 +103,7 @@ export default function SqlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
+          disabled={!formatted.ok || !input.trim()}
           onClick={() => {
             const r = formatSql(input, { dialect, indent, uppercaseKeywords: uppercase })
             if (r.ok) setInput(r.text)
@@ -112,6 +114,7 @@ export default function SqlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-secondary"
+          disabled={!formatted.ok || !input.trim()}
           onClick={() => {
             const r = minifySql(input, { dialect, uppercaseKeywords: uppercase })
             if (r.ok) setInput(r.text)
@@ -176,6 +179,7 @@ export default function SqlStudio(): JSX.Element {
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={formatted.ok ? formatted.text : ''} fileName="formatted.sql" accept=".sql,.txt" />
       </ToolToolbar>
 
       <div className="min-h-0 flex-1 p-3">
@@ -185,6 +189,9 @@ export default function SqlStudio(): JSX.Element {
           language="sql"
           sqlDialect={dialect}
           placeholder="Paste SQL…"
+          label={`${SQL_DIALECTS.find((item) => item.id === dialect)?.label ?? 'SQL'} input`}
+          issue={!input.trim() || validated.ok ? null : validated}
+          onRun={() => { if (formatted.ok) setInput(formatted.text) }}
         />
       </div>
 

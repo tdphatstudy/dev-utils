@@ -10,6 +10,8 @@ export interface LineDiffResult {
   added: number
   removed: number
   unchanged: number
+  /** Large inputs use a bounded comparison of the unchanged prefix/suffix. */
+  coarse?: boolean
 }
 
 /**
@@ -21,6 +23,8 @@ export function diffLines(leftText: string, rightText: string): LineDiffResult {
   const right = splitLines(rightText)
   const n = left.length
   const m = right.length
+
+  if ((n + 1) * (m + 1) > 2_000_000) return coarseDiff(left, right)
 
   const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0))
   for (let i = n - 1; i >= 0; i--) {
@@ -106,6 +110,42 @@ export function diffLines(leftText: string, rightText: string): LineDiffResult {
   }
 
   return { pairs, added, removed, unchanged }
+}
+
+function coarseDiff(left: string[], right: string[]): LineDiffResult {
+  let prefix = 0
+  while (prefix < left.length && prefix < right.length && left[prefix] === right[prefix]) prefix++
+  let suffix = 0
+  while (suffix < left.length - prefix && suffix < right.length - prefix && left[left.length - 1 - suffix] === right[right.length - 1 - suffix]) suffix++
+  const pairs: LineDiffPair[] = []
+  const equal = (li: number, ri: number): void => {
+    pairs.push({ left: { line: li + 1, text: left[li]!, kind: 'equal' }, right: { line: ri + 1, text: right[ri]!, kind: 'equal' } })
+  }
+  for (let i = 0; i < prefix; i++) equal(i, i)
+  const removed = left.length - prefix - suffix
+  const added = right.length - prefix - suffix
+  for (let i = 0; i < Math.max(removed, added); i++) {
+    pairs.push({
+      left: i < removed ? { line: prefix + i + 1, text: left[prefix + i]!, kind: 'remove' } : null,
+      right: i < added ? { line: prefix + i + 1, text: right[prefix + i]!, kind: 'add' } : null
+    })
+  }
+  for (let i = suffix; i > 0; i--) equal(left.length - i, right.length - i)
+  return { pairs, added, removed, unchanged: prefix + suffix, coarse: true }
+}
+
+/** Portable text report; copying a diff should copy the comparison, not just B. */
+export function lineDiffReport(result: LineDiffResult): string {
+  const lines = ['--- Left', '+++ Right']
+  if (result.coarse) lines.push('# Large input: changes grouped between equal prefix and suffix')
+  for (const pair of result.pairs) {
+    if (pair.left?.kind === 'equal') lines.push(` ${pair.left.text}`)
+    else {
+      if (pair.left) lines.push(`-${pair.left.text}`)
+      if (pair.right) lines.push(`+${pair.right.text}`)
+    }
+  }
+  return lines.join('\n')
 }
 
 function splitLines(text: string): string[] {

@@ -13,15 +13,18 @@ export function useToolDraft(
   const setDraft = useSessionStore((s) => s.setDraft)
   const getDraft = useSessionStore((s) => s.getDraft)
   const pushHistory = useSessionStore((s) => s.pushHistory)
-  const restored = useRef(false)
+  const restored = useRef<string | null>(null)
+  const snapshots = useRef(new Map<string, { value: string; label: string; history: boolean }>())
+  const pendingFlush = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  snapshots.current.set(toolId, { value, label: options?.label ?? toolId, history: !!options?.historyOnUnmount })
 
   useEffect(() => {
-    if (NO_HISTORY_TOOLS.has(toolId) || restored.current) return
+    if (NO_HISTORY_TOOLS.has(toolId) || restored.current === toolId) return
     const draft = getDraft(toolId)
     if (draft != null && draft !== value) {
       setValue(draft)
     }
-    restored.current = true
+    restored.current = toolId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolId])
 
@@ -32,15 +35,20 @@ export function useToolDraft(
   }, [toolId, value, setDraft])
 
   useEffect(() => {
-    if (!options?.historyOnUnmount || NO_HISTORY_TOOLS.has(toolId)) return
+    if (NO_HISTORY_TOOLS.has(toolId)) return
+    const pending = pendingFlush.current.get(toolId)
+    if (pending) clearTimeout(pending)
     return () => {
-      if (value.trim()) {
-        pushHistory({
-          toolId,
-          label: options.label ?? toolId,
-          snippet: value.slice(0, HISTORY_SNIPPET_MAX)
-        })
-      }
+      const snapshot = snapshots.current.get(toolId)
+      if (!snapshot) return
+      // Cancelled by StrictMode's immediate setup; a real unmount flushes once.
+      pendingFlush.current.set(toolId, setTimeout(() => {
+        setDraft(toolId, snapshot.value)
+        if (snapshot.history && snapshot.value.trim()) {
+          pushHistory({ toolId, label: snapshot.label, snippet: snapshot.value.slice(0, HISTORY_SNIPPET_MAX) })
+        }
+        pendingFlush.current.delete(toolId)
+      }, 0))
     }
-  }, [toolId, value, pushHistory, options?.historyOnUnmount, options?.label])
+  }, [toolId, setDraft, pushHistory])
 }

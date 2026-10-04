@@ -47,7 +47,7 @@ export function ToolStatus({
           : 'bg-mac-label-tertiary/50'
 
   return (
-    <span className={cn('inline-flex items-center gap-2 text-[12px] leading-snug', color, className)}>
+    <span role="status" className={cn('inline-flex min-w-0 items-start gap-2 break-words text-[12px] leading-snug', color, className)}>
       <span className={cn('mac-status-dot', dot)} aria-hidden />
       <span className={tone === 'neutral' ? 'text-mac-label-secondary' : undefined}>{children}</span>
     </span>

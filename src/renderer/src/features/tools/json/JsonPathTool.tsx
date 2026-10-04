@@ -5,6 +5,8 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { parseJson } from '@shared/json'
 import { queryJsonPath } from '@shared/json/path'
+import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 
 const SAMPLE = `{
   "store": {
@@ -19,6 +21,7 @@ const SAMPLE = `{
 export default function JsonPathTool(): JSX.Element {
   const [json, setJson] = useState(SAMPLE)
   const [path, setPath] = useState('$.store.book[*].title')
+  const [outputMode, setOutputMode] = useState<'matches' | 'values' | 'paths'>('matches')
 
   const parsed = useMemo(() => parseJson(json), [json])
   const result = useMemo(() => {
@@ -29,21 +32,23 @@ export default function JsonPathTool(): JSX.Element {
   const output =
     result?.ok
       ? JSON.stringify(
-          result.values.map((value, i) => ({ path: result.paths[i], value })),
+          outputMode === 'values' ? result.values : outputMode === 'paths' ? result.paths : result.values.map((value, i) => ({ path: result.paths[i], value })),
           null,
           2
         )
       : ''
 
-  const status = !parsed.ok
+  const status = !json.trim()
+    ? { tone: 'neutral' as const, text: 'Paste JSON or open a file to query.' }
+    : !parsed.ok
     ? { tone: 'danger' as const, text: parsed.error }
     : !result
       ? { tone: 'neutral' as const, text: '—' }
       : !result.ok
         ? { tone: 'danger' as const, text: result.error }
         : {
-            tone: 'success' as const,
-            text: `${result.values.length} match${result.values.length === 1 ? '' : 'es'}`
+            tone: result.values.length ? 'success' as const : 'neutral' as const,
+            text: result.values.length ? `${result.values.length} match${result.values.length === 1 ? '' : 'es'}` : 'No matches. Check the key names and array indexes in your path.'
           }
 
   return (
@@ -55,6 +60,8 @@ export default function JsonPathTool(): JSX.Element {
           onChange={(e) => setPath(e.target.value)}
           placeholder="$.path.to[*].value"
           spellCheck={false}
+          aria-label="JSONPath expression"
+          aria-invalid={!!result && !result.ok}
         />
         <div className="flex gap-1">
           {['$.store.book[0]', '$.store.book[*].price', '$..price'].map((p) => (
@@ -64,19 +71,21 @@ export default function JsonPathTool(): JSX.Element {
           ))}
         </div>
         <div className="ml-auto">
-          <CopyButton text={output} />
+          <CopyButton text={output} label="Copy results" />
         </div>
+        <SegmentedControl value={outputMode} onChange={setOutputMode} options={[{ value: 'matches', label: 'Paths + values' }, { value: 'values', label: 'Values' }, { value: 'paths', label: 'Paths' }]} />
+        <TextInputActions value={json} onChange={setJson} output={output} fileName="query-results.json" accept=".json,.txt" />
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={json} onChange={setJson} language="json" />
-        <CodeEditor value={output} language="json" readOnly />
+        <CodeEditor value={json} onChange={setJson} language="json" label="JSON input" issue={!json.trim() || parsed.ok ? null : parsed} />
+        <CodeEditor value={output} language="json" readOnly label="Query results" />
       </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
         <span className="ml-auto text-[11px] text-mac-label-tertiary">
-          Supports $, .key, [n], [*], ..key
+          Supports $, .key, [n], [-n], [*], ["key"], ..key · no filters
         </span>
       </footer>
     </div>

@@ -15,6 +15,11 @@ describe('parseJson', () => {
 })
 
 describe('formatJson', () => {
+  it('keeps __proto__ as data while sorting keys', () => {
+    const result = formatJson('{"z":1,"__proto__":{"safe":true},"a":2}', { sortKeys: true })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(JSON.parse(result.text!)).toEqual(JSON.parse('{"z":1,"__proto__":{"safe":true},"a":2}'))
+  })
   it('beautifies', () => {
     const r = formatJson('{"b":1,"a":2}', { indent: 2, sortKeys: true })
     expect(r.ok).toBe(true)

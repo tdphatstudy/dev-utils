@@ -8,6 +8,7 @@ import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { formatYaml, jsonToYaml, parseYaml, yamlToJson } from '@shared/yaml'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 
 const SAMPLE = `name: DevUtils
 version: 1
@@ -52,6 +53,8 @@ export default function YamlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
+          disabled={!input.trim() || !formatted.ok}
+          title="Format while preserving YAML comments and aliases"
           onClick={() => {
             if (formatted.ok && formatted.text) setInput(formatted.text)
           }}
@@ -61,6 +64,8 @@ export default function YamlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-secondary"
+          disabled={!input.trim() || !asJson.ok}
+          title="Convert through JSON; YAML comments and aliases will be removed"
           onClick={() => {
             if (asJson.ok && asJson.text) {
               const back = jsonToYaml(asJson.text)
@@ -94,29 +99,30 @@ export default function YamlStudio(): JSX.Element {
                 ? undefined
                 : `yaml-${new Date().toISOString().slice(0, 10)}.yaml`
             }
-            disabled={!parsed.ok && !!input.trim()}
+            disabled={!input.trim() || !parsed.ok || (view === 'json' && !asJson.ok)}
           />
           <CopyButton text={outputCopy} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={view === 'json' ? jsonOut : yamlOut} fileName={view === 'json' ? 'converted.json' : 'formatted.yaml'} accept=".yaml,.yml,.txt" />
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder="Paste YAML…" />
+        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder="Paste YAML…" label="YAML input" issue={!input.trim() || parsed.ok ? null : parsed} onRun={() => { if (formatted.ok && formatted.text) setInput(formatted.text) }} />
         {view === 'tree' ? (
-          treeData !== null ? (
+          parsed.ok && asJson.ok ? (
             <TreeView data={treeData} />
           ) : (
             <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
-              Fix YAML errors to see tree
+              {input.trim() ? (asJson.ok ? 'Fix the highlighted YAML error to see the tree.' : asJson.error) : 'Paste YAML or open a file to get started.'}
             </div>
           )
         ) : view === 'json' ? (
-          <CodeEditor value={jsonOut} language="json" readOnly />
+          <CodeEditor value={jsonOut} language="json" readOnly label="JSON output" issue={input.trim() && !asJson.ok ? asJson : null} />
         ) : (
-          <CodeEditor value={yamlOut} language="yaml" readOnly />
+          <CodeEditor value={yamlOut} language="yaml" readOnly label="Formatted YAML" />
         )}
       </SplitPane>
 

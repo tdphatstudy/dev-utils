@@ -76,13 +76,24 @@ function tokenize(path: string): Token[] {
       }
       if (path[i] === '"' || path[i] === "'") {
         const q = path[i]!
+        const start = i
         i++
-        let key = ''
+        let raw = ''
         while (i < path.length && path[i] !== q) {
-          key += path[i]
-          i++
+          if (path[i] === '\\') {
+            if (i + 1 >= path.length) throw new Error(`Incomplete escape at column ${i + 1}`)
+            const next = path[i + 1]!
+            raw += q === "'" && next === "'" ? "'" : '\\' + next
+            i += 2
+          } else {
+            raw += path[i] === '"' && q === "'" ? '\\"' : path[i]
+            i++
+          }
         }
         if (path[i] !== q) throw new Error('Unclosed quote in path')
+        let key: string
+        try { key = JSON.parse(`"${raw}"`) as string }
+        catch { throw new Error(`Invalid quoted key at column ${start + 1}`) }
         i++
         if (path[i] !== ']') throw new Error('Expected ]')
         i++
@@ -90,11 +101,12 @@ function tokenize(path: string): Token[] {
         continue
       }
       let num = ''
+      if (path[i] === '-') { num = '-'; i++ }
       while (i < path.length && /[0-9]/.test(path[i]!)) {
         num += path[i]
         i++
       }
-      if (!num || path[i] !== ']') throw new Error('Expected [index]')
+      if (!/^-?\d+$/.test(num) || path[i] !== ']') throw new Error('Expected [index], [*] or a quoted property name; filters and slices are not supported')
       i++
       tokens.push({ type: 'index', index: Number(num) })
       continue
@@ -125,15 +137,16 @@ function applyToken(
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       const obj = value as Record<string, JsonValue>
       if (Object.prototype.hasOwnProperty.call(obj, token.key)) {
-        return [{ value: obj[token.key]!, path: `${path}.${token.key}` }]
+        return [{ value: obj[token.key]!, path: propertyPath(path, token.key) }]
       }
     }
     return []
   }
 
   if (token.type === 'index') {
-    if (Array.isArray(value) && token.index >= 0 && token.index < value.length) {
-      return [{ value: value[token.index]!, path: `${path}[${token.index}]` }]
+    const index = Array.isArray(value) && token.index < 0 ? value.length + token.index : token.index
+    if (Array.isArray(value) && index >= 0 && index < value.length) {
+      return [{ value: value[index]!, path: `${path}[${index}]` }]
     }
     return []
   }
@@ -145,7 +158,7 @@ function applyToken(
     if (value !== null && typeof value === 'object') {
       return Object.entries(value as Record<string, JsonValue>).map(([k, v]) => ({
         value: v,
-        path: `${path}.${k}`
+        path: propertyPath(path, k)
       }))
     }
     return []
@@ -166,15 +179,19 @@ function walk(
     if (!Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, key)) {
       out.push({
         value: (value as Record<string, JsonValue>)[key]!,
-        path: `${path}.${key}`
+        path: propertyPath(path, key)
       })
     }
     if (Array.isArray(value)) {
       value.forEach((v, i) => walk(v, `${path}[${i}]`, key, out))
     } else {
       for (const [k, v] of Object.entries(value as Record<string, JsonValue>)) {
-        walk(v, `${path}.${k}`, key, out)
+        walk(v, propertyPath(path, k), key, out)
       }
     }
   }
+}
+
+function propertyPath(base: string, key: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? `${base}.${key}` : `${base}[${JSON.stringify(key)}]`
 }

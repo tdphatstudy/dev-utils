@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { convertFormat } from './formats'
 
 describe('convertFormat', () => {
+  it('rejects empty input and unsupported JSON values without throwing', () => {
+    expect(convertFormat('', 'yaml', 'json').ok).toBe(false)
+    expect(convertFormat('value: .inf', 'yaml', 'json').ok).toBe(false)
+    expect(convertFormat('node: &node\n  child: *node', 'yaml', 'json').ok).toBe(false)
+  })
+  it('preserves comments when formatting YAML to YAML', () => {
+    const result = convertFormat('# keep me\na: 1', 'yaml', 'yaml')
+    if (!result.ok) throw new Error(result.error)
+    expect(result.text).toContain('# keep me')
+  })
   it('json to yaml', () => {
     const r = convertFormat('{"a":1}', 'json', 'yaml')
     expect(r.ok).toBe(true)

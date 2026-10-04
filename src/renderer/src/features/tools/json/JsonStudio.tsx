@@ -5,7 +5,8 @@ import { TreeView, type JsonValue } from '@renderer/components/ui/TreeView'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
-import { formatJson, parseJson } from '@shared/json'
+import { formatJson } from '@shared/json'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
@@ -26,10 +27,9 @@ export default function JsonStudio(): JSX.Element {
   useToolDraft('json.studio', input, setInput, { label: 'JSON Studio', historyOnUnmount: true })
 
   const result = useMemo(() => formatJson(input, { indent, sortKeys }), [input, indent, sortKeys])
-  const parsed = useMemo(() => parseJson(input), [input])
 
   const outputText = result.ok ? (result.text ?? '') : ''
-  const treeData: JsonValue | null = parsed.ok ? parsed.value : null
+  const treeData: JsonValue = result.ok ? result.value : null
 
   const status = !input.trim()
     ? { tone: 'neutral' as const, text: 'Paste JSON to get started' }
@@ -46,7 +46,7 @@ export default function JsonStudio(): JSX.Element {
   return (
     <div className="flex h-full flex-col">
       <ToolToolbar>
-        <button type="button" className="mac-btn-primary" onClick={() => {
+        <button type="button" className="mac-btn-primary" disabled={!input.trim() || !result.ok} title="Format JSON (Ctrl/⌘ + Enter in the input editor)" onClick={() => {
           if (result.ok && result.text) setInput(result.text)
         }}>
           Format
@@ -54,6 +54,7 @@ export default function JsonStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-secondary"
+          disabled={!input.trim() || !result.ok}
           onClick={() => {
             const r = formatJson(input, { minify: true })
             if (r.ok && r.text) setInput(r.text)
@@ -93,13 +94,14 @@ export default function JsonStudio(): JSX.Element {
           <SaveToBoxButton
             type="json"
             content={result.ok ? outputText || input : input}
-            disabled={!result.ok && !!input.trim()}
+            disabled={!input.trim() || !result.ok}
           />
-          <CopyButton text={view === 'raw' ? outputText : input} />
+          <CopyButton text={outputText} label="Copy output" />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={outputText} fileName="formatted.json" accept=".json,.txt,application/json" />
       </ToolToolbar>
 
       <SplitPane>
@@ -108,17 +110,20 @@ export default function JsonStudio(): JSX.Element {
           onChange={setInput}
           language="json"
           placeholder="Paste JSON…"
+          label="JSON input"
+          issue={!input.trim() || result.ok ? null : result}
+          onRun={() => { if (result.ok && result.text) setInput(result.text) }}
         />
         {view === 'tree' ? (
-          treeData !== null ? (
+          result.ok ? (
             <TreeView data={treeData} />
           ) : (
             <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
-              Fix JSON errors to see tree
+              {input.trim() ? 'Fix the highlighted error in the input to see the tree.' : 'Paste JSON or open a file to explore its structure.'}
             </div>
           )
         ) : (
-          <CodeEditor value={outputText} language="json" readOnly />
+          <CodeEditor value={outputText} language="json" readOnly label="Formatted output" />
         )}
       </SplitPane>
 

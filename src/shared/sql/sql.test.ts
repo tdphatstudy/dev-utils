@@ -4,6 +4,27 @@ import { formatSql, minifySql, validateSql } from './index'
 const SIMPLE = `select id,name from users where active=1 order by id`
 
 describe('sql shared', () => {
+  it('keeps whitespace inside literals and retains line-comment termination when minifying', () => {
+    const result = minifySql("SELECT 'hello  world', 'a\nb' -- keep comment\nFROM users", { dialect: 'postgresql' })
+    if (!result.ok) throw new Error(result.error)
+    expect(result.text).toContain("'hello  world'")
+    expect(result.text).toContain("'a\nb'")
+    expect(result.text).toMatch(/-- keep comment\n/)
+  })
+  it('uses structured parser locations', () => {
+    const result = validateSql('SELECT id\nFROM\nWHERE', { dialect: 'mysql' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.line).toBe(3)
+      expect(result.column).toBe(6)
+      expect(result.offset).toBe(20)
+    }
+  })
+  it('does not reject Oracle SQL using the MySQL validator', () => {
+    const result = validateSql('SELECT SYSDATE FROM dual', { dialect: 'plsql' })
+    expect(result.ok).toBe(true)
+    expect(result.note).toContain('not fully validated')
+  })
   it('formats generic SQL', () => {
     const r = formatSql(SIMPLE, { dialect: 'generic', indent: 2 })
     expect(r.ok).toBe(true)
