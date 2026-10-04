@@ -1,4 +1,4 @@
-import type { DocContent, DocType } from './types'
+import type { DocContent, DocEncoding, DocType } from './types'
 
 export interface SaveDocumentInput {
   name: string
@@ -13,6 +13,8 @@ export interface ExportPlainResult {
   type: DocType
   content: string
   relativePath: string
+  encoding?: DocEncoding
+  mimeType?: string
 }
 
 export interface ImportPlainInput {
@@ -20,6 +22,8 @@ export interface ImportPlainInput {
   type?: DocType
   content: string
   relativeDir?: string
+  encoding?: DocEncoding
+  mimeType?: string
 }
 
 export interface SaveDocumentResult {

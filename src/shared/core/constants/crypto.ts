@@ -28,3 +28,6 @@ export const VERIFY_SCRYPT_MAXMEM = 256 * 1024 * 1024
 
 export const MAX_AUTH_FAILURES = 5
 export const AUTH_LOCKOUT_MS = 5 * 60 * 1000
+
+/** Max raw bytes for image/video/audio import into Secret Box (.putl) */
+export const MAX_PUTL_MEDIA_BYTES = 40 * 1024 * 1024

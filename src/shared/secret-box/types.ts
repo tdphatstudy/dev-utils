@@ -47,13 +47,18 @@ export interface PutlEnvelope {
   ct: string
 }
 
+export type DocEncoding = 'utf-8' | 'base64'
+
 export interface DocPayload {
   name: string
   type: DocType
-  encoding: 'utf-8'
+  /** utf-8 text, or base64 for image/video/audio/binary */
+  encoding: DocEncoding
   createdAt: string
   updatedAt: string
   content: string
+  /** MIME type for media playback (optional on legacy text docs) */
+  mimeType?: string
 }
 
 export interface DirEntry {
@@ -103,6 +108,8 @@ export interface DocContent {
   content: string
   relativePath: string
   updatedAt: string
+  encoding?: DocEncoding
+  mimeType?: string
 }
 
 export const DOC_EXT: Record<DocType, string> = Object.fromEntries(
@@ -120,8 +127,13 @@ export function typeFromName(name: string): DocType {
     const kind = getContentKind(id)
     if (kind.extensions.some((ext) => lower.endsWith(ext))) return id
   }
+  // Unknown extension → generic binary if it has a dotted extension, else text
+  if (/\.[a-z0-9]{1,12}$/i.test(lower)) return 'binary'
   return 'text'
 }
+
+/** Soft limit for encrypted media inside .putl (base64 + dual AES expands further). */
+export const MAX_MEDIA_BYTES = 40 * 1024 * 1024
 
 export function ensureExtension(name: string, type: DocType): string {
   const trimmed = name.trim()

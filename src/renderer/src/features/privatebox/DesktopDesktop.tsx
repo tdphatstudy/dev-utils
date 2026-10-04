@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronRight,
   FileText,
+  Film,
   Home,
+  Image as ImageIcon,
   LogOut,
+  Music,
+  File,
   Save,
   X
 } from 'lucide-react'
 import type { DirEntry, DocContent, DocType, VaultStatus } from '@shared/secret-box/types'
+import { isBinaryKind } from '@shared/secret-box/content-kinds'
 import { NameDialog } from './NameDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TypeFileEditor } from './editors/TypeFileEditor'
@@ -131,6 +136,46 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
       </div>
     )
   }
+  if (entry.type === 'image') {
+    return (
+      <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#ff9f0a]/20 to-[#ff375f]/15 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+        <ImageIcon className="h-6 w-6 text-[#ff9f0a]" strokeWidth={1.5} />
+        <div className="absolute -right-0.5 -top-0.5 rounded bg-[#ff9f0a] px-0.5 text-[7px] font-bold uppercase text-white">
+          img
+        </div>
+      </div>
+    )
+  }
+  if (entry.type === 'video') {
+    return (
+      <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#bf5af2]/25 to-[#5e5ce6]/20 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+        <Film className="h-6 w-6 text-[#bf5af2]" strokeWidth={1.5} />
+        <div className="absolute -right-0.5 -top-0.5 rounded bg-[#bf5af2] px-0.5 text-[7px] font-bold uppercase text-white">
+          vid
+        </div>
+      </div>
+    )
+  }
+  if (entry.type === 'audio') {
+    return (
+      <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#30d158]/20 to-[#64d2ff]/15 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+        <Music className="h-6 w-6 text-[#30d158]" strokeWidth={1.5} />
+        <div className="absolute -right-0.5 -top-0.5 rounded bg-[#30d158] px-0.5 text-[7px] font-bold uppercase text-white">
+          aud
+        </div>
+      </div>
+    )
+  }
+  if (entry.type === 'binary') {
+    return (
+      <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-mac-control shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+        <File className="h-6 w-6 text-mac-label-secondary" strokeWidth={1.5} />
+        <div className="absolute -right-0.5 -top-0.5 rounded bg-mac-label-tertiary px-0.5 text-[7px] font-bold uppercase text-white">
+          file
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="relative flex h-12 w-11 flex-col overflow-hidden rounded-[6px] border border-black/10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12)] dark:border-white/10 dark:bg-mac-raised">
       <div className="h-2 bg-gradient-to-b from-mac-label-tertiary/50 to-mac-label-tertiary/30" />
@@ -215,6 +260,10 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
   const save = async (): Promise<void> => {
     if (!doc) return
+    if (isBinaryKind(doc.type) || doc.encoding === 'base64') {
+      setError('Media files are view-only — use Export or re-import to replace')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -225,6 +274,19 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
       await loadList()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const exportCurrent = async (): Promise<void> => {
+    if (!doc) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.devutils.privateBox.exportToDisk(doc.relativePath)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed')
     } finally {
       setBusy(false)
     }
@@ -383,7 +445,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     { id: 'new-json', label: 'New JSON', shortcut: '⌘J' },
     { id: 'sep1', label: '', separator: true },
     { id: 'new-folder', label: 'New Folder', shortcut: '⇧⌘N' },
-    { id: 'import', label: 'Import file…' },
+    { id: 'import', label: 'Import file / media…' },
     { id: 'sep2', label: '', separator: true },
     { id: 'refresh', label: 'Refresh' }
   ]
@@ -399,7 +461,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     { id: 'sep2', label: '', separator: true },
     { id: 'new-text', label: 'New Text File' },
     { id: 'new-json', label: 'New JSON' },
-    { id: 'import', label: 'Import file…' },
+    { id: 'import', label: 'Import file / media…' },
     { id: 'new-folder', label: 'New Folder' }
   ]
 
@@ -606,17 +668,33 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 {doc.type === 'markdown' && 'Notion blocks · type / · Enter new block · ⌘S'}
                 {doc.type === 'json' && 'Format · Minify · Tree · ⌘S'}
                 {doc.type === 'text' && 'Plain text · LF/CRLF · ⌘S'}
+                {doc.type === 'image' && 'Image preview · encrypted · Export to save out'}
+                {doc.type === 'video' && 'Video player · encrypted · Export to save out'}
+                {doc.type === 'audio' && 'Audio player · encrypted · Export to save out'}
+                {doc.type === 'binary' && 'Binary file · encrypted · Export to open elsewhere'}
+                {doc.type === 'keep-note' && 'Keep note'}
               </div>
             </div>
-            <button
-              type="button"
-              className="mac-btn-primary !text-[12px]"
-              disabled={!dirty || busy}
-              onClick={() => void save()}
-            >
-              <Save className="h-3.5 w-3.5" />
-              Save
-            </button>
+            {isBinaryKind(doc.type) || doc.encoding === 'base64' ? (
+              <button
+                type="button"
+                className="mac-btn-secondary !text-[12px]"
+                disabled={busy}
+                onClick={() => void exportCurrent()}
+              >
+                Export…
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="mac-btn-primary !text-[12px]"
+                disabled={!dirty || busy}
+                onClick={() => void save()}
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+            )}
             <button type="button" className="mac-btn-ghost !p-1.5" onClick={closeEditor} title="Close">
               <X className="h-4 w-4" />
             </button>
@@ -625,7 +703,11 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
             <TypeFileEditor
               type={doc.type}
               value={draft}
+              name={doc.name}
+              mimeType={doc.mimeType}
+              onExport={() => void exportCurrent()}
               onChange={(v) => {
+                if (isBinaryKind(doc.type)) return
                 setDraft(v)
                 setDirty(v !== doc.content)
               }}

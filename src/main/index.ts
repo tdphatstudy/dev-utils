@@ -9,6 +9,7 @@ import { performHttpRequest } from './http-request'
 import type { HttpRequestPayload } from '@shared/http/types'
 import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
+import { registerCryptoAndSshIpc } from './ssh/ipc'
 
 /**
  * Chromium/V8 switches must run before app.ready.
@@ -220,6 +221,7 @@ function registerIpc(): void {
 
   registerSecretBoxIpc()
   registerPortsIpc()
+  registerCryptoAndSshIpc()
 
   ipcMain.handle('app:platform', () => process.platform)
   ipcMain.handle('app:version', () => app.getVersion())

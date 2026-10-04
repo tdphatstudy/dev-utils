@@ -27,6 +27,7 @@ import {
   Code2,
   FileType2,
   Database,
+  Terminal,
   type LucideIcon
 } from 'lucide-react'
 
@@ -229,6 +230,28 @@ export const tools: ToolDefinition[] = [
     component: lazy(() => import('@renderer/features/tools/security/SecureRandom'))
   },
   {
+    id: 'security.keygen',
+    group: 'security',
+    name: 'Key Generator',
+    description: 'RSA, ECDSA, Ed25519, X25519 key pairs — PEM & OpenSSH',
+    keywords: [
+      'key',
+      'keypair',
+      'rsa',
+      'ecdsa',
+      'ed25519',
+      'x25519',
+      'pem',
+      'ssh',
+      'public',
+      'private',
+      'generate',
+      'openssl'
+    ],
+    icon: KeyRound,
+    component: lazy(() => import('@renderer/features/tools/security/KeygenTool'))
+  },
+  {
     id: 'security.hash',
     group: 'security',
     name: 'Hash',
@@ -342,6 +365,26 @@ export const tools: ToolDefinition[] = [
     ],
     icon: Radio,
     component: lazy(() => import('@renderer/features/tools/network/PortManager'))
+  },
+  {
+    id: 'network.ssh',
+    group: 'network',
+    name: 'SSH Keys & Hosts',
+    description: 'List ~/.ssh keys and config hosts, test TCP reachability',
+    keywords: [
+      'ssh',
+      'openssh',
+      'known_hosts',
+      'id_rsa',
+      'id_ed25519',
+      'config',
+      'host',
+      'ping',
+      'fingerprint',
+      'key'
+    ],
+    icon: Terminal,
+    component: lazy(() => import('@renderer/features/tools/network/SshManager'))
   },
   {
     id: 'file.hash',

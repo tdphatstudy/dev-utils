@@ -7,9 +7,13 @@ import type {
   SaveDocumentInput,
   SaveDocumentResult
 } from '@shared/secret-box/io-types'
-import { getContentKind } from '@shared/secret-box/content-kinds'
+import {
+  getContentKind,
+  isBinaryKind,
+  mimeFromFileName
+} from '@shared/secret-box/content-kinds'
 import type { DocType } from '@shared/secret-box/types'
-import { ensureExtension, typeFromName } from '@shared/secret-box/types'
+import { ensureExtension, MAX_MEDIA_BYTES, typeFromName } from '@shared/secret-box/types'
 import * as fsOps from './fs-ops'
 import { getAccess } from './session'
 import {
@@ -27,7 +31,9 @@ export async function exportDocPlain(relativePath: string): Promise<ExportPlainR
     name: doc.name,
     type: doc.type,
     content: doc.content,
-    relativePath: doc.relativePath
+    relativePath: doc.relativePath,
+    encoding: doc.encoding,
+    mimeType: doc.mimeType
   }
 }
 
@@ -46,7 +52,13 @@ export async function exportDocToDisk(
     ]
   })
   if (result.canceled || !result.filePath) return null
-  await writeFile(result.filePath, plain.content, 'utf8')
+
+  if (plain.encoding === 'base64' || isBinaryKind(plain.type)) {
+    const buf = Buffer.from(plain.content, 'base64')
+    await writeFile(result.filePath, buf)
+  } else {
+    await writeFile(result.filePath, plain.content, 'utf8')
+  }
   return result.filePath
 }
 
@@ -59,13 +71,19 @@ export async function importPlainToActiveBox(
     input.relativeDir || '',
     input.name,
     type,
-    input.content
+    input.content,
+    {
+      encoding: input.encoding,
+      mimeType: input.mimeType
+    }
   )
   return {
     name: doc.name,
     type: doc.type,
     content: doc.content,
-    relativePath: doc.relativePath
+    relativePath: doc.relativePath,
+    encoding: doc.encoding,
+    mimeType: doc.mimeType
   }
 }
 
@@ -78,20 +96,66 @@ export async function importPlainFromDisk(
   const result = await dialog.showOpenDialog(win!, {
     properties: ['openFile'],
     filters: [
-      { name: 'Documents', extensions: ['txt', 'md', 'markdown', 'json', 'yaml', 'yml'] },
+      {
+        name: 'Media',
+        extensions: [
+          'png',
+          'jpg',
+          'jpeg',
+          'gif',
+          'webp',
+          'bmp',
+          'svg',
+          'mp4',
+          'webm',
+          'mov',
+          'mkv',
+          'mp3',
+          'wav',
+          'ogg',
+          'm4a',
+          'flac'
+        ]
+      },
+      { name: 'Documents', extensions: ['txt', 'md', 'markdown', 'json', 'yaml', 'yml', 'csv'] },
       { name: 'All Files', extensions: ['*'] }
     ]
   })
   if (result.canceled || !result.filePaths[0]) return null
   const filePath = result.filePaths[0]
-  const { readFile } = await import('fs/promises')
-  const content = await readFile(filePath, 'utf8')
+  const { readFile, stat } = await import('fs/promises')
   const base = basename(filePath)
+  const type = typeFromName(base)
+  const st = await stat(filePath)
+
+  if (isBinaryKind(type) || st.size > 0) {
+    // Prefer binary path for known media / any large-ish non-text
+    if (isBinaryKind(type)) {
+      if (st.size > MAX_MEDIA_BYTES) {
+        throw new Error(
+          `File too large (${Math.round(st.size / (1024 * 1024))} MB). Max ${Math.round(MAX_MEDIA_BYTES / (1024 * 1024))} MB for encrypted media in Secret Box.`
+        )
+      }
+      const buf = await readFile(filePath)
+      const content = buf.toString('base64')
+      return importPlainToActiveBox({
+        name: base,
+        content,
+        relativeDir,
+        type,
+        encoding: 'base64',
+        mimeType: mimeFromFileName(base, type)
+      })
+    }
+  }
+
+  // Text-like
+  const content = await readFile(filePath, 'utf8')
   return importPlainToActiveBox({
     name: base,
     content,
     relativeDir,
-    type: typeFromName(base)
+    type
   })
 }
 
@@ -107,6 +171,9 @@ export async function saveDocument(input: SaveDocumentInput): Promise<SaveDocume
   if (!active) throw new Error('No active Secret Box')
 
   const type = input.type
+  if (isBinaryKind(type)) {
+    throw new Error('Cannot save binary types via Save to Box — use Import in Private Box')
+  }
   const name = ensureExtension(input.name, type)
   const dir = input.relativeDir ?? 'saves'
   const doc = await fsOps.createFileWithContent(dir, name, type, input.content)

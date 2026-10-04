@@ -21,10 +21,20 @@ interface AppState {
    * - `last` — jump straight to last tool
    */
   launchMode: LaunchMode
+  /**
+   * Custom SSH directory (keys). null = platform default (`$HOME/.ssh`).
+   */
+  sshDir: string | null
+  /**
+   * Custom ssh_config path when not `$sshDir/config`. null = default.
+   */
+  sshConfigPath: string | null
   setTheme: (theme: ThemeMode) => void
   setSidebarCollapsed: (v: boolean) => void
   setLastToolId: (id: string) => void
   setLaunchMode: (mode: LaunchMode) => void
+  setSshDir: (path: string | null) => void
+  setSshConfigPath: (path: string | null) => void
   commandOpen: boolean
   setCommandOpen: (v: boolean) => void
 }
@@ -37,6 +47,8 @@ export const useAppStore = create<AppState>()(
       lastToolId: null,
       recentToolIds: [],
       launchMode: 'home',
+      sshDir: null,
+      sshConfigPath: null,
       commandOpen: false,
       setTheme: (theme) => set({ theme }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -49,6 +61,8 @@ export const useAppStore = create<AppState>()(
           return { lastToolId, recentToolIds }
         }),
       setLaunchMode: (launchMode) => set({ launchMode }),
+      setSshDir: (sshDir) => set({ sshDir }),
+      setSshConfigPath: (sshConfigPath) => set({ sshConfigPath }),
       setCommandOpen: (commandOpen) => set({ commandOpen })
     }),
     {
@@ -58,7 +72,9 @@ export const useAppStore = create<AppState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         lastToolId: s.lastToolId,
         recentToolIds: s.recentToolIds,
-        launchMode: s.launchMode
+        launchMode: s.launchMode,
+        sshDir: s.sshDir,
+        sshConfigPath: s.sshConfigPath
       })
     }
   )

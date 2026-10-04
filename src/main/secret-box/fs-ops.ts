@@ -2,10 +2,16 @@ import { randomUUID } from 'crypto'
 import { existsSync } from 'fs'
 import { mkdir, readdir, readFile, rename, rm } from 'fs/promises'
 import { basename, dirname, join } from 'path'
-import { getContentKind } from '@shared/secret-box/content-kinds'
+import { getContentKind, isBinaryKind, mimeFromFileName } from '@shared/secret-box/content-kinds'
 import { PUTL_EXT, VAULT_DIR } from '@shared/secret-box/constants'
 import { joinRelative, normalizeRelative } from '@shared/secret-box/path-utils'
-import type { DirEntry, DocContent, DocType, DocPayload } from '@shared/secret-box/types'
+import type {
+  DirEntry,
+  DocContent,
+  DocEncoding,
+  DocType,
+  DocPayload
+} from '@shared/secret-box/types'
 import { ensureExtension, typeFromName } from '@shared/secret-box/types'
 import { openDoc, parseEnvelope, sealDoc, serializeEnvelope } from './crypto'
 import { resolveVaultPath, toRelativeFromRoot } from './vault-paths'
@@ -93,40 +99,56 @@ async function readFileInternal(
   return { ...doc, relativePath: normalizeRelative(relativePath) }
 }
 
-export async function readDoc(relativePath: string): Promise<DocContent> {
-  const doc = await readFileInternal(relativePath)
-  return {
-    id: doc.relativePath,
-    name: doc.name,
-    type: doc.type,
-    content: doc.content,
-    relativePath: doc.relativePath,
-    updatedAt: doc.updatedAt
-  }
-}
-
-export async function writeDoc(relativePath: string, content: string): Promise<DocContent> {
-  const access = requireAccess()
-  const existing = await readFileInternal(relativePath)
-  const now = new Date().toISOString()
-  const payload: DocPayload = {
-    name: existing.name,
-    type: existing.type,
-    encoding: 'utf-8',
-    createdAt: existing.createdAt,
-    updatedAt: now,
-    content
-  }
-  const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-  await atomicWriteFile(resolveVaultPath(relativePath), serializeEnvelope(envelope), 'utf8')
+function toDocContent(
+  relativePath: string,
+  payload: Pick<
+    DocPayload,
+    'name' | 'type' | 'content' | 'updatedAt' | 'encoding' | 'mimeType'
+  >
+): DocContent {
   return {
     id: relativePath,
     name: payload.name,
     type: payload.type,
     content: payload.content,
     relativePath,
-    updatedAt: now
+    updatedAt: payload.updatedAt,
+    encoding: payload.encoding ?? 'utf-8',
+    mimeType: payload.mimeType
   }
+}
+
+export async function readDoc(relativePath: string): Promise<DocContent> {
+  const doc = await readFileInternal(relativePath)
+  return toDocContent(doc.relativePath, {
+    name: doc.name,
+    type: doc.type,
+    content: doc.content,
+    updatedAt: doc.updatedAt,
+    encoding: doc.encoding ?? 'utf-8',
+    mimeType: doc.mimeType
+  })
+}
+
+export async function writeDoc(relativePath: string, content: string): Promise<DocContent> {
+  const access = requireAccess()
+  const existing = await readFileInternal(relativePath)
+  if (isBinaryKind(existing.type) || existing.encoding === 'base64') {
+    throw new Error('Binary / media files are read-only in the editor — re-import to replace')
+  }
+  const now = new Date().toISOString()
+  const payload: DocPayload = {
+    name: existing.name,
+    type: existing.type,
+    encoding: existing.encoding ?? 'utf-8',
+    createdAt: existing.createdAt,
+    updatedAt: now,
+    content,
+    mimeType: existing.mimeType
+  }
+  const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
+  await atomicWriteFile(resolveVaultPath(relativePath), serializeEnvelope(envelope), 'utf8')
+  return toDocContent(relativePath, payload)
 }
 
 export async function createFile(
@@ -134,14 +156,23 @@ export async function createFile(
   name: string,
   type: DocType
 ): Promise<DocContent> {
+  if (isBinaryKind(type)) {
+    throw new Error('Create media via Import file… (upload from disk)')
+  }
   return createFileWithContent(relativeDir, name, type, defaultContentFor(type))
+}
+
+export interface CreateFileOptions {
+  encoding?: DocEncoding
+  mimeType?: string
 }
 
 export async function createFileWithContent(
   relativeDir: string,
   name: string,
   type: DocType,
-  content: string
+  content: string,
+  options: CreateFileOptions = {}
 ): Promise<DocContent> {
   const access = requireAccess()
   const logicalName = ensureExtension(name, type)
@@ -152,25 +183,31 @@ export async function createFileWithContent(
   await mkdir(absDir, { recursive: true })
 
   const now = new Date().toISOString()
-  const resolvedType = typeFromName(logicalName)
+  const resolvedType = typeFromName(logicalName) === 'text' && type !== 'text' ? type : typeFromName(logicalName)
+  // Prefer explicit type for media imports (name may force typeFromName correctly)
+  const finalType =
+    type === 'image' || type === 'video' || type === 'audio' || type === 'binary'
+      ? type
+      : resolvedType
+
+  const encoding: DocEncoding =
+    options.encoding ?? (isBinaryKind(finalType) ? 'base64' : 'utf-8')
+  const mimeType =
+    options.mimeType ??
+    (isBinaryKind(finalType) ? mimeFromFileName(logicalName, finalType) : undefined)
+
   const payload: DocPayload = {
     name: logicalName,
-    type: resolvedType,
-    encoding: 'utf-8',
+    type: finalType,
+    encoding,
     createdAt: now,
     updatedAt: now,
-    content
+    content,
+    mimeType
   }
   const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
   await atomicWriteFile(resolveVaultPath(rel), serializeEnvelope(envelope), 'utf8')
-  return {
-    id: rel,
-    name: payload.name,
-    type: payload.type,
-    content: payload.content,
-    relativePath: rel,
-    updatedAt: now
-  }
+  return toDocContent(rel, payload)
 }
 
 export async function mkdirPath(relativePath: string): Promise<void> {
@@ -193,10 +230,13 @@ export async function renameEntry(relativePath: string, newName: string): Promis
     const logical = ensureExtension(name, type)
     const now = new Date().toISOString()
     const payload: DocPayload = {
-      ...doc,
       name: logical,
       type,
-      updatedAt: now
+      encoding: doc.encoding ?? 'utf-8',
+      createdAt: doc.createdAt,
+      updatedAt: now,
+      content: doc.content,
+      mimeType: doc.mimeType
     }
     const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
     await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8')

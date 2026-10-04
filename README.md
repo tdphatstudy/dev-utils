@@ -20,6 +20,13 @@ Privacy-first: all processing happens on your machine. macOS-like UI on Windows,
 
 Session history is **in-memory only** and never records Security tools.
 
+## Architecture & AI coding guide
+
+- [Architecture map and feature entry points](docs/architecture.md)
+- [Shared coding rules for AI agents](AGENTS.md)
+- [Claude / Copilot setup and workflow](docs/ai-workflow.md)
+- [Repository review — 2026-10-04](docs/review-2026-10-04.md)
+
 ## Develop
 
 Requires [pnpm](https://pnpm.io) (this repo pins `packageManager` in `package.json`).

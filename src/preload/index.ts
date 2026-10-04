@@ -16,6 +16,18 @@ import type {
   SaveDocumentResult
 } from '@shared/secret-box/io-types'
 import type { PortKillResult, PortListResult } from '@shared/ports/types'
+import type { KeygenRequest, KeygenResult } from '@shared/crypto/keygen-types'
+import type {
+  SshConnectRequest,
+  SshConnectResult,
+  SshHostEntry,
+  SshHostInput,
+  SshKeyCreateInput,
+  SshKeyCreateResult,
+  SshKeyRenameInput,
+  SshListResult,
+  SshLocation
+} from '@shared/ssh/types'
 
 export type HashAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
 export type DnsRecordType = 'A' | 'AAAA' | 'MX' | 'TXT' | 'CNAME' | 'NS'
@@ -70,6 +82,52 @@ const api = {
       pid: number
       confirmPhrase?: string
     }): Promise<PortKillResult> => ipcRenderer.invoke('ports:kill', payload)
+  },
+
+  crypto: {
+    generateKeyPair: (req: KeygenRequest): Promise<KeygenResult> =>
+      ipcRenderer.invoke('crypto:generateKeyPair', req)
+  },
+
+  ssh: {
+    list: (location?: SshLocation | null): Promise<SshListResult> =>
+      ipcRenderer.invoke('ssh:list', location ?? null),
+    resolvePaths: (
+      location?: SshLocation | null
+    ): Promise<{
+      sshDir: string
+      configPath: string
+      defaultSshDir: string
+      defaultConfigPath: string
+      usingCustomLocation: boolean
+    }> => ipcRenderer.invoke('ssh:resolvePaths', location ?? null),
+    readPublic: (path: string, location?: SshLocation | null): Promise<string> =>
+      ipcRenderer.invoke('ssh:readPublic', { path, location: location ?? null }),
+    testConnect: (req: SshConnectRequest): Promise<SshConnectResult> =>
+      ipcRenderer.invoke('ssh:testConnect', req),
+    openFolder: (location?: SshLocation | null): Promise<string> =>
+      ipcRenderer.invoke('ssh:openFolder', location ?? null),
+    pickFolder: (): Promise<string | null> => ipcRenderer.invoke('ssh:pickFolder'),
+    pickConfigFile: (): Promise<string | null> => ipcRenderer.invoke('ssh:pickConfigFile'),
+    upsertHost: (
+      input: SshHostInput,
+      location?: SshLocation | null
+    ): Promise<SshHostEntry> =>
+      ipcRenderer.invoke('ssh:upsertHost', { ...input, location: location ?? null }),
+    deleteHost: (alias: string, location?: SshLocation | null): Promise<void> =>
+      ipcRenderer.invoke('ssh:deleteHost', { alias, location: location ?? null }),
+    createKey: (
+      input: SshKeyCreateInput,
+      location?: SshLocation | null
+    ): Promise<SshKeyCreateResult> =>
+      ipcRenderer.invoke('ssh:createKey', { ...input, location: location ?? null }),
+    deleteKey: (path: string, location?: SshLocation | null): Promise<void> =>
+      ipcRenderer.invoke('ssh:deleteKey', { path, location: location ?? null }),
+    renameKey: (
+      input: SshKeyRenameInput,
+      location?: SshLocation | null
+    ): Promise<{ privatePath: string; publicPath?: string }> =>
+      ipcRenderer.invoke('ssh:renameKey', { ...input, location: location ?? null })
   },
 
   privateBox: {
