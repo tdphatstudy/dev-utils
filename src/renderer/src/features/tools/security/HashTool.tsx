@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
 import { hashText, type TextHashAlgorithm } from '@shared/crypto/hash'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -10,29 +11,9 @@ const ALGOS: TextHashAlgorithm[] = ['SHA-256', 'SHA-512', 'SHA-1', 'MD5']
 export default function HashTool(): JSX.Element {
   const [input, setInput] = useState('hello')
   const [algo, setAlgo] = useState<TextHashAlgorithm>('SHA-256')
-  const [digest, setDigest] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const h = await hashText(input, algo)
-        if (!cancelled) {
-          setDigest(h)
-          setError(null)
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setDigest('')
-          setError(e instanceof Error ? e.message : 'Hash failed')
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [input, algo])
+  const compute = useCallback(() => hashText(input, algo), [input, algo])
+  const { value, error, pending } = useAsyncValue(compute)
+  const digest = value ?? ''
 
   const weak = algo === 'MD5' || algo === 'SHA-1'
 
@@ -65,20 +46,20 @@ export default function HashTool(): JSX.Element {
       </ToolToolbar>
 
       <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 p-3">
-        <CodeEditor value={input} onChange={setInput} language="text" placeholder="Text to hash…" />
+        <CodeEditor value={input} onChange={setInput} language="text" label="Text to hash (UTF-8)" placeholder="Text to hash…" />
         <div className="flex flex-col rounded-mac-lg border border-mac-separator bg-mac-surface p-4">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
             Digest (hex)
           </div>
-          <pre className="code-select flex-1 break-all font-mono text-[13px] text-mac-label">
-            {digest || '—'}
+          <pre aria-label="Hash digest" aria-busy={pending} className="code-select flex-1 whitespace-pre-wrap break-all font-mono text-[13px] text-mac-label">
+            {pending ? 'Calculating…' : digest || '—'}
           </pre>
         </div>
       </div>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : 'success'}>
-          {error ?? `${algo} · ${digest.length / 2} bytes`}
+        <ToolStatus tone={error ? 'danger' : pending ? 'neutral' : 'success'}>
+          {error ?? (pending ? 'Calculating current input…' : `${algo} · ${digest.length / 2} digest bytes · ${new TextEncoder().encode(input).length} input bytes${input === '' ? ' · empty string' : ''}`)}
         </ToolStatus>
       </footer>
     </div>

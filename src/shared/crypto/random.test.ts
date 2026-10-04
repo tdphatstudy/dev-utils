@@ -4,10 +4,24 @@ import {
   generateUuidV4,
   randomBytes,
   randomHex,
-  randomInt
+  randomInt,
+  estimatePasswordEntropy,
+  passwordAlphabetSize
 } from './random'
 
 describe('CSPRNG', () => {
+  it('supports random buffers above the Web Crypto per-call limit', () => {
+    expect(randomBytes(70_000)).toHaveLength(70_000)
+  })
+  it('rejects fractional and nonfinite generator parameters', () => {
+    for (const length of [NaN, Infinity, 4.5]) expect(() => generatePassword({ length })).toThrow()
+    for (const max of [NaN, Infinity, 2.5]) expect(() => randomInt(max)).toThrow()
+    expect(() => generatePassword({ length: 8, lower: false, upper: false, digits: false, symbols: false })).toThrow(/Select/)
+  })
+  it('keeps the alphabet estimate finite for long passwords', () => {
+    expect(passwordAlphabetSize({ lower: true, upper: true, digits: true, symbols: true })).toBe(87)
+    expect(estimatePasswordEntropy(256, 87)).toBeCloseTo(256 * Math.log2(87))
+  })
   it('randomBytes length', () => {
     expect(randomBytes(16)).toHaveLength(16)
   })

@@ -10,7 +10,8 @@ export const NO_HISTORY_TOOLS = new Set([
   'privatebox.home',
   'privatebox.keep',
   'network.ssh',
-  'network.http'
+  'network.http',
+  'network.url'
 ])
 
 export interface HistoryEntry {

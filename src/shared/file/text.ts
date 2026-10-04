@@ -1,21 +1,17 @@
 export type LineEnding = 'lf' | 'crlf' | 'cr'
 
-export function detectLineEnding(text: string): LineEnding | 'mixed' | 'none' {
-  let crlf = 0
-  let cr = 0
-  let lf = 0
+export function lineEndingCounts(text: string): { crlf: number; cr: number; lf: number } {
+  const counts = { crlf: 0, cr: 0, lf: 0 }
   for (let i = 0; i < text.length; i++) {
     if (text[i] === '\r') {
-      if (text[i + 1] === '\n') {
-        crlf++
-        i++
-      } else {
-        cr++
-      }
-    } else if (text[i] === '\n') {
-      lf++
-    }
+      if (text[i + 1] === '\n') { counts.crlf++; i++ } else counts.cr++
+    } else if (text[i] === '\n') counts.lf++
   }
+  return counts
+}
+
+export function detectLineEnding(text: string): LineEnding | 'mixed' | 'none' {
+  const { crlf, cr, lf } = lineEndingCounts(text)
   const kinds = [
     crlf > 0 ? 'crlf' : null,
     cr > 0 ? 'cr' : null,

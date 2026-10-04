@@ -8,7 +8,8 @@ type Mode = 'ip' | 'cidr'
 
 export default function IpTools(): JSX.Element {
   const [mode, setMode] = useState<Mode>('ip')
-  const [input, setInput] = useState('192.168.1.10')
+  const [inputs, setInputs] = useState({ ip: '192.168.1.10', cidr: '10.0.0.1/8' })
+  const input = inputs[mode]
 
   const ip = useMemo(() => parseIp(input), [input])
   const cidr = useMemo(() => parseCidr(input), [input])
@@ -23,9 +24,9 @@ export default function IpTools(): JSX.Element {
         : ''
 
   const status =
-    mode === 'ip'
+    !input.trim() ? { tone: 'neutral' as const, text: 'Enter an address to begin' } : mode === 'ip'
       ? ip
-        ? { tone: 'success' as const, text: `IPv${ip.version} · ${ip.isPrivate ? 'private' : 'public'}` }
+        ? { tone: 'success' as const, text: `IPv${ip.version} · ${ip.isPrivate ? 'private / local' : 'non-private'}${ip.isMulticast ? ' · multicast' : ''}` }
         : { tone: 'danger' as const, text: 'Invalid IP address' }
       : cidr.ok
         ? { tone: 'success' as const, text: `/${cidr.prefix} · ${cidr.hostCount} addresses` }
@@ -36,13 +37,10 @@ export default function IpTools(): JSX.Element {
       <ToolToolbar>
         <SegmentedControl
           value={mode}
-          onChange={(m) => {
-            setMode(m)
-            setInput(m === 'ip' ? '192.168.1.10' : '10.0.0.0/8')
-          }}
+          onChange={setMode}
           options={[
             { value: 'ip', label: 'IP info' },
-            { value: 'cidr', label: 'CIDR' }
+            { value: 'cidr', label: 'IPv4 CIDR' }
           ]}
         />
         <div className="ml-auto">
@@ -50,11 +48,14 @@ export default function IpTools(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-5">
+        <label htmlFor="ip-input" className="text-[12px] text-mac-label-secondary">{mode === 'ip' ? 'IPv4 or IPv6 address' : 'IPv4 address and prefix'}</label>
         <input
+          id="ip-input"
+          aria-invalid={!!input.trim() && status.tone === 'danger'}
           className="mac-input max-w-lg font-mono text-[15px]"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => setInputs((previous) => ({ ...previous, [mode]: e.target.value }))}
           placeholder={mode === 'ip' ? '192.168.0.1 or ::1' : '192.168.0.0/24'}
           spellCheck={false}
         />
@@ -75,6 +76,12 @@ export default function IpTools(): JSX.Element {
             <Row label="Network" value={cidr.network} mono />
             <Row label="Prefix" value={`/${cidr.prefix}`} />
             <Row label="Addresses" value={String(cidr.hostCount)} />
+            <Row label="Netmask" value={cidr.netmask} mono />
+            <Row label="Broadcast" value={cidr.broadcast} mono />
+            <Row label="First host" value={cidr.firstHost} mono />
+            <Row label="Last host" value={cidr.lastHost} mono />
+            <Row label="Usable hosts" value={String(cidr.usableHosts)} />
+            {cidr.prefix === 31 && <p className="text-[11px] text-mac-label-secondary">/31 assumes a point-to-point link; both addresses are usable.</p>}
           </div>
         )}
       </div>

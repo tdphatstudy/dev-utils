@@ -3,6 +3,7 @@ import {
   estimatePasswordEntropy,
   generatePassword,
   generateUuidV4,
+  passwordAlphabetSize,
   randomBase64,
   randomHex
 } from '@shared/crypto/random'
@@ -24,17 +25,16 @@ export default function SecureRandom(): JSX.Element {
   const [format, setFormat] = useState<'hex' | 'base64'>('hex')
   const [nonce, setNonce] = useState(0)
 
-  const password = useMemo(() => {
+  const passwordResult = useMemo(() => {
     void nonce
     try {
-      return generatePassword({ length, lower, upper, digits, symbols })
-    } catch {
-      return ''
+      return { value: generatePassword({ length, lower, upper, digits, symbols }), error: null }
+    } catch (error) {
+      return { value: '', error: error instanceof Error ? error.message : 'Password generation failed' }
     }
   }, [length, lower, upper, digits, symbols, nonce])
 
-  const alphabetSize =
-    (lower ? 26 : 0) + (upper ? 26 : 0) + (digits ? 10 : 0) + (symbols ? 24 : 0)
+  const alphabetSize = passwordAlphabetSize({ lower, upper, digits, symbols })
   const entropy = estimatePasswordEntropy(length, alphabetSize)
 
   const bytesOut = useMemo(() => {
@@ -48,7 +48,7 @@ export default function SecureRandom(): JSX.Element {
   }, [nonce])
 
   const current =
-    tab === 'password' ? password : tab === 'bytes' ? bytesOut : uuid
+    tab === 'password' ? passwordResult.value : tab === 'bytes' ? bytesOut : uuid
 
   return (
     <div className="flex h-full flex-col">
@@ -62,7 +62,7 @@ export default function SecureRandom(): JSX.Element {
             { value: 'uuid', label: 'UUID v4' }
           ]}
         />
-        <button type="button" className="mac-btn-primary" onClick={() => setNonce((n) => n + 1)}>
+        <button type="button" className="mac-btn-primary" disabled={tab === 'password' && !!passwordResult.error} onClick={() => setNonce((n) => n + 1)}>
           <RefreshCw className="h-3.5 w-3.5" />
           Generate
         </button>
@@ -76,7 +76,7 @@ export default function SecureRandom(): JSX.Element {
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
             Output · CSPRNG (Web Crypto)
           </div>
-          <pre className="code-select break-all font-mono text-[14px] leading-relaxed text-mac-label">
+          <pre className="code-select whitespace-pre-wrap break-all font-mono text-[14px] leading-relaxed text-mac-label">
             {current || '—'}
           </pre>
         </div>
@@ -102,13 +102,14 @@ export default function SecureRandom(): JSX.Element {
               <Toggle label="Symbols" checked={symbols} onChange={setSymbols} />
             </div>
             <p className="text-[12px] text-mac-label-secondary">
-              Estimated entropy:{' '}
+              Alphabet estimate (upper bound):{' '}
               <span className="font-medium text-mac-label">~{entropy.toFixed(0)} bits</span>
               {entropy < 50 && (
                 <span className="text-mac-warning"> · weak for sensitive use</span>
               )}
               {entropy >= 80 && <span className="text-mac-success"> · strong</span>}
             </p>
+            {passwordResult.error && <p role="alert" className="text-[12px] text-mac-danger">{passwordResult.error}. Enable a–z, A–Z, digits or symbols.</p>}
           </div>
         )}
 

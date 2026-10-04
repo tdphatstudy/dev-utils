@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
 import { hmacBase64, hmacHex, type HmacAlgorithm } from '@shared/crypto/hmac'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -10,32 +11,13 @@ export default function HmacTool(): JSX.Element {
   const [secret, setSecret] = useState('secret')
   const [algo, setAlgo] = useState<HmacAlgorithm>('SHA-256')
   const [format, setFormat] = useState<'hex' | 'base64'>('hex')
-  const [out, setOut] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const v =
-          format === 'hex'
-            ? await hmacHex(message, secret, algo)
-            : await hmacBase64(message, secret, algo)
-        if (!cancelled) {
-          setOut(v)
-          setError(null)
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setOut('')
-          setError(e instanceof Error ? e.message : 'HMAC failed')
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
+  const [showSecret, setShowSecret] = useState(false)
+  const compute = useCallback(async () => {
+    if (!secret) throw new Error('Enter a secret key to calculate the HMAC.')
+    return format === 'hex' ? hmacHex(message, secret, algo) : hmacBase64(message, secret, algo)
   }, [message, secret, algo, format])
+  const { value, error, pending } = useAsyncValue(compute)
+  const out = value ?? ''
 
   return (
     <div className="flex h-full flex-col">
@@ -65,41 +47,45 @@ export default function HmacTool(): JSX.Element {
         </div>
       </ToolToolbar>
 
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr_auto] gap-3 p-3">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-auto p-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
+          <label htmlFor="hmac-secret" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
             Secret key
           </label>
           <input
             className="mac-input font-mono"
-            type="password"
+            id="hmac-secret"
+            type={showSecret ? 'text' : 'password'}
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
             placeholder="Secret (stays local)"
             autoComplete="off"
           />
+          <label className="mt-2 flex items-center gap-2 text-[12px] text-mac-label-secondary">
+            <input type="checkbox" checked={showSecret} onChange={(e) => setShowSecret(e.target.checked)} /> Show secret
+          </label>
         </div>
-        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 [&>*]:min-h-[160px] md:[&>*]:min-h-0">
+        <div className="grid min-h-[332px] grid-cols-1 grid-rows-2 gap-3 md:min-h-0 md:grid-cols-2 md:grid-rows-1">
           <div className="flex min-h-0 flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
               Message
             </span>
-            <CodeEditor value={message} onChange={setMessage} language="text" />
+            <CodeEditor value={message} onChange={setMessage} language="text" label="HMAC message (UTF-8)" />
           </div>
           <div className="flex min-h-0 flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
               MAC
             </span>
             <div className="selectable flex-1 overflow-auto rounded-mac-lg border border-mac-separator bg-mac-surface p-3 font-mono text-[13px] break-all">
-              {out || '—'}
+              {pending ? 'Calculating…' : out || '—'}
             </div>
           </div>
         </div>
       </div>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : 'success'}>
-          {error ?? `HMAC-${algo} · Web Crypto · local only`}
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
+        <ToolStatus tone={error ? 'danger' : pending ? 'neutral' : 'success'}>
+          {error ?? (pending ? 'Calculating current message and key…' : `HMAC-${algo} · ${format} · UTF-8 key and message · local only`)}
         </ToolStatus>
       </footer>
     </div>

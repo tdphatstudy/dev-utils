@@ -16,6 +16,7 @@ import {
 } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { Decoration, EditorView } from '@codemirror/view'
+import { Prec } from '@codemirror/state'
 import { useAppStore } from '@renderer/store/app-store'
 import { cn } from '@renderer/lib/utils'
 import type { SqlDialectId } from '@shared/sql'
@@ -157,14 +158,14 @@ export function CodeEditor({
       return [baseTheme, EditorView.lineWrapping, languageExtension(language, sqlDialect),
         EditorView.decorations.of(Decoration.set(decorations, true)),
         EditorView.contentAttributes.of({ 'aria-label': label ?? `${readOnly ? 'Output' : 'Input'} ${language} editor` }),
-        EditorView.domEventHandlers({ keydown(event) {
+        Prec.highest(EditorView.domEventHandlers({ keydown(event) {
           if (onRun && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
             event.preventDefault()
             onRun()
             return true
           }
           return false
-        } })].flat()
+        } }))].flat()
     },
     [language, sqlDialect, errorOffset, value, diagnostic?.error, readOnly, label, onRun]
   )

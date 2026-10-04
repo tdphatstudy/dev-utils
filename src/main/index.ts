@@ -3,7 +3,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { readFile, stat } from 'fs/promises'
-import { promises as dns } from 'dns'
+import { lookupDns } from './dns-lookup'
 import { is } from './env'
 import { performHttpRequest } from './http-request'
 import type { HttpRequestPayload } from '@shared/http/types'
@@ -150,68 +150,7 @@ function registerIpc(): void {
       _event,
       payload: { hostname: string; recordType: 'A' | 'AAAA' | 'MX' | 'TXT' | 'CNAME' | 'NS' }
     ) => {
-      const host = payload.hostname.trim()
-      if (!host || /[\s/]/.test(host)) {
-        throw new Error('Invalid hostname')
-      }
-      const cleaned = host.replace(/^https?:\/\//i, '').split('/')[0]!.split(':')[0]!
-      const type = payload.recordType
-
-      /** ENODATA = no records of this type; ENOTFOUND = NXDOMAIN — not app failures */
-      const emptyResult = (code: string, message: string) => ({
-        hostname: cleaned,
-        type,
-        records: [] as unknown[],
-        empty: true as const,
-        code,
-        message
-      })
-
-      try {
-        switch (type) {
-          case 'A': {
-            const r = await dns.resolve4(cleaned)
-            return { hostname: cleaned, type, records: r }
-          }
-          case 'AAAA': {
-            const r = await dns.resolve6(cleaned)
-            return { hostname: cleaned, type, records: r }
-          }
-          case 'MX': {
-            const r = await dns.resolveMx(cleaned)
-            return { hostname: cleaned, type, records: r }
-          }
-          case 'TXT': {
-            const r = await dns.resolveTxt(cleaned)
-            return {
-              hostname: cleaned,
-              type,
-              records: r.map((x) => x.join(''))
-            }
-          }
-          case 'CNAME': {
-            const r = await dns.resolveCname(cleaned)
-            return { hostname: cleaned, type, records: r }
-          }
-          case 'NS': {
-            const r = await dns.resolveNs(cleaned)
-            return { hostname: cleaned, type, records: r }
-          }
-          default:
-            throw new Error('Unsupported record type')
-        }
-      } catch (e) {
-        const err = e as NodeJS.ErrnoException
-        const code = err.code ?? 'DNS_ERROR'
-        if (code === 'ENODATA' || code === 'ENOTFOUND') {
-          const message =
-            code === 'ENODATA'
-              ? `No ${type} records for ${cleaned}`
-              : `Host not found: ${cleaned}`
-          return emptyResult(code, message)
-        }
-        throw e
-      }
+      return lookupDns(payload)
     }
   )
 

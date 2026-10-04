@@ -139,7 +139,7 @@ khỏi UI của app khi kho đã mở.
 | Dữ liệu | Nơi lưu | Đặc tính |
 |---|---|---|
 | Preferences, recent ID, SSH paths | localStorage `devutils-app` | Persist; không lưu payload tool |
-| Draft/history tool | Zustand session-store | Chỉ RAM; denylist hiện cần hoàn thiện |
+| Draft/history tool | Zustand session-store | Chỉ RAM; security, vault/Keep, SSH, HTTP và URL không lưu payload trong draft/history |
 | Danh sách/active vault | `app.getPath('userData')/privatebox-registry.json` | JSON plaintext chứa tên/path |
 | Default vault | `userData/data/default-secret-box` | Dùng chung Keep và Save to Box |
 | Vault metadata | `<vault>/.privatebox/vault.json` | Salt, mode, KDF, verifier; cần backup |

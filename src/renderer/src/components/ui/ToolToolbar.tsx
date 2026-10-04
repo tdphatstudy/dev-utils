@@ -10,7 +10,7 @@ export function ToolToolbar({
   return (
     <div
       className={cn(
-        'flex min-h-[40px] flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-mac-separator bg-mac-surface px-3 py-2 sm:px-4',
+        'flex min-h-[40px] shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-mac-separator bg-mac-surface px-3 py-2 sm:px-4',
         className
       )}
     >

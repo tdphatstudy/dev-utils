@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
-import { formatXml, minifyXml, validateXml } from '@shared/xml'
+import { formatXml, minifyXml } from '@shared/xml'
+import { validateXmlDocument } from '@shared/xml/browser'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
@@ -22,8 +25,10 @@ export default function XmlStudio(): JSX.Element {
     historyOnUnmount: true
   })
 
-  const validated = useMemo(() => validateXml(input), [input])
+  const validated = useMemo(() => validateXmlDocument(input), [input])
   const formatted = useMemo(() => formatXml(input, { indent }), [input, indent])
+  const output = validated.ok && formatted.ok ? formatted.text : ''
+  const runFormat = (): void => { if (validated.ok && formatted.ok) setInput(formatted.text) }
 
   const status = !input.trim()
     ? { tone: 'neutral' as const, text: 'Paste XML to get started' }
@@ -43,16 +48,15 @@ export default function XmlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
-          onClick={() => {
-            const r = formatXml(input, { indent })
-            if (r.ok) setInput(r.text)
-          }}
+          disabled={!input.trim() || !validated.ok || !formatted.ok}
+          onClick={runFormat}
         >
           Format
         </button>
         <button
           type="button"
           className="mac-btn-secondary"
+          disabled={!input.trim() || !validated.ok}
           onClick={() => {
             const r = minifyXml(input)
             if (r.ok) setInput(r.text)
@@ -74,27 +78,32 @@ export default function XmlStudio(): JSX.Element {
         <div className="ml-auto flex gap-2">
           <SaveToBoxButton
             type="text"
-            content={formatted.ok ? formatted.text : input}
+            content={output}
             defaultName={`xml-${new Date().toISOString().slice(0, 10)}.xml`}
-            disabled={!validated.ok && !!input.trim()}
+            disabled={!input.trim() || !validated.ok}
           />
-          <CopyButton text={input} />
+          <CopyButton text={output} label="Copy output" />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={output} fileName="formatted.xml" accept=".xml,.xhtml,.svg,text/xml,application/xml" />
       </ToolToolbar>
 
-      <div className="min-h-0 flex-1 p-3">
+      <SplitPane>
         <CodeEditor
           value={input}
           onChange={setInput}
           language="xml"
+          label="XML input"
+          issue={input.trim() && !validated.ok ? validated : null}
+          onRun={runFormat}
           placeholder="Paste XML…"
         />
-      </div>
+        <CodeEditor value={output} language="xml" label="Formatted XML" readOnly placeholder="Fix errors to see formatted output" />
+      </SplitPane>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
       </footer>
     </div>

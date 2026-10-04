@@ -17,6 +17,8 @@ import type {
 } from '@shared/secret-box/io-types'
 import type { PortKillResult, PortListResult } from '@shared/ports/types'
 import type { KeygenRequest, KeygenResult } from '@shared/crypto/keygen-types'
+import type { DnsRecordType, DnsLookupResult } from '@shared/network/dns'
+export type { DnsRecordType, DnsLookupResult } from '@shared/network/dns'
 import type {
   SshConnectRequest,
   SshConnectResult,
@@ -30,7 +32,6 @@ import type {
 } from '@shared/ssh/types'
 
 export type HashAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
-export type DnsRecordType = 'A' | 'AAAA' | 'MX' | 'TXT' | 'CNAME' | 'NS'
 
 export interface FileInfo {
   path: string
@@ -38,16 +39,6 @@ export interface FileInfo {
   isFile: boolean
   mtimeMs: number
   ctimeMs: number
-}
-
-export interface DnsLookupResult {
-  hostname: string
-  type: DnsRecordType
-  records: unknown
-  /** True when the query succeeded but returned no RRs (ENODATA) or NXDOMAIN (ENOTFOUND) */
-  empty?: boolean
-  code?: string
-  message?: string
 }
 
 const api = {

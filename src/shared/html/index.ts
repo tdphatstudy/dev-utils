@@ -1,226 +1,101 @@
 import type { MarkupResult } from '../xml'
+import { markupError, renderMarkup, tagEnd, type MarkupFailure, type MarkupToken } from '../markup/tokens'
 
 export type { MarkupResult }
+const VOID = new Set('area base br col embed hr img input link meta param source track wbr'.split(' '))
+const OPTIONAL = new Set('html head body p li dt dd option optgroup tr td th thead tbody tfoot colgroup'.split(' '))
+const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe'])
 
-const VOID = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr'
-])
-
-const RAW_TEXT = new Set(['script', 'style', 'pre', 'textarea', 'code'])
-
-type Token =
-  | { kind: 'doctype'; value: string }
-  | { kind: 'comment'; value: string }
-  | { kind: 'open'; name: string; raw: string; selfClosing: boolean }
-  | { kind: 'close'; name: string; raw: string }
-  | { kind: 'text'; value: string }
-  | { kind: 'raw'; value: string }
-
-function lineAt(input: string, index: number): number {
-  return input.slice(0, index).split(/\n/).length
-}
-
-function tokenizeHtml(input: string): { ok: true; tokens: Token[] } | MarkupResult {
-  const tokens: Token[] = []
+function tokenizeHtml(input: string): { ok: true; tokens: MarkupToken[] } | MarkupFailure {
+  const tokens: MarkupToken[] = []
   let i = 0
-  const n = input.length
   let rawUntil: string | null = null
-
-  while (i < n) {
+  while (i < input.length) {
+    const start = i
     if (rawUntil) {
-      const close = `</${rawUntil}`
-      const idx = input.toLowerCase().indexOf(close, i)
-      if (idx < 0) {
-        tokens.push({ kind: 'raw', value: input.slice(i) })
-        i = n
-        rawUntil = null
-        continue
-      }
-      if (idx > i) tokens.push({ kind: 'raw', value: input.slice(i, idx) })
-      // close tag handled next loop
+      const pattern = new RegExp(`</${rawUntil}(?=[\\x20\\t\\r\\n/>])`, 'ig')
+      pattern.lastIndex = i
+      const match = pattern.exec(input)
+      if (!match) return markupError(input, tokens[tokens.length - 1]!.start, `Unclosed <${rawUntil}> element.`, `Add </${rawUntil}> after its content.`)
+      if (match.index > i) tokens.push({ kind: 'raw', raw: input.slice(i, match.index), start: i, end: match.index })
+      i = match.index
       rawUntil = null
-      i = idx
       continue
     }
-
-    if (input[i] === '<') {
-      if (input.startsWith('<!--', i)) {
-        const end = input.indexOf('-->', i + 4)
-        if (end < 0) return { ok: false, error: 'Unclosed comment', line: lineAt(input, i) }
-        tokens.push({ kind: 'comment', value: input.slice(i, end + 3) })
-        i = end + 3
-        continue
-      }
-      if (/^<!doctype/i.test(input.slice(i, i + 10))) {
-        const end = input.indexOf('>', i + 2)
-        if (end < 0) return { ok: false, error: 'Unclosed doctype', line: lineAt(input, i) }
-        tokens.push({ kind: 'doctype', value: input.slice(i, end + 1) })
-        i = end + 1
-        continue
-      }
-      if (input.startsWith('</', i)) {
-        const end = input.indexOf('>', i + 2)
-        if (end < 0) return { ok: false, error: 'Unclosed end tag', line: lineAt(input, i) }
-        const raw = input.slice(i, end + 1)
-        const name = (raw.slice(2, -1).trim().split(/\s/)[0] ?? '').toLowerCase()
-        if (!name) return { ok: false, error: 'Empty end tag', line: lineAt(input, i) }
-        tokens.push({ kind: 'close', name, raw: `</${name}>` })
-        i = end + 1
-        continue
-      }
-      const end = input.indexOf('>', i + 1)
-      if (end < 0) return { ok: false, error: 'Unclosed start tag', line: lineAt(input, i) }
-      const raw = input.slice(i, end + 1)
-      const inner = raw.slice(1, -1).trim()
-      const selfClosingSlash = /\/\s*$/.test(inner)
-      const namePart = selfClosingSlash ? inner.replace(/\/\s*$/, '').trim() : inner
-      const name = (namePart.split(/\s/)[0] ?? '').toLowerCase()
-      if (!name) return { ok: false, error: 'Empty start tag', line: lineAt(input, i) }
-      const isVoid = VOID.has(name) || selfClosingSlash
-      tokens.push({
-        kind: 'open',
-        name,
-        raw: isVoid && !selfClosingSlash ? `<${namePart}>` : raw,
-        selfClosing: isVoid
-      })
-      if (!isVoid && RAW_TEXT.has(name)) rawUntil = name
-      i = end + 1
+    if (input[i] !== '<' || !/^<(?:[A-Za-z]|\/|!)/.test(input.slice(i, i + 3))) {
+      const next = input.indexOf('<', i + 1)
+      i = next < 0 ? input.length : next
+      tokens.push({ kind: 'text', raw: input.slice(start, i), start, end: i })
       continue
     }
-
-    const next = input.indexOf('<', i)
-    const value = next < 0 ? input.slice(i) : input.slice(i, next)
-    tokens.push({ kind: 'text', value })
-    i = next < 0 ? n : next
+    if (input.startsWith('<!--', i)) {
+      const end = input.indexOf('-->', i + 4)
+      if (end < 0) return markupError(input, i, 'Unclosed comment', 'Add --> to close it.')
+      i = end + 3
+      tokens.push({ kind: 'comment', raw: input.slice(start, i), start, end: i })
+      continue
+    }
+    if (input.startsWith('<![CDATA[', i)) {
+      const end = input.indexOf(']]>', i + 9)
+      if (end < 0) return markupError(input, i, 'Unclosed CDATA section.', 'Add ]]> to close it.')
+      i = end + 3
+      tokens.push({ kind: 'cdata', raw: input.slice(start, i), start, end: i })
+      continue
+    }
+    const end = tagEnd(input, i, /^<!doctype/i.test(input.slice(i, i + 10)))
+    if (end < 0) return markupError(input, i, 'Unclosed tag or quoted attribute', 'Close quoted values and finish the tag with >.')
+    i = end + 1
+    const raw = input.slice(start, i)
+    if (/^<!doctype(?:\s|>)/i.test(raw)) { tokens.push({ kind: 'decl', raw, start, end: i }); continue }
+    if (raw.startsWith('<!')) return markupError(input, start, 'Unsupported HTML declaration.', 'Use <!DOCTYPE html> or <!-- comment -->.')
+    const close = raw.startsWith('</')
+    const body = raw.slice(close ? 2 : 1, -1)
+    const name = body.match(/^[A-Za-z][^\x20\t\r\n\/>]*/)?.[0]?.toLowerCase()
+    if (!name) return markupError(input, start, 'Invalid HTML tag name.')
+    if (close && body.slice(name.length).trim()) return markupError(input, start, 'Closing tags cannot contain attributes.')
+    const selfClosing = VOID.has(name) || /\/\s*>$/.test(raw)
+    tokens.push({ kind: close ? 'close' : 'open', name, raw, start, end: i, selfClosing })
+    if (!close && !selfClosing && RAW_TEXT.has(name)) rawUntil = name
   }
   return { ok: true, tokens }
 }
 
-function balanceCheck(tokens: Token[]): MarkupResult {
-  const stack: string[] = []
-  for (const t of tokens) {
-    if (t.kind === 'open' && !t.selfClosing) stack.push(t.name)
-    else if (t.kind === 'close') {
-      // HTML is forgiving: allow closing optional parents loosely — still flag hard mismatches
-      if (stack.length === 0) {
-        // ignore stray closes for optional html/body/head/p/li
-        if (['html', 'body', 'head', 'p', 'li', 'dt', 'dd', 'option', 'tr', 'td', 'th'].includes(t.name)) {
-          continue
-        }
-        return { ok: false, error: `Unexpected closing tag </${t.name}>` }
+function balance(input: string, tokens: MarkupToken[]): MarkupResult {
+  const stack: MarkupToken[] = []
+  for (const token of tokens) {
+    if (token.kind === 'open' && !token.selfClosing) stack.push(token)
+    else if (token.kind === 'close') {
+      let matching = stack.length - 1
+      while (matching >= 0 && stack[matching]!.name !== token.name) matching--
+      if (matching < 0) {
+        if (OPTIONAL.has(token.name!)) continue
+        return markupError(input, token.start, `Unexpected closing tag </${token.name}>`, 'Add its opening tag or remove this closing tag.')
       }
-      // pop until match (HTML optional end tags)
-      let found = false
-      for (let s = stack.length - 1; s >= 0; s--) {
-        if (stack[s] === t.name) {
-          stack.length = s
-          found = true
-          break
-        }
-      }
-      if (!found) {
-        return { ok: false, error: `Mismatched or unexpected </${t.name}>` }
-      }
+      const unclosed = stack.slice(matching + 1).find((open) => !OPTIONAL.has(open.name!))
+      if (unclosed) return markupError(input, token.start, `Expected </${unclosed.name}> before </${token.name}>`, `The <${unclosed.name}> tag starts on line ${markupError(input, unclosed.start, '').line}.`)
+      stack.length = matching
     }
   }
-  // leftover open tags are OK for HTML (optional closes) but report if many unclosed custom-ish
-  return { ok: true, text: '' }
+  const unclosed = stack.find((token) => !OPTIONAL.has(token.name!))
+  if (unclosed) return markupError(input, unclosed.start, `Unclosed <${unclosed.name}> element.`, `Add </${unclosed.name}> after its content.`)
+  return { ok: true, text: input }
 }
 
 export function validateHtml(input: string): MarkupResult {
   if (!input.trim()) return { ok: false, error: 'Empty input' }
-  const tok = tokenizeHtml(input)
-  if (!('tokens' in tok)) return tok
-  const bal = balanceCheck(tok.tokens)
-  if (!bal.ok) return bal
-  return { ok: true, text: input }
+  const tokens = tokenizeHtml(input)
+  return tokens.ok ? balance(input, tokens.tokens) : tokens
 }
 
-export function formatHtml(
-  input: string,
-  options: { indent?: number; minify?: boolean } = {}
-): MarkupResult {
-  const tok = tokenizeHtml(input)
-  if (!('tokens' in tok)) return tok
-  const bal = balanceCheck(tok.tokens)
-  if (!bal.ok) return bal
-
-  if (options.minify) {
-    return { ok: true, text: minifyHtmlTokens(tok.tokens) }
-  }
-
-  const indentSize = options.indent ?? 2
-  const pad = (level: number): string => ' '.repeat(Math.max(0, level) * indentSize)
-  const lines: string[] = []
-  let depth = 0
-
-  for (const t of tok.tokens) {
-    if (t.kind === 'text') {
-      const trimmed = t.value.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim()
-      if (!trimmed) continue
-      lines.push(pad(depth) + trimmed)
-      continue
-    }
-    if (t.kind === 'raw') {
-      // keep raw block content indented once under parent
-      const content = t.value.replace(/^\n+|\n+$/g, '')
-      if (content) {
-        for (const line of content.split('\n')) {
-          lines.push(pad(depth) + line)
-        }
-      }
-      continue
-    }
-    if (t.kind === 'close') {
-      depth = Math.max(0, depth - 1)
-      lines.push(pad(depth) + t.raw)
-      continue
-    }
-    if (t.kind === 'open') {
-      lines.push(pad(depth) + t.raw)
-      if (!t.selfClosing) depth += 1
-      continue
-    }
-    lines.push(pad(depth) + t.value)
-  }
-
-  return { ok: true, text: lines.join('\n') + (lines.length ? '\n' : '') }
+export function formatHtml(input: string, options: { indent?: number; minify?: boolean } = {}): MarkupResult {
+  if (!input.trim()) return { ok: false, error: 'Empty input' }
+  const tokens = tokenizeHtml(input)
+  if (!tokens.ok) return tokens
+  const checked = balance(input, tokens.tokens)
+  if (!checked.ok) return checked
+  const indent = options.indent ?? 2
+  if (!Number.isInteger(indent) || indent < 0 || indent > 8) return { ok: false, error: 'Indent must be an integer from 0 to 8.' }
+  return { ok: true, text: renderMarkup(input, tokens.tokens, indent, !!options.minify, true) }
 }
 
-function minifyHtmlTokens(tokens: Token[]): string {
-  let out = ''
-  for (const t of tokens) {
-    if (t.kind === 'text') {
-      const s = t.value.replace(/\s+/g, ' ')
-      if (s.trim()) out += s
-      continue
-    }
-    if (t.kind === 'raw') {
-      out += t.value
-      continue
-    }
-    if (t.kind === 'open' || t.kind === 'close') {
-      out += t.raw
-      continue
-    }
-    out += t.value
-  }
-  return out.replace(/>\s+</g, '><').trim()
-}
-
-export function minifyHtml(input: string): MarkupResult {
-  return formatHtml(input, { minify: true })
-}
+export function minifyHtml(input: string): MarkupResult { return formatHtml(input, { minify: true }) }

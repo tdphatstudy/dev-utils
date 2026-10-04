@@ -22,7 +22,7 @@ export function SplitPane({
   return (
     <div
       className={cn(
-        'grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2',
+        'grid min-h-0 flex-1 auto-rows-[minmax(160px,1fr)] grid-cols-1 gap-3 overflow-auto md:auto-rows-[minmax(0,1fr)] md:grid-cols-2',
         !flush && 'p-3',
         '[&>*]:min-h-[160px] [&>*]:min-w-0 md:[&>*]:min-h-0',
         className

@@ -5,6 +5,9 @@ import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { formatHtml, minifyHtml, validateHtml } from '@shared/html'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
+import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 
 const SAMPLE = `<!DOCTYPE html>
 <html lang="en">
@@ -22,6 +25,7 @@ const SAMPLE = `<!DOCTYPE html>
 export default function HtmlStudio(): JSX.Element {
   const [input, setInput] = useState(SAMPLE)
   const [indent, setIndent] = useState(2)
+  const [view, setView] = useState<'formatted' | 'preview'>('formatted')
   useToolDraft('markup.html', input, setInput, {
     label: 'HTML Studio',
     historyOnUnmount: true
@@ -32,6 +36,9 @@ export default function HtmlStudio(): JSX.Element {
     () => formatHtml(input, { indent }),
     [input, indent]
   )
+  const output = formatted.ok ? formatted.text : ''
+  const runFormat = (): void => { if (formatted.ok) setInput(formatted.text) }
+  const previewDocument = `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none';"></head><body>${input}</body></html>`
 
   const status = !input.trim()
     ? { tone: 'neutral' as const, text: 'Paste HTML to get started' }
@@ -51,16 +58,15 @@ export default function HtmlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
-          onClick={() => {
-            const r = formatHtml(input, { indent })
-            if (r.ok) setInput(r.text)
-          }}
+          disabled={!input.trim() || !formatted.ok}
+          onClick={runFormat}
         >
           Format
         </button>
         <button
           type="button"
           className="mac-btn-secondary"
+          disabled={!input.trim() || !validated.ok}
           onClick={() => {
             const r = minifyHtml(input)
             if (r.ok) setInput(r.text)
@@ -79,30 +85,39 @@ export default function HtmlStudio(): JSX.Element {
             <option value={4}>4</option>
           </select>
         </label>
+        <SegmentedControl value={view} onChange={setView} options={[{ value: 'formatted', label: 'Formatted' }, { value: 'preview', label: 'Static preview' }]} />
         <div className="ml-auto flex gap-2">
           <SaveToBoxButton
             type="text"
-            content={formatted.ok ? formatted.text : input}
+            content={output}
             defaultName={`html-${new Date().toISOString().slice(0, 10)}.html`}
-            disabled={!input.trim()}
+            disabled={!input.trim() || !formatted.ok}
           />
-          <CopyButton text={input} />
+          <CopyButton text={output} label="Copy output" />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={output} fileName="formatted.html" accept=".html,.htm,text/html" />
       </ToolToolbar>
 
-      <div className="min-h-0 flex-1 p-3">
+      <SplitPane>
         <CodeEditor
           value={input}
           onChange={setInput}
           language="html"
+          label="HTML input"
+          issue={input.trim() && !validated.ok ? validated : null}
+          onRun={runFormat}
           placeholder="Paste HTML…"
         />
-      </div>
+        {view === 'formatted' ? <CodeEditor value={output} language="html" label="Formatted HTML" readOnly placeholder="Fix structural issues to see formatted output" /> : <div className="flex min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator">
+          <p className="shrink-0 border-b border-mac-separator px-3 py-2 text-[11px] text-mac-label-secondary">Static preview · scripts and remote resources disabled</p>
+          <iframe title="Static HTML preview" sandbox="" srcDoc={previewDocument} className="min-h-0 flex-1 bg-white" />
+        </div>}
+      </SplitPane>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
       </footer>
     </div>

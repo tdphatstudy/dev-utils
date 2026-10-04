@@ -1,202 +1,119 @@
-export type MarkupResult =
-  | { ok: true; text: string }
-  | { ok: false; error: string; line?: number }
+import { markupError, renderMarkup, tagEnd, type MarkupFailure, type MarkupToken } from '../markup/tokens'
 
-const VOID_LIKE = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr'
-])
+export type MarkupResult = { ok: true; text: string } | MarkupFailure
+// XML 1.0 Fifth Edition NameStartChar / NameChar. No namespace normalization.
+const NAME_START = ':A-Z_a-z\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u02ff\\u0370-\\u037d\\u037f-\\u1fff\\u200c-\\u200d\\u2070-\\u218f\\u2c00-\\u2fef\\u3001-\\ud7ff\\uf900-\\ufdcf\\ufdf0-\\ufffd\\u{10000}-\\u{effff}'
+const NAME = new RegExp(`^[${NAME_START}][${NAME_START}0-9.\\-\\u00b7\\u0300-\\u036f\\u203f-\\u2040]*$`, 'u')
+const SPACE = /^[\x20\t\r\n]+/
 
-type Token =
-  | { kind: 'decl'; value: string }
-  | { kind: 'comment'; value: string }
-  | { kind: 'cdata'; value: string }
-  | { kind: 'open'; name: string; raw: string; selfClosing: boolean }
-  | { kind: 'close'; name: string; raw: string }
-  | { kind: 'text'; value: string }
-
-function lineAt(input: string, index: number): number {
-  return input.slice(0, index).split(/\n/).length
-}
-
-function tokenizeXml(input: string): { ok: true; tokens: Token[] } | { ok: false; error: string; line?: number } {
-  const tokens: Token[] = []
-  let i = 0
-  const n = input.length
-
-  while (i < n) {
-    if (input[i] === '<') {
-      if (input.startsWith('<!--', i)) {
-        const end = input.indexOf('-->', i + 4)
-        if (end < 0) return { ok: false, error: 'Unclosed comment', line: lineAt(input, i) }
-        tokens.push({ kind: 'comment', value: input.slice(i, end + 3) })
-        i = end + 3
-        continue
-      }
-      if (input.startsWith('<![CDATA[', i)) {
-        const end = input.indexOf(']]>', i + 9)
-        if (end < 0) return { ok: false, error: 'Unclosed CDATA', line: lineAt(input, i) }
-        tokens.push({ kind: 'cdata', value: input.slice(i, end + 3) })
-        i = end + 3
-        continue
-      }
-      if (input.startsWith('<?', i) || input.startsWith('<!', i)) {
-        const end = input.indexOf('>', i + 2)
-        if (end < 0) return { ok: false, error: 'Unclosed declaration', line: lineAt(input, i) }
-        tokens.push({ kind: 'decl', value: input.slice(i, end + 1) })
-        i = end + 1
-        continue
-      }
-      if (input.startsWith('</', i)) {
-        const end = input.indexOf('>', i + 2)
-        if (end < 0) return { ok: false, error: 'Unclosed end tag', line: lineAt(input, i) }
-        const raw = input.slice(i, end + 1)
-        const name = raw.slice(2, -1).trim().split(/\s/)[0] ?? ''
-        if (!name) return { ok: false, error: 'Empty end tag', line: lineAt(input, i) }
-        tokens.push({ kind: 'close', name, raw })
-        i = end + 1
-        continue
-      }
-      // open / self-closing
-      const end = input.indexOf('>', i + 1)
-      if (end < 0) return { ok: false, error: 'Unclosed start tag', line: lineAt(input, i) }
-      const raw = input.slice(i, end + 1)
-      const inner = raw.slice(1, -1).trim()
-      const selfClosing = inner.endsWith('/')
-      const namePart = (selfClosing ? inner.slice(0, -1) : inner).trim()
-      const name = namePart.split(/\s/)[0] ?? ''
-      if (!name || !/^[A-Za-z_:][\w:.-]*$/.test(name)) {
-        return { ok: false, error: `Invalid tag name: ${name || '(empty)'}`, line: lineAt(input, i) }
-      }
-      tokens.push({ kind: 'open', name, raw: selfClosing ? raw : `<${namePart}>`, selfClosing })
-      i = end + 1
+function tokenizeXml(input: string): { ok: true; tokens: MarkupToken[] } | MarkupFailure {
+  const tokens: MarkupToken[] = []
+  let i = input.startsWith('\ufeff') ? 1 : 0
+  const failure = (offset: number, error: string, hint?: string): MarkupFailure => markupError(input, offset, error, hint)
+  while (i < input.length) {
+    const start = i
+    if (input[i] !== '<') {
+      const next = input.indexOf('<', i)
+      i = next < 0 ? input.length : next
+      tokens.push({ kind: 'text', raw: input.slice(start, i), start, end: i })
       continue
     }
-    const next = input.indexOf('<', i)
-    const value = next < 0 ? input.slice(i) : input.slice(i, next)
-    tokens.push({ kind: 'text', value })
-    i = next < 0 ? n : next
+    let kind: MarkupToken['kind'] = 'open'
+    let end: number
+    if (input.startsWith('<!--', i)) {
+      end = input.indexOf('-->', i + 4)
+      if (end < 0) return failure(i, 'Unclosed comment', 'Add --> to close the comment.')
+      if (input.slice(i + 4, end).includes('--') || input[end - 1] === '-') return failure(i, 'XML comments cannot contain -- or end with a hyphen.')
+      end += 2; kind = 'comment'
+    } else if (input.startsWith('<![CDATA[', i)) {
+      end = input.indexOf(']]>', i + 9)
+      if (end < 0) return failure(i, 'Unclosed CDATA', 'Add ]]> to close this section.')
+      end += 2; kind = 'cdata'
+    } else if (input.startsWith('<?', i)) {
+      end = input.indexOf('?>', i + 2)
+      if (end < 0) return failure(i, 'Unclosed processing instruction', 'Use ?> to close the instruction.')
+      end++; kind = 'decl'
+    } else if (input.startsWith('<!DOCTYPE', i)) {
+      end = tagEnd(input, i, true); kind = 'decl'
+    } else {
+      end = tagEnd(input, i)
+      if (input.startsWith('</', i)) kind = 'close'
+    }
+    if (end < 0) return failure(i, 'Unclosed tag or quoted attribute', 'Close every quoted value and finish the tag with >.')
+    i = end + 1
+    const raw = input.slice(start, i)
+    const token: MarkupToken = { kind, raw, start, end: i }
+    if (kind === 'open' || kind === 'close') {
+      const body = raw.slice(kind === 'open' ? 1 : 2, -1)
+      const name = body.match(/^[^\x20\t\r\n\/>]+/)?.[0] ?? ''
+      if (!NAME.test(name)) return failure(start + (kind === 'open' ? 1 : 2), 'Invalid XML tag name', 'Start a name with a letter, underscore or a valid XML name character.')
+      token.name = name
+      if (kind === 'close') {
+        if (body.slice(name.length).trim()) return failure(start, 'Closing tags cannot contain attributes.')
+      } else {
+        let position = name.length
+        const attrs = new Set<string>()
+        while (position < body.length) {
+          const space = SPACE.exec(body.slice(position))?.[0] ?? ''
+          position += space.length
+          if (position === body.length) break
+          if (body[position] === '/' && position === body.length - 1) { token.selfClosing = true; position++; break }
+          const attributeOffset = start + 1 + position
+          if (!space) return failure(attributeOffset, 'Expected whitespace between XML attributes.')
+          const match = /^([^\x20\t\r\n=]+)[\x20\t\r\n]*=[\x20\t\r\n]*(['"])([\s\S]*?)\2/.exec(body.slice(position))
+          if (!match || !NAME.test(match[1]!)) return failure(attributeOffset, 'Invalid attribute: use name="value" with a quoted value.')
+          if (attrs.has(match[1]!)) return failure(attributeOffset, `Duplicate attribute ${match[1]}`)
+          attrs.add(match[1]!)
+          if (match[3]!.includes('<')) return failure(attributeOffset, 'Attribute values cannot contain a literal <.', 'Use &lt; instead.')
+          position += match[0].length
+        }
+      }
+    }
+    tokens.push(token)
   }
   return { ok: true, tokens }
 }
 
-function validateWellFormed(tokens: Token[]): MarkupResult {
-  const stack: string[] = []
-  for (const t of tokens) {
-    if (t.kind === 'open' && !t.selfClosing) {
-      stack.push(t.name)
-    } else if (t.kind === 'close') {
-      if (stack.length === 0) {
-        return { ok: false, error: `Unexpected closing tag </${t.name}>` }
-      }
-      const open = stack.pop()!
-      if (open !== t.name) {
-        return {
-          ok: false,
-          error: `Mismatched tags: expected </${open}>, found </${t.name}>`
-        }
-      }
+function structure(input: string, tokens: MarkupToken[]): MarkupResult {
+  const stack: MarkupToken[] = []
+  let roots = 0
+  let doctype = false
+  for (const token of tokens) {
+    if (token.kind === 'open') {
+      if (!stack.length && ++roots > 1) return markupError(input, token.start, 'XML must contain exactly one root element.', 'Wrap these elements in one parent element.')
+      if (!token.selfClosing) stack.push(token)
+    } else if (token.kind === 'close') {
+      const open = stack.pop()
+      if (!open) return markupError(input, token.start, `Unexpected closing tag </${token.name}>`)
+      if (open.name !== token.name) return markupError(input, token.start, `Mismatched tags: expected </${open.name}>, found </${token.name}>`, `Match the tag opened on line ${markupError(input, open.start, '').line}.`)
+    } else if ((token.kind === 'text' && token.raw.trim()) || token.kind === 'cdata') {
+      if (!stack.length) return markupError(input, token.start, 'Text and CDATA must be inside the root element.')
+      if (token.kind === 'text' && token.raw.includes(']]>')) return markupError(input, token.start + token.raw.indexOf(']]>'), 'The sequence ]]> is only allowed to end a CDATA section.')
+    } else if (token.kind === 'decl' && token.raw.startsWith('<!DOCTYPE')) {
+      if (doctype || roots || stack.length) return markupError(input, token.start, 'DOCTYPE must occur once, before the root element.')
+      doctype = true
     }
   }
-  if (stack.length > 0) {
-    return { ok: false, error: `Unclosed tag <${stack[stack.length - 1]}>` }
-  }
-  return { ok: true, text: '' }
-}
-
-export function validateXml(input: string): MarkupResult {
-  if (!input.trim()) return { ok: false, error: 'Empty input' }
-  const tok = tokenizeXml(input)
-  if (!tok.ok) return tok
-  const v = validateWellFormed(tok.tokens)
-  if (!v.ok) return v
+  if (stack.length) { const open = stack[stack.length - 1]!; return markupError(input, open.start, `Unclosed tag <${open.name}>`, `Add </${open.name}> before closing its parent.`) }
+  if (!roots) return markupError(input, input.length, 'XML requires a root element.')
   return { ok: true, text: input }
 }
 
-export function formatXml(
-  input: string,
-  options: { indent?: number; minify?: boolean } = {}
-): MarkupResult {
-  const tok = tokenizeXml(input)
-  if (!tok.ok) return tok
-  const v = validateWellFormed(tok.tokens)
-  if (!v.ok) return v
-
-  if (options.minify) {
-    return { ok: true, text: minifyTokens(tok.tokens) }
-  }
-
-  const indentSize = options.indent ?? 2
-  const pad = (level: number): string => ' '.repeat(Math.max(0, level) * indentSize)
-  const lines: string[] = []
-  let depth = 0
-
-  for (const t of tok.tokens) {
-    if (t.kind === 'text') {
-      const trimmed = t.value.replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n').trim()
-      if (!trimmed) continue
-      lines.push(pad(depth) + trimmed)
-      continue
-    }
-    if (t.kind === 'close') {
-      depth = Math.max(0, depth - 1)
-      lines.push(pad(depth) + t.raw)
-      continue
-    }
-    if (t.kind === 'open') {
-      lines.push(pad(depth) + (t.selfClosing ? makeSelfClose(t) : t.raw))
-      if (!t.selfClosing) depth += 1
-      continue
-    }
-    // decl / comment / cdata
-    lines.push(pad(depth) + t.value)
-  }
-
-  return { ok: true, text: lines.join('\n') + (lines.length ? '\n' : '') }
+/** Structural check; renderer also uses the platform XML parser for entities and namespaces. */
+export function validateXml(input: string): MarkupResult {
+  if (!input.trim()) return { ok: false, error: 'Empty input' }
+  const result = tokenizeXml(input)
+  return result.ok ? structure(input, result.tokens) : result
 }
 
-function makeSelfClose(t: Extract<Token, { kind: 'open' }>): string {
-  if (t.raw.endsWith('/>') || t.raw.endsWith('/ >')) return t.raw.replace(/\s*\/\s*>$/, ' />')
-  // normalize open that was marked selfClosing
-  return t.raw.replace(/>$/, ' />')
+export function formatXml(input: string, options: { indent?: number; minify?: boolean } = {}): MarkupResult {
+  const result = tokenizeXml(input)
+  if (!result.ok) return result
+  const checked = structure(input, result.tokens)
+  if (!checked.ok) return checked
+  const indent = options.indent ?? 2
+  if (!Number.isInteger(indent) || indent < 0 || indent > 8) return { ok: false, error: 'Indent must be an integer from 0 to 8.' }
+  return { ok: true, text: renderMarkup(input, result.tokens, indent, !!options.minify) }
 }
 
-function minifyTokens(tokens: Token[]): string {
-  let out = ''
-  for (const t of tokens) {
-    if (t.kind === 'text') {
-      const trimmed = t.value.replace(/\s+/g, ' ')
-      if (trimmed.trim()) out += trimmed.trim()
-      continue
-    }
-    if (t.kind === 'open') {
-      out += t.selfClosing ? t.raw.replace(/\s*\/\s*>$/, '/>') : t.raw
-      continue
-    }
-    if (t.kind === 'close') {
-      out += t.raw
-      continue
-    }
-    out += t.value
-  }
-  return out
-}
-
-export function minifyXml(input: string): MarkupResult {
-  return formatXml(input, { minify: true })
-}
-
-/** Exported for HTML void-tag awareness if needed */
-export { VOID_LIKE }
+export function minifyXml(input: string): MarkupResult { return formatXml(input, { minify: true }) }

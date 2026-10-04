@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { convertLineEndings, countLines, detectLineEnding, type LineEnding } from '@shared/file/text'
+import { convertLineEndings, countLines, detectLineEnding, lineEndingCounts, type LineEnding } from '@shared/file/text'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -20,6 +21,7 @@ export default function LineEndings(): JSX.Element {
   const detected = useMemo(() => detectLineEnding(input), [input])
   const output = useMemo(() => convertLineEndings(input, target), [input, target])
   const lines = useMemo(() => countLines(input), [input])
+  const counts = useMemo(() => lineEndingCounts(input), [input])
 
   return (
     <div className="flex h-full flex-col">
@@ -36,7 +38,7 @@ export default function LineEndings(): JSX.Element {
             { value: 'cr', label: 'CR' }
           ]}
         />
-        <button type="button" className="mac-btn-primary" onClick={() => setInput(output)}>
+        <button type="button" className="mac-btn-primary" disabled={!input || input === output} onClick={() => setInput(output)}>
           Apply to input
         </button>
         <div className="ml-auto flex gap-2">
@@ -45,17 +47,19 @@ export default function LineEndings(): JSX.Element {
             Sample
           </button>
         </div>
+        <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted-${target}.txt`} accept="text/*,.txt,.csv,.log,.md" />
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="text" placeholder="Paste text…" />
-        <CodeEditor value={output} language="text" readOnly />
+        <CodeEditor value={input} onChange={setInput} language="text" label="Original text" placeholder="Paste text…" />
+        <CodeEditor value={output} language="text" label={`Converted text (${target.toUpperCase()})`} readOnly />
       </SplitPane>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone="success">
-          Convert → {target.toUpperCase()} · output {output.length.toLocaleString()} chars
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
+        <ToolStatus tone={!input ? 'neutral' : detected === 'mixed' ? 'warning' : 'success'}>
+          {!input ? 'Open a UTF-8 file or paste text to begin' : `Input: ${counts.crlf} CRLF · ${counts.lf} LF · ${counts.cr} CR · output ${new TextEncoder().encode(output).length.toLocaleString()} bytes (${target.toUpperCase()})`}
         </ToolStatus>
+        <p className="mt-1 text-[11px] text-mac-label-tertiary">Editing normalizes editor line breaks to LF. Download preserves the selected output ending, including the final newline.</p>
       </footer>
     </div>
   )

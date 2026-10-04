@@ -1,7 +1,10 @@
 function getRandomValues(length: number): Uint8Array {
   const bytes = new Uint8Array(length)
   if (typeof globalThis.crypto?.getRandomValues === 'function') {
-    globalThis.crypto.getRandomValues(bytes)
+    // Web Crypto limits each call to 65,536 bytes.
+    for (let offset = 0; offset < length; offset += 65_536) {
+      globalThis.crypto.getRandomValues(bytes.subarray(offset, Math.min(offset + 65_536, length)))
+    }
     return bytes
   }
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -39,6 +42,11 @@ const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const DIGITS = '0123456789'
 const SYMBOLS = '!@#$%^&*()-_=+[]{};:,.<>?'
 
+export function passwordAlphabetSize(options: Omit<PasswordOptions, 'length'>): number {
+  return (options.lower ?? true ? LOWER.length : 0) + (options.upper ?? true ? UPPER.length : 0) +
+    (options.digits ?? true ? DIGITS.length : 0) + (options.symbols ? SYMBOLS.length : 0)
+}
+
 export interface PasswordOptions {
   length: number
   lower?: boolean
@@ -49,7 +57,7 @@ export interface PasswordOptions {
 
 export function generatePassword(options: PasswordOptions): string {
   const { length, lower = true, upper = true, digits = true, symbols = false } = options
-  if (length < 4 || length > 256) throw new Error('Password length must be 4–256')
+  if (!Number.isInteger(length) || length < 4 || length > 256) throw new Error('Password length must be an integer from 4–256')
 
   let alphabet = ''
   const required: string[] = []
@@ -87,7 +95,7 @@ function pickChar(alphabet: string): string {
 }
 
 export function randomInt(max: number): number {
-  if (max <= 0 || max > 0xffffffff) throw new Error('Invalid max')
+  if (!Number.isInteger(max) || max <= 0 || max > 0xffffffff) throw new Error('Invalid max')
   const limit = Math.floor(0x100000000 / max) * max
   while (true) {
     const buf = randomBytes(4)
@@ -106,5 +114,5 @@ export function generateUuidV4(): string {
 
 export function estimatePasswordEntropy(length: number, alphabetSize: number): number {
   if (length <= 0 || alphabetSize <= 0) return 0
-  return Math.log2(Math.pow(alphabetSize, length))
+  return length * Math.log2(alphabetSize)
 }
