@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw, Skull, ShieldAlert } from 'lucide-react'
-import { systemKillConfirmPhrase } from '@shared/ports/classify'
+import { isCriticalProcess, systemKillConfirmPhrase } from '@shared/ports/classify'
 import type { PortEntry, PortTier } from '@shared/ports/types'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { cn } from '@renderer/lib/utils'
+import { CopyButton } from '@renderer/components/ui/CopyButton'
 
 type Filter = 'all' | PortTier
 
@@ -17,30 +18,61 @@ export default function PortManager(): JSX.Element {
   const [killTarget, setKillTarget] = useState<PortEntry | null>(null)
   const [confirmText, setConfirmText] = useState('')
   const [killing, setKilling] = useState(false)
+  const [scannedAt, setScannedAt] = useState<number | null>(null)
+  const desktop = Boolean(window.devutils?.ports)
+  const scanningRef = useRef(false)
+  const killingRef = useRef(false)
+  const mounted = useRef(true)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   const scan = useCallback(async (): Promise<void> => {
+    if (scanningRef.current || !window.devutils?.ports) return
+    scanningRef.current = true
     setBusy(true)
     setError(null)
     try {
       const result = await window.devutils.ports.list()
+      if (!mounted.current) return
       setEntries(result.entries)
+      setScannedAt(result.scannedAt)
       const appN = result.entries.filter((e) => e.tier === 'application').length
       const sysN = result.entries.filter((e) => e.tier === 'system').length
       setStatus(
         `${result.entries.length} listeners · ${appN} application · ${sysN} system · ${result.platform}`
       )
     } catch (e) {
-      setEntries([])
+      if (!mounted.current) return
       setError(e instanceof Error ? e.message : 'Failed to list ports')
-      setStatus('Scan failed')
+      setStatus('Scan failed — previous results may be outdated')
     } finally {
-      setBusy(false)
+      scanningRef.current = false
+      if (mounted.current) setBusy(false)
     }
   }, [])
 
   useEffect(() => {
+    mounted.current = true
     void scan()
+    return () => { mounted.current = false }
   }, [scan])
+
+  useEffect(() => {
+    if (!killTarget) return
+    const previous = document.activeElement as HTMLElement | null
+    const dialog = dialogRef.current
+    const focusable = (): HTMLElement[] => [...(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? [])]
+    focusable()[0]?.focus()
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !killingRef.current) { event.preventDefault(); setKillTarget(null); setConfirmText('') }
+      if (event.key !== 'Tab') return
+      const elements = focusable()
+      const first = elements[0], last = elements.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus() }
+  }, [killTarget])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -70,7 +102,7 @@ export default function PortManager(): JSX.Element {
   }
 
   const doKill = async (): Promise<void> => {
-    if (!killTarget) return
+    if (!killTarget || killingRef.current || scanningRef.current) return
     const entry = killTarget
     if (entry.tier === 'system') {
       const needed = systemKillConfirmPhrase(entry.port)
@@ -80,6 +112,7 @@ export default function PortManager(): JSX.Element {
       }
     }
 
+    killingRef.current = true
     setKilling(true)
     setError(null)
     try {
@@ -89,6 +122,7 @@ export default function PortManager(): JSX.Element {
         confirmPhrase:
           entry.tier === 'system' ? systemKillConfirmPhrase(entry.port) : undefined
       })
+      if (!mounted.current) return
       setStatus(
         `Killed ${result.processName} (PID ${result.pid}) on :${result.port} [${result.tier}]`
       )
@@ -96,9 +130,11 @@ export default function PortManager(): JSX.Element {
       setConfirmText('')
       await scan()
     } catch (e) {
+      if (!mounted.current) return
       setError(e instanceof Error ? e.message : 'Kill failed')
     } finally {
-      setKilling(false)
+      killingRef.current = false
+      if (mounted.current) setKilling(false)
     }
   }
 
@@ -108,12 +144,12 @@ export default function PortManager(): JSX.Element {
     confirmText.trim().toLowerCase() === systemPhrase
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolToolbar>
         <button
           type="button"
           className="mac-btn-primary"
-          disabled={busy}
+          disabled={busy || killing || Boolean(killTarget) || !desktop}
           onClick={() => void scan()}
         >
           <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
@@ -131,6 +167,7 @@ export default function PortManager(): JSX.Element {
               key={f.id}
               type="button"
               data-active={filter === f.id}
+              aria-pressed={filter === f.id}
               className="mac-segment-item"
               onClick={() => setFilter(f.id)}
             >
@@ -141,10 +178,13 @@ export default function PortManager(): JSX.Element {
         <input
           className="mac-input max-w-[220px] font-mono text-[12px]"
           placeholder="Filter port / PID / name…"
+          aria-label="Filter listeners by port, PID, process or address"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}
         />
+        {(query || filter !== 'all') && <button type="button" className="mac-btn-secondary" onClick={() => { setQuery(''); setFilter('all') }}>Clear filters</button>}
+        <CopyButton text={!filtered.length || busy || error ? '' : JSON.stringify(filtered, null, 2)} label="Copy JSON" />
         <div className="ml-auto flex items-center gap-3 text-[11px]">
           <Legend color="bg-emerald-500" label="Application" />
           <Legend color="bg-amber-500" label="System" />
@@ -157,10 +197,12 @@ export default function PortManager(): JSX.Element {
         node…) · simple confirm.{' '}
         <strong className="text-mac-warning">System</strong> (amber) — OS / infra — type{' '}
         <code className="font-mono text-mac-label">kill [port]</code>. Never kills this app or
-        critical PIDs.
+        protected PIDs or known critical process names. Process details may be hidden by OS permissions. Stopping a process closes all its listeners.
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto" aria-busy={busy}>
+        {!desktop && <p className="px-4 py-4 text-[12px] text-mac-label-secondary" role="status">Open the desktop app to inspect local TCP listeners.</p>}
+        {error && <p className="px-4 py-3 text-[12px] text-mac-danger" role="alert">{error}{scannedAt ? ' Showing the last successful scan; refresh before stopping a process.' : ''}</p>}
         <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 bg-mac-surface/95 backdrop-blur">
             <tr className="border-b border-mac-separator text-[10px] uppercase tracking-wide text-mac-label-tertiary">
@@ -178,7 +220,7 @@ export default function PortManager(): JSX.Element {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-10 text-center text-mac-label-tertiary">
-                  {busy ? 'Scanning…' : 'No matching listeners'}
+                  {busy ? 'Scanning TCP listeners…' : !desktop ? 'Desktop app required' : error ? 'Scan unavailable' : entries.length ? 'No listeners match these filters. Clear filters to show all.' : 'No visible TCP listeners found. Permissions can limit this scan.'}
                 </td>
               </tr>
             ) : (
@@ -199,7 +241,7 @@ export default function PortManager(): JSX.Element {
                   <td className="max-w-[140px] truncate px-3 py-2 font-mono text-mac-label-secondary">
                     {e.address}
                   </td>
-                  <td className="px-3 py-2 font-mono text-mac-label-secondary">{e.pid}</td>
+                  <td className="px-3 py-2 font-mono text-mac-label-secondary">{e.pid || 'Unavailable'}</td>
                   <td className="max-w-[180px] truncate px-3 py-2 font-medium text-mac-label" title={e.processPath ?? e.processName}>
                     {e.processName}
                   </td>
@@ -216,6 +258,9 @@ export default function PortManager(): JSX.Element {
                           : 'bg-mac-danger/10 text-mac-danger hover:bg-mac-danger/20'
                       )}
                       onClick={() => openKill(e)}
+                      disabled={busy || killing || Boolean(error) || e.pid <= 4 || isCriticalProcess(e.processName)}
+                      aria-label={`Stop ${e.processName}, PID ${e.pid}, port ${e.port}`}
+                      title={!e.pid ? 'Process ownership unavailable — cannot stop safely' : isCriticalProcess(e.processName) ? 'Critical process protected' : 'Stop this process and all its listeners'}
                     >
                       <Skull className="h-3.5 w-3.5" />
                       Kill
@@ -228,15 +273,17 @@ export default function PortManager(): JSX.Element {
         </table>
       </div>
 
-      <footer className="flex items-center border-t border-mac-separator px-4 py-2">
+      <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : entries.length ? 'success' : 'neutral'}>
-          {error ?? status}
+          {!desktop ? 'Desktop app required' : error ?? (busy ? 'Scanning…' : status)}
         </ToolStatus>
+        {scannedAt && <span className="ml-auto text-[11px] text-mac-label-tertiary">{filtered.length}/{entries.length} shown · {new Date(scannedAt).toLocaleTimeString()}</span>}
       </footer>
 
       {killTarget && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
           <div
+            ref={dialogRef}
             className={cn(
               'w-full max-w-md rounded-mac-xl border bg-mac-surface p-5 shadow-mac-lg',
               killTarget.tier === 'system'
@@ -245,6 +292,8 @@ export default function PortManager(): JSX.Element {
             )}
             role="dialog"
             aria-modal
+            aria-labelledby="port-kill-title"
+            aria-describedby="port-kill-description"
           >
             <div className="mb-3 flex items-start gap-3">
               <div
@@ -262,10 +311,10 @@ export default function PortManager(): JSX.Element {
                 )}
               </div>
               <div className="min-w-0">
-                <h3 className="text-[15px] font-semibold text-mac-label">
+                <h3 id="port-kill-title" className="text-[15px] font-semibold text-mac-label">
                   {killTarget.tier === 'system' ? 'Kill system port?' : 'Kill application port?'}
                 </h3>
-                <p className="mt-1 text-[12px] leading-relaxed text-mac-label-secondary">
+                <p id="port-kill-description" className="mt-1 text-[12px] leading-relaxed text-mac-label-secondary">
                   End process{' '}
                   <strong className="text-mac-label">{killTarget.processName}</strong> (PID{' '}
                   <span className="font-mono">{killTarget.pid}</span>) listening on{' '}
@@ -291,6 +340,8 @@ export default function PortManager(): JSX.Element {
                   className="mac-input font-mono"
                   autoFocus
                   placeholder={systemPhrase}
+                  aria-label="Confirm stopping system process"
+                  disabled={killing}
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
                   onKeyDown={(e) => {

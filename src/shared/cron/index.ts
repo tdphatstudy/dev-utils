@@ -31,7 +31,7 @@ export interface ParsedCron {
   summary: string[]
 }
 
-export type CronParseResult = ParsedCron | { ok: false; error: string }
+export type CronParseResult = ParsedCron | { ok: false; error: string; field?: CronFieldName; column?: number }
 
 const MONTHS: Record<string, number> = {
   jan: 1,
@@ -64,7 +64,7 @@ const RANGES: Record<CronFieldName, { min: number; max: number; unit: string }> 
   hour: { min: 0, max: 23, unit: 'hour' },
   dayOfMonth: { min: 1, max: 31, unit: 'day' },
   month: { min: 1, max: 12, unit: 'month' },
-  dayOfWeek: { min: 0, max: 6, unit: 'weekday' }
+  dayOfWeek: { min: 0, max: 7, unit: 'weekday' }
 }
 
 const FIELD_LABEL: Record<CronFieldName, string> = {
@@ -110,20 +110,18 @@ export const CRON_PRESETS: { label: string; expr: string; hint: string }[] = [
 
 function normalizeToken(token: string, field: CronFieldName): string {
   const t = token.trim().toLowerCase()
-  if (field === 'month' && MONTHS[t] != null) return String(MONTHS[t])
-  if (field === 'dayOfWeek' && DOW[t] != null) return String(DOW[t])
-  // Sunday as 7 → 0
-  if (field === 'dayOfWeek' && t === '7') return '0'
+  if (field === 'month' && Object.hasOwn(MONTHS, t)) return String(MONTHS[t])
+  if (field === 'dayOfWeek' && Object.hasOwn(DOW, t)) return String(DOW[t])
   return token.trim()
 }
 
 function parseNumber(token: string, field: CronFieldName, min: number, max: number): number {
-  const n = Number(normalizeToken(token, field))
+  const normalized = normalizeToken(token, field)
+  const n = /^\d+$/.test(normalized) ? Number(normalized) : NaN
   if (!Number.isInteger(n) || n < min || n > max) {
     throw new Error(`${FIELD_LABEL[field]}: invalid value "${token}" (expected ${min}–${max})`)
   }
   // day-of-week 7 = Sunday
-  if (field === 'dayOfWeek' && n === 7) return 0
   return n
 }
 
@@ -145,11 +143,12 @@ function expandPart(part: string, field: CronFieldName): number[] {
 
   // */step or base/step
   if (raw.includes('/')) {
+    if (raw.split('/').length !== 2) throw new Error(`${FIELD_LABEL[field]}: expected one step separator`)
     const [base, stepStr] = raw.split('/')
     if (stepStr == null || stepStr === '' || base === undefined) {
       throw new Error(`${FIELD_LABEL[field]}: invalid step "${raw}"`)
     }
-    const step = Number(stepStr)
+    const step = /^\d+$/.test(stepStr) ? Number(stepStr) : NaN
     if (!Number.isInteger(step) || step <= 0) {
       throw new Error(`${FIELD_LABEL[field]}: step must be a positive integer`)
     }
@@ -157,6 +156,7 @@ function expandPart(part: string, field: CronFieldName): number[] {
     let end = max
     if (base !== '*') {
       if (base.includes('-')) {
+        if (base.split('-').length !== 2) throw new Error(`${FIELD_LABEL[field]}: invalid range`)
         const [a, b] = base.split('-')
         start = parseNumber(a!, field, min, max)
         end = parseNumber(b!, field, min, max)
@@ -173,6 +173,7 @@ function expandPart(part: string, field: CronFieldName): number[] {
 
   // a-b
   if (raw.includes('-')) {
+    if (raw.split('-').length !== 2) throw new Error(`${FIELD_LABEL[field]}: invalid range`)
     const [a, b] = raw.split('-')
     const start = parseNumber(a!, field, min, max)
     const end = parseNumber(b!, field, min, max)
@@ -187,7 +188,7 @@ function expandField(raw: string, field: CronFieldName): number[] {
   const parts = raw.split(',')
   const set = new Set<number>()
   for (const p of parts) {
-    for (const v of expandPart(p, field)) set.add(v)
+    for (const v of expandPart(p, field)) set.add(field === 'dayOfWeek' && v === 7 ? 0 : v)
   }
   return [...set].sort((a, b) => a - b)
 }
@@ -229,8 +230,8 @@ function buildHuman(fields: CronFieldInfo[], hasSeconds: boolean): string {
 
   const parts: string[] = ['At']
 
-  if (sec && sec.raw !== '0' && sec.raw !== '*') {
-    parts.push(`second ${sec.description},`)
+  if (sec) {
+    parts.push(`seconds ${sec.values.join(', ')},`)
   }
 
   if (min.raw === '*' && hour.raw === '*') {
@@ -247,9 +248,12 @@ function buildHuman(fields: CronFieldInfo[], hasSeconds: boolean): string {
     parts.push(`hour ${hour.description}`)
   }
 
+  const domWildcard = /^[*?]/.test(dom.raw), dowWildcard = /^[*?]/.test(dow.raw)
   const domAll = dom.raw === '*' || dom.raw === '?'
   const dowAll = dow.raw === '*' || dow.raw === '?'
-  if (!domAll && !dowAll) {
+  if (!domAll && !dowAll && (domWildcard || dowWildcard)) {
+    parts.push(`on day-of-month ${dom.description} and ${dow.description}`)
+  } else if (!domAll && !dowAll) {
     parts.push(`on day-of-month ${dom.description} or ${dow.description}`)
   } else if (!domAll) {
     parts.push(`on day ${dom.description}`)
@@ -271,6 +275,7 @@ function pad(n: number): string {
 }
 
 export function parseCron(expression: string): CronParseResult {
+  if (expression.length > 4096) return { ok: false, error: 'Expression exceeds 4096 characters.' }
   const expr = expression.trim().replace(/\s+/g, ' ')
   if (!expr) return { ok: false, error: 'Expression is empty' }
 
@@ -287,8 +292,12 @@ export function parseCron(expression: string): CronParseResult {
     ? ['second', 'minute', 'hour', 'dayOfMonth', 'month', 'dayOfWeek']
     : ['minute', 'hour', 'dayOfMonth', 'month', 'dayOfWeek']
 
+  let currentField: CronFieldName | undefined
+  let currentColumn: number | undefined
   try {
     const fields: CronFieldInfo[] = names.map((name, i) => {
+      currentField = name
+      currentColumn = [...expression.matchAll(/\S+/g)][i]!.index + 1
       const raw = tokens[i]!
       const values = expandField(raw, name)
       if (!values.length) throw new Error(`${FIELD_LABEL[name]}: no values`)
@@ -324,7 +333,7 @@ export function parseCron(expression: string): CronParseResult {
       summary
     }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Invalid cron expression' }
+    return { ok: false, error: e instanceof Error ? e.message : 'Invalid cron expression', field: currentField, column: currentColumn }
   }
 }
 
@@ -332,83 +341,55 @@ function fieldSet(parsed: ParsedCron, name: CronFieldName): Set<number> {
   return new Set(parsed.fields.find((f) => f.name === name)!.values)
 }
 
-function matchesDate(parsed: ParsedCron, d: Date): boolean {
-  const sec = fieldSet(parsed, 'second')
-  const min = fieldSet(parsed, 'minute')
-  const hour = fieldSet(parsed, 'hour')
-  const mon = fieldSet(parsed, 'month')
-  const dom = fieldSet(parsed, 'dayOfMonth')
-  const dow = fieldSet(parsed, 'dayOfWeek')
-
-  if (!sec.has(d.getSeconds())) return false
-  if (!min.has(d.getMinutes())) return false
-  if (!hour.has(d.getHours())) return false
-  if (!mon.has(d.getMonth() + 1)) return false
-
-  const domRaw = parsed.fields.find((f) => f.name === 'dayOfMonth')!.raw
-  const dowRaw = parsed.fields.find((f) => f.name === 'dayOfWeek')!.raw
-  const domAll = domRaw === '*' || domRaw === '?'
-  const dowAll = dowRaw === '*' || dowRaw === '?'
-  const day = d.getDate()
-  const weekday = d.getDay() // 0=Sun
-
-  if (domAll && dowAll) return true
-  if (!domAll && dowAll) return dom.has(day)
-  if (domAll && !dowAll) return dow.has(weekday)
-  // Both restricted → OR
-  return dom.has(day) || dow.has(weekday)
-}
-
 /**
  * Next `count` fire times at or after `from` (if from lands exactly on a fire and inclusive).
- * Iterates second-by-second (or minute if only second=0).
+ * Skip nonmatching calendar days, walk eligible minutes and enumerate seconds.
  */
 export function nextRuns(
   parsed: ParsedCron,
   from: Date = new Date(),
   count = 10,
-  options?: { inclusive?: boolean; maxScanMs?: number }
+  options?: { inclusive?: boolean; maxScanMs?: number; timezone?: 'local' | 'UTC' }
 ): Date[] {
   const inclusive = options?.inclusive ?? false
-  const maxScanMs = options?.maxScanMs ?? 1000 * 60 * 60 * 24 * 366 * 2 // 2 years
+  const maxScanMs = options?.maxScanMs ?? 1000 * 60 * 60 * 24 * 366 * 8
+  if (!Number.isFinite(from.getTime()) || !Number.isInteger(count) || count < 1 || count > 50 || !Number.isFinite(maxScanMs) || maxScanMs < 0) return []
+  const utc = options?.timezone === 'UTC'
   const results: Date[] = []
-  const start = new Date(from.getTime())
-  // Align to second
-  start.setMilliseconds(0)
-  if (!inclusive) start.setSeconds(start.getSeconds() + 1)
-
-  const onlyZeroSec =
-    parsed.fields.find((f) => f.name === 'second')!.values.length === 1 &&
-    parsed.fields.find((f) => f.name === 'second')!.values[0] === 0
-
-  let cursor = start.getTime()
-  const end = from.getTime() + maxScanMs
-  let guard = 0
-  const maxGuard = onlyZeroSec ? 60 * 24 * 370 * 2 : 60 * 60 * 24 * 370 * 2
-
-  while (results.length < count && cursor <= end && guard < maxGuard) {
-    guard++
+  const seconds = parsed.fields.find((field) => field.name === 'second')!.values
+  const minutes = fieldSet(parsed, 'minute'), hours = fieldSet(parsed, 'hour'), months = fieldSet(parsed, 'month')
+  const dom = fieldSet(parsed, 'dayOfMonth'), dow = fieldSet(parsed, 'dayOfWeek')
+  const domAll = /^[*?]/.test(parsed.fields.find((field) => field.name === 'dayOfMonth')!.raw)
+  const dowAll = /^[*?]/.test(parsed.fields.find((field) => field.name === 'dayOfWeek')!.raw)
+  let cursor = Math.floor(from.getTime() / 60000) * 60000
+  const end = Math.min(from.getTime() + maxScanMs, from.getTime() + 1000 * 60 * 60 * 24 * 366 * 8, 8.64e15)
+  while (results.length < count && cursor <= end) {
     const d = new Date(cursor)
-    if (matchesDate(parsed, d)) {
-      results.push(new Date(d))
-      // Jump forward at least 1 unit after match
-      cursor += onlyZeroSec ? 60_000 : 1000
-      continue
-    }
-    // Smart-ish skip: if second wrong and we have sparse seconds, jump
-    if (onlyZeroSec && d.getSeconds() !== 0) {
-      d.setSeconds(0, 0)
-      d.setMinutes(d.getMinutes() + 1)
+    const month = utc ? d.getUTCMonth() + 1 : d.getMonth() + 1
+    const day = utc ? d.getUTCDate() : d.getDate(), weekday = utc ? d.getUTCDay() : d.getDay()
+    const dayMatches = domAll || dowAll ? dom.has(day) && dow.has(weekday) : dom.has(day) || dow.has(weekday)
+    if (!months.has(month) || !dayMatches) {
+      if (utc) d.setUTCHours(24, 0, 0, 0)
+      else d.setHours(24, 0, 0, 0)
       cursor = d.getTime()
       continue
     }
-    cursor += onlyZeroSec ? 60_000 : 1000
+    if (hours.has(utc ? d.getUTCHours() : d.getHours()) && minutes.has(utc ? d.getUTCMinutes() : d.getMinutes())) {
+      for (const second of seconds) {
+        const candidate = cursor + second * 1000
+        if ((inclusive ? candidate >= from.getTime() : candidate > from.getTime()) && candidate <= end) results.push(new Date(candidate))
+        if (results.length === count) break
+      }
+    }
+    // Walk actual elapsed minutes so repeated DST hours are preserved.
+    cursor += 60000
   }
 
   return results
 }
 
-export function formatCronDate(d: Date): string {
+export function formatCronDate(d: Date, timezone: 'local' | 'UTC' = 'local'): string {
+  if (timezone === 'UTC') return `${d.toISOString().slice(0, 19).replace('T', ' ')} (UTC)`
   const y = d.getFullYear()
   const mo = pad(d.getMonth() + 1)
   const day = pad(d.getDate())

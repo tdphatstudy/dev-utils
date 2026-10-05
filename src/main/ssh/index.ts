@@ -22,7 +22,7 @@ export async function listSshInventory(
   const hosts = exists || existsSync(paths.configPath) ? await listHostsFromConfig(location) : []
 
   const identityFiles = hosts
-    .map((h) => h.identityFile)
+    .flatMap((h) => h.identityFiles ?? [h.identityFile])
     .filter((x): x is string => !!x)
   keys = await mergeExternalIdentityKeys(keys, identityFiles, location)
 
@@ -51,7 +51,8 @@ export async function sshTestConnect(req: SshConnectRequest) {
 
 export async function sshOpenFolder(location?: SshLocation | null): Promise<string> {
   const dir = getSshDir(location)
-  await shell.openPath(dir)
+  const error = await shell.openPath(dir)
+  if (error) throw new Error(`Could not open SSH directory “${dir}”: ${error}`)
   return dir
 }
 

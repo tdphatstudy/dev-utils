@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pin,
   Plus,
@@ -20,6 +20,7 @@ import {
   type KeepNote
 } from '@shared/secret-box/keep-note'
 import { cn } from '@renderer/lib/utils'
+import { isVaultAccessError } from '@shared/secret-box/access-errors'
 
 interface NoteCard {
   entry: DirEntry
@@ -28,10 +29,16 @@ interface NoteCard {
 }
 
 function isNeedsAccess(e: unknown): boolean {
-  return e instanceof Error && (e.message === 'NEEDS_ACCESS' || e.name === 'NEEDS_ACCESS')
+  return isVaultAccessError(e)
 }
 
 export default function KeepApp(): JSX.Element {
+  const desktop = !!window.devutils?.privateBox
+  const inventoryVersion = useRef(0)
+  const defaultBoxId = useRef<string>()
+  const mutating = useRef(false)
+  const [saving, setSaving] = useState(false)
+  const [unreadable, setUnreadable] = useState<string[]>([])
   const [ready, setReady] = useState(false)
   const [hasAccess, setHasAccess] = useState(false)
   const [keyB, setKeyB] = useState('')
@@ -46,27 +53,33 @@ export default function KeepApp(): JSX.Element {
   const [showPalette, setShowPalette] = useState(false)
 
   const unlock = useCallback(async (password: string): Promise<void> => {
+    if (!desktop || mutating.current || !password.trim()) return
+    mutating.current = true
     setBusy(true)
     setError(null)
     try {
-      await window.devutils.privateBox.ensureDefault()
-      await window.devutils.privateBox.accessDefault(password.trim())
+      const box = await window.devutils.privateBox.ensureDefault()
+      defaultBoxId.current = box.id
+      await window.devutils.privateBox.accessDefault(password)
       setHasAccess(true)
       setKeyB('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not unlock')
       setHasAccess(false)
     } finally {
+      mutating.current = false
       setBusy(false)
     }
-  }, [])
+  }, [desktop])
 
   const bootstrap = useCallback(async (): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
+      if (!desktop) throw new Error('Keep requires the desktop app.')
       await window.devutils.privateBox.ensureDefault()
       const prep = await window.devutils.privateBox.prepareDefaultForSave()
+      defaultBoxId.current = prep.boxId
       if (prep.hasAccess) {
         setHasAccess(true)
       } else {
@@ -78,10 +91,11 @@ export default function KeepApp(): JSX.Element {
       setBusy(false)
       setReady(true)
     }
-  }, [])
+  }, [desktop])
 
   const loadNotes = useCallback(async (): Promise<void> => {
     if (!hasAccess) return
+    const version = ++inventoryVersion.current
     setBusy(true)
     setError(null)
     try {
@@ -92,37 +106,43 @@ export default function KeepApp(): JSX.Element {
       }
       const list = await window.devutils.privateBox.list(KEEP_FOLDER)
       const files = list.filter(
-        (e) => e.kind === 'file' && (e.type === 'keep-note' || e.name.endsWith('.keep.json'))
+        (e) => e.kind === 'file' && (!e.type || e.type === 'keep-note' || e.name.endsWith('.keep.json'))
       )
       const loaded: NoteCard[] = []
+      const failures: string[] = []
       for (const entry of files) {
         try {
           const doc = await window.devutils.privateBox.readFile(entry.relativePath)
           loaded.push({ entry, doc, note: parseKeepNote(doc.content) })
-        } catch {
-          /* skip corrupt */
+        } catch (e) {
+          if (isNeedsAccess(e)) throw e
+          failures.push(`${entry.name}: ${e instanceof Error ? e.message : 'Could not read note'}`)
         }
       }
       loaded.sort((a, b) => {
         if (a.note.pinned !== b.note.pinned) return a.note.pinned ? -1 : 1
         return (b.note.updatedAt || '').localeCompare(a.note.updatedAt || '')
       })
-      setCards(loaded)
+      if (version !== inventoryVersion.current) return
+      setCards(loaded); setUnreadable(failures)
     } catch (e) {
+      if (version !== inventoryVersion.current) return
+      setCards([]); setUnreadable([])
       if (isNeedsAccess(e)) {
         setHasAccess(false)
       } else {
         setError(e instanceof Error ? e.message : 'Failed to load notes')
       }
     } finally {
-      setBusy(false)
+      if (version === inventoryVersion.current) setBusy(false)
     }
   }, [hasAccess])
 
   useEffect(() => {
     void bootstrap()
     return () => {
-      void window.devutils.privateBox.clearAccess()
+      inventoryVersion.current++
+      void window.devutils?.privateBox?.clearAccess()
     }
   }, [bootstrap])
 
@@ -142,19 +162,28 @@ export default function KeepApp(): JSX.Element {
   const pinned = filtered.filter((c) => c.note.pinned)
   const others = filtered.filter((c) => !c.note.pinned)
 
-  const saveCard = async (card: NoteCard, note: KeepNote): Promise<void> => {
-    const next = { ...note, updatedAt: new Date().toISOString() }
-    await window.devutils.privateBox.writeFile(card.doc.relativePath, serializeKeepNote(next))
-    await loadNotes()
+  const saveCard = async (card: NoteCard, note: KeepNote): Promise<boolean> => {
+    if (mutating.current) return false
+    mutating.current = true; setSaving(true); setError(null)
+    try {
+      const next = { ...note, updatedAt: new Date().toISOString() }
+      await window.devutils.privateBox.writeFile(card.doc.relativePath, serializeKeepNote(next, card.doc.content))
+      await loadNotes()
+      return true
+    } catch (e) {
+      setError(`${e instanceof Error ? e.message : 'Could not save note'}. Draft kept in memory; retry before closing Keep.`)
+      return false
+    } finally { mutating.current = false; setSaving(false) }
   }
 
   const createNote = async (note: KeepNote): Promise<void> => {
+    if (mutating.current) return
     if (!note.title.trim() && !note.body.trim()) {
       setCreating(false)
       setComposer(emptyKeepNote())
       return
     }
-    setBusy(true)
+    mutating.current = true; setSaving(true); setError(null)
     try {
       const now = new Date().toISOString()
       const payload = serializeKeepNote({
@@ -163,6 +192,7 @@ export default function KeepApp(): JSX.Element {
         updatedAt: now
       })
       await window.devutils.privateBox.saveDocument({
+        boxId: defaultBoxId.current,
         name: keepNoteFileName(note.title || 'note'),
         type: 'keep-note',
         content: payload,
@@ -174,19 +204,20 @@ export default function KeepApp(): JSX.Element {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create note')
     } finally {
-      setBusy(false)
+      mutating.current = false; setSaving(false)
     }
   }
 
   const deleteCard = async (card: NoteCard): Promise<void> => {
-    if (!window.confirm('Delete this note?')) return
+    if (mutating.current || !window.confirm('Permanently delete this note? This cannot be undone.')) return
+    mutating.current = true; setSaving(true); setError(null)
     try {
       await window.devutils.privateBox.remove(card.doc.relativePath)
       setEditing(null)
       await loadNotes()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed')
-    }
+    } finally { mutating.current = false; setSaving(false) }
   }
 
   if (!ready) {
@@ -199,7 +230,7 @@ export default function KeepApp(): JSX.Element {
 
   if (!hasAccess) {
     return (
-      <div className="flex h-full flex-col items-center justify-center bg-[#202124] px-6">
+      <div className="flex h-full flex-col items-center justify-center overflow-auto bg-[#202124] px-6">
         <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#2d2e30] p-6 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#fbbc04]/20 text-[#fbbc04]">
@@ -216,20 +247,22 @@ export default function KeepApp(): JSX.Element {
           </p>
           <input
             type="password"
+            aria-label="Keep password"
+            disabled={!desktop || busy}
             className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 font-mono text-[13px] text-white outline-none placeholder:text-white/30 focus:border-[#fbbc04]/50"
             placeholder="Password (key B)"
             value={keyB}
             onChange={(e) => setKeyB(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && keyB.trim()) void unlock(keyB)
+              if (e.key === 'Enter' && !busy && keyB.trim()) void unlock(keyB)
             }}
             autoFocus
             autoComplete="off"
           />
-          {error && <p className="mt-2 text-[12px] text-red-400">{error}</p>}
+          {error && <p role="alert" className="mt-2 break-words text-[12px] text-red-400">{error}</p>}
           <button
             type="button"
-            disabled={busy || !keyB.trim()}
+            disabled={!desktop || busy || !keyB.trim()}
             className="mt-4 w-full rounded-lg bg-[#fbbc04] py-2.5 text-[13px] font-semibold text-[#202124] disabled:opacity-40"
             onClick={() => void unlock(keyB)}
           >
@@ -250,6 +283,7 @@ export default function KeepApp(): JSX.Element {
           <input
             className="w-full rounded-lg border border-transparent bg-[#525355]/40 py-2 pl-9 pr-3 text-[13px] outline-none placeholder:text-white/40 focus:border-white/10 focus:bg-[#525355]/60"
             placeholder="Search notes"
+            aria-label="Search notes by title or body"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -258,10 +292,14 @@ export default function KeepApp(): JSX.Element {
           type="button"
           className="rounded-lg px-2 py-1.5 text-[12px] text-white/60 hover:bg-white/10 hover:text-white"
           title="Sign out of box"
+          aria-label="Sign out of box"
+          disabled={busy || saving}
           onClick={() => {
             void window.devutils.privateBox.clearAccess()
+            inventoryVersion.current++
             setHasAccess(false)
-            setCards([])
+            setCards([]); setUnreadable([]); setEditing(null); setDraft(emptyKeepNote())
+            setCreating(false); setComposer(emptyKeepNote()); setKeyB('')
           }}
         >
           <LogOut className="h-4 w-4" />
@@ -288,7 +326,8 @@ export default function KeepApp(): JSX.Element {
             onClose={() => {
               void createNote(composer)
             }}
-            submitLabel="Close"
+            submitLabel="Save note"
+            busy={saving}
             showPalette={showPalette}
             setShowPalette={setShowPalette}
           />
@@ -297,12 +336,16 @@ export default function KeepApp(): JSX.Element {
 
       <div className="min-h-0 flex-1 overflow-auto px-4 py-6">
         {error && (
-          <p className="mx-auto mb-4 max-w-3xl text-center text-[12px] text-red-400">{error}</p>
+          <p role="alert" className="mx-auto mb-4 max-w-3xl text-center text-[12px] text-red-400">{error}</p>
         )}
         {busy && cards.length === 0 && (
           <p className="text-center text-[13px] text-white/40">Loading…</p>
         )}
-        {!busy && filtered.length === 0 && (
+        {unreadable.length > 0 && <details className="mx-auto mb-4 max-w-3xl rounded-lg border border-red-400/30 p-3 text-[12px] text-red-300">
+          <summary>{unreadable.length} note(s) could not be read. Files were kept.</summary>
+          <ul className="mt-2 space-y-1">{unreadable.map((issue) => <li key={issue} className="break-words">{issue}</li>)}</ul>
+        </details>}
+        {!busy && !error && !unreadable.length && filtered.length === 0 && (
           <p className="text-center text-[13px] text-white/40">
             {query ? 'No matching notes' : 'No notes yet — take one above'}
           </p>
@@ -347,18 +390,19 @@ export default function KeepApp(): JSX.Element {
 
       {editing && (
         <div className="fixed inset-0 z-[200] flex items-start justify-center overflow-auto bg-black/60 p-4 pt-[10vh] backdrop-blur-[2px]">
-          <div className="w-full max-w-lg">
+          <div role="dialog" aria-label="Edit note" className="w-full max-w-lg">
+            {error && <p role="alert" className="mb-3 rounded-lg bg-[#2d2e30] p-3 text-[12px] text-red-300">{error}</p>}
             <NoteEditor
               note={draft}
               onChange={setDraft}
               onClose={() => {
                 void (async () => {
-                  await saveCard(editing, draft)
-                  setEditing(null)
+                  if (await saveCard(editing, draft)) setEditing(null)
                 })()
               }}
               onDelete={() => void deleteCard(editing)}
-              submitLabel="Done"
+              submitLabel="Save changes"
+              busy={saving}
               showPalette={showPalette}
               setShowPalette={setShowPalette}
             />
@@ -431,7 +475,8 @@ function NoteEditor({
   onDelete,
   submitLabel,
   showPalette,
-  setShowPalette
+  setShowPalette,
+  busy = false
 }: {
   note: KeepNote
   onChange: (n: KeepNote) => void
@@ -440,6 +485,7 @@ function NoteEditor({
   submitLabel: string
   showPalette: boolean
   setShowPalette: (v: boolean) => void
+  busy?: boolean
 }): JSX.Element {
   const bg = colorBg(note.color)
   return (
@@ -447,12 +493,16 @@ function NoteEditor({
       <input
         className="w-full bg-transparent px-4 pt-3 text-[16px] font-medium text-white outline-none placeholder:text-white/35"
         placeholder="Title"
+        aria-label="Note title"
+        disabled={busy}
         value={note.title}
         onChange={(e) => onChange({ ...note, title: e.target.value })}
       />
       <textarea
         className="min-h-[120px] w-full resize-none bg-transparent px-4 py-2 text-[14px] leading-relaxed text-white/90 outline-none placeholder:text-white/35"
         placeholder="Take a note…"
+        aria-label="Note body"
+        disabled={busy}
         value={note.body}
         onChange={(e) => onChange({ ...note, body: e.target.value })}
         autoFocus
@@ -462,6 +512,9 @@ function NoteEditor({
           type="button"
           className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
           title="Pin"
+          aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
+          disabled={busy}
+          aria-pressed={note.pinned}
           onClick={() => onChange({ ...note, pinned: !note.pinned })}
         >
           <Pin className={cn('h-4 w-4', note.pinned && 'fill-current text-[#fbbc04]')} />
@@ -470,6 +523,9 @@ function NoteEditor({
           type="button"
           className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
           title="Background"
+          aria-label="Choose note background"
+          aria-expanded={showPalette}
+          disabled={busy}
           onClick={() => setShowPalette(!showPalette)}
         >
           <Palette className="h-4 w-4" />
@@ -479,6 +535,8 @@ function NoteEditor({
             type="button"
             className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-red-300"
             title="Delete"
+            aria-label="Permanently delete note"
+            disabled={busy}
             onClick={onDelete}
           >
             <Trash2 className="h-4 w-4" />
@@ -488,8 +546,9 @@ function NoteEditor({
           type="button"
           className="ml-auto rounded-lg px-3 py-1.5 text-[13px] font-medium text-white/80 hover:bg-white/10"
           onClick={onClose}
+          disabled={busy}
         >
-          {submitLabel}
+          {busy ? 'Saving…' : submitLabel}
         </button>
 
         {showPalette && (
@@ -499,6 +558,9 @@ function NoteEditor({
                 key={c.id}
                 type="button"
                 title={c.label}
+                aria-label={`${c.label} background`}
+                aria-pressed={note.color === c.id}
+                disabled={busy}
                 className={cn(
                   'h-7 w-7 rounded-full border-2',
                   note.color === c.id ? 'border-white' : 'border-transparent'

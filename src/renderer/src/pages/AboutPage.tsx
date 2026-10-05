@@ -4,12 +4,18 @@ import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import logoPng from '@renderer/assets/logo.png'
 
 export function AboutPage(): JSX.Element {
-  const [version, setVersion] = useState('0.1.0')
+  const [version, setVersion] = useState<string | null>(null)
   const [platform, setPlatform] = useState('')
+  const [runtimeError, setRuntimeError] = useState<string | null>(null)
+  const desktop = !!window.devutils
 
   useEffect(() => {
-    window.devutils?.version().then(setVersion).catch(() => undefined)
-    window.devutils?.platform().then(setPlatform).catch(() => undefined)
+    let current = true
+    if (!desktop) return
+    void Promise.all([window.devutils.version(), window.devutils.platform()]).then(([value, os]) => {
+      if (current) { setVersion(value); setPlatform(os) }
+    }).catch(() => { if (current) setRuntimeError('Could not read desktop version and platform. Reopen this page to retry.') })
+    return () => { current = false }
   }, [])
 
   return (
@@ -21,23 +27,26 @@ export function AboutPage(): JSX.Element {
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-mac-label">DevUtils</h1>
             <p className="mt-1 text-[13px] text-mac-label-secondary">
-              Local developer toolbox · v{version}
+              Local developer toolbox · {desktop ? version ? `v${version}` : runtimeError ? 'Version unavailable' : 'Reading version…' : 'Browser preview'}
               {platform ? ` · ${platform}` : ''}
             </p>
+            {runtimeError && <p role="alert" className="mt-1 text-[12px] text-mac-danger">{runtimeError}</p>}
           </div>
         </div>
 
         <div className="mt-8 space-y-4">
           <Card
             icon={<WifiOff className="h-4 w-4 text-mac-accent" />}
-            title="100% local by default"
-            body="JSON, YAML, Base64, crypto, and file hashing run entirely on your machine. No accounts, no telemetry."
+            title="Local processing"
+            body="JSON, YAML, Base64, image and crypto tools process data on your machine. Native file and network tools require the desktop app. The app has no account sign-in or background telemetry. HTTP, DNS and TCP probes contact the network when you run them."
           />
           <Card
             icon={<Shield className="h-4 w-4 text-mac-success" />}
-            title="Secure defaults"
-            body="Passwords and random values use Web Crypto CSPRNG. JWT can decode, verify (HS/RS/ES), and sign HS tokens on-device. Secret Box uses dual-layer AES-GCM; device mode binds key A to this machine’s hardware id (board/CPU/UUID) so reinstalling the OS on the same PC can still unlock — portable mode uses two passwords you choose."
+            title="Encryption and recovery"
+            body="Random values use Web Crypto. JWT supports on-device HS/RS/ES signature verification and HS signing; decoding alone does not verify a token. Private Box uses dual-layer AES-GCM. Device mode depends on device key material and may be affected by hardware, OS or account changes. Portable mode uses two passwords you choose. Keep a separate backup of the entire vault, including metadata, and retain the original keys. An encrypted backup cannot recover a forgotten password."
           />
+          <Card icon={<Shield className="h-4 w-4 text-mac-accent" />} title="Local data and history"
+            body="Preferences and recently opened tool IDs persist locally. Eligible tools keep input drafts and history snippets in RAM until the window closes or reloads; Settings can clear them separately. Security, vault, SSH, HTTP, URL and QR payloads are excluded. Keep notes and explicit Save to Box actions write encrypted vault files. SSH keys/config and explicit exports or downloads are ordinary local files." />
           <Card
             icon={<Keyboard className="h-4 w-4 text-mac-warning" />}
             title="Keyboard shortcuts"
@@ -54,8 +63,9 @@ export function AboutPage(): JSX.Element {
         </div>
 
         <p className="mt-10 text-[11px] leading-relaxed text-mac-label-tertiary">
-          Network tools (HTTP client) only contact remote hosts when you explicitly click Send.
-          Prefer offline tools for secrets and production data.
+          HTTP uses the URL you send; DNS uses configured DNS servers; SSH Test performs a TCP
+          reachability probe and does not authenticate. Verify JWT claims and application policy
+          separately from the signature result.
         </p>
       </div>
     </div>

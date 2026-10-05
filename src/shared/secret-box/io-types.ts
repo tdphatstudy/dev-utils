@@ -1,6 +1,8 @@
 import type { DocContent, DocEncoding, DocType } from './types'
 
 export interface SaveDocumentInput {
+  /** Pin a save dialog/composer to the box it prepared, across separate IPC calls. */
+  boxId?: string
   name: string
   type: DocType
   content: string

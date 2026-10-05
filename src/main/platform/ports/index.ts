@@ -1,5 +1,5 @@
 import { PORT_MAX, PORT_MIN, PROTECTED_PIDS } from '@shared/core/constants'
-import { classifyPort } from '@shared/ports/classify'
+import { classifyPort, isCriticalProcess } from '@shared/ports/classify'
 import type { PortEntry, PortKillResult, PortListResult } from '@shared/ports/types'
 import { runCmd } from './exec'
 import { unixPortScanner } from './unix'
@@ -41,7 +41,7 @@ export async function listListeningPorts(): Promise<PortListResult> {
   ])
   const raw = dedupe(rawList)
 
-  const missing = [...new Set(raw.filter((r) => !r.processName && !procMap.has(r.pid)).map((r) => r.pid))]
+  const missing = [...new Set(raw.filter((r) => r.pid > 0 && !r.processName && !procMap.has(r.pid)).map((r) => r.pid))]
   if (missing.length > 0 && scanner.id === 'unix') {
     try {
       const out = await runCmd('ps', ['-o', 'pid=,comm=', '-p', missing.join(',')])
@@ -57,7 +57,7 @@ export async function listListeningPorts(): Promise<PortListResult> {
 
   const entries: PortEntry[] = raw.map((r) => {
     const fromMap = procMap.get(r.pid)
-    const processName = r.processName || fromMap?.name || `pid-${r.pid}`
+    const processName = r.processName || fromMap?.name || (r.pid ? `pid-${r.pid}` : 'Unavailable (permissions)')
     const processPath = r.processPath || fromMap?.path
     const { tier, reason } = classifyPort({ port: r.port, processName, processPath })
     return {
@@ -100,6 +100,10 @@ export async function killProcessOnPort(
   const match = list.entries.find((e) => e.port === port && e.pid === pid)
   if (!match) {
     throw new Error(`No listening process on port ${port} with PID ${pid}`)
+  }
+
+  if (isCriticalProcess(match.processName)) {
+    throw new Error(`Refusing to stop critical process ${match.processName} (PID ${pid})`)
   }
 
   if (match.tier === 'system') {

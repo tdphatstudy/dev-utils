@@ -24,6 +24,7 @@ export interface SshKeyInfo {
   preview?: string
   /** Key lives outside the configured sshDir (e.g. IdentityFile elsewhere) */
   external?: boolean
+  readOnlyReason?: string
 }
 
 export interface SshHostEntry {
@@ -33,9 +34,12 @@ export interface SshHostEntry {
   user?: string
   port: number
   identityFile?: string
+  identityFiles?: string[]
   options: Record<string, string>
   /** Config file this host was loaded from */
   sourceConfig?: string
+  /** UI is a view of this block, not a resolved ssh -G configuration. */
+  readOnlyReason?: string
 }
 
 export interface SshHostInput {
@@ -60,6 +64,19 @@ export interface SshKeyCreateResult {
   publicPath: string
   publicKeyOpenSsh: string
   fingerprintSha256: string
+  recovery?: SshKeyRecovery
+}
+
+export interface SshKeyRecovery {
+  directory: string
+  keyPath: string
+  name: string
+}
+
+export interface SshKeyDeleteResult {
+  recovery: SshKeyRecovery
+  removed: number
+  error?: string
 }
 
 export interface SshKeyRenameInput {

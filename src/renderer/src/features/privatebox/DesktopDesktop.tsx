@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight,
   FileText,
@@ -17,6 +17,7 @@ import { NameDialog } from './NameDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TypeFileEditor } from './editors/TypeFileEditor'
 import { cn } from '@renderer/lib/utils'
+import { isVaultAccessError } from '@shared/secret-box/access-errors'
 
 type NamePrompt =
   | { kind: 'file'; type: DocType; initial: string }
@@ -31,7 +32,7 @@ interface Props {
 }
 
 function isNeedsAccess(e: unknown): boolean {
-  return e instanceof Error && (e.message === 'NEEDS_ACCESS' || e.name === 'NEEDS_ACCESS')
+  return isVaultAccessError(e)
 }
 
 function isMod(e: KeyboardEvent | React.KeyboardEvent): boolean {
@@ -190,12 +191,19 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
 }
 
 export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Props): JSX.Element {
+  const listVersion = useRef(0)
+  const openVersion = useRef(0)
+  const saving = useRef(false)
   const activeName = status.vaults.find((v) => v.id === status.activeId)?.name ?? 'Private Box'
   const [cwd, setCwd] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [doc, setDoc] = useState<DocContent | null>(null)
   const [draft, setDraft] = useState('')
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const cwdRef = useRef(cwd)
+  cwdRef.current = cwd
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -206,11 +214,16 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const selected = entries.find((e) => e.id === selectedId) ?? null
 
   const loadList = useCallback(async (): Promise<void> => {
+    if (cwd !== cwdRef.current) return
+    const version = ++listVersion.current
     setError(null)
     try {
       const list = await window.devutils.privateBox.list(cwd)
+      if (version !== listVersion.current) return
       setEntries(list)
     } catch (e) {
+      if (version !== listVersion.current) return
+      setEntries([])
       if (isNeedsAccess(e)) onSignOut()
       else setError(e instanceof Error ? e.message : 'Failed to list')
     }
@@ -218,6 +231,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
   useEffect(() => {
     void loadList()
+    return () => { listVersion.current++; openVersion.current++ }
   }, [loadList])
 
   useEffect(() => {
@@ -230,8 +244,10 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }, [status.activeId])
 
   const openEntry = async (entry: DirEntry): Promise<void> => {
+    if (saving.current) return
     if (entry.kind === 'dir') {
       if (dirty && !window.confirm('Discard unsaved changes?')) return
+      openVersion.current++; setBusy(false)
       setDoc(null)
       setDraft('')
       setDirty(false)
@@ -242,39 +258,46 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     if (dirty && doc && doc.relativePath !== entry.relativePath) {
       if (!window.confirm('Discard unsaved changes?')) return
     }
+    const version = ++openVersion.current
     setBusy(true)
     setError(null)
     try {
       const file = await window.devutils.privateBox.readFile(entry.relativePath)
+      if (version !== openVersion.current) return
       setDoc(file)
       setDraft(file.content)
       setDirty(false)
       setSelectedId(entry.id)
     } catch (e) {
+      if (version !== openVersion.current) return
       if (isNeedsAccess(e)) onSignOut()
       else setError(e instanceof Error ? e.message : 'Open failed')
     } finally {
-      setBusy(false)
+      if (version === openVersion.current) setBusy(false)
     }
   }
 
   const save = async (): Promise<void> => {
-    if (!doc) return
+    if (!doc || saving.current) return
     if (isBinaryKind(doc.type) || doc.encoding === 'base64') {
       setError('Media files are view-only — use Export or re-import to replace')
       return
     }
+    saving.current = true
+    const version = openVersion.current
     setBusy(true)
     setError(null)
     try {
       if (doc.type === 'json') JSON.parse(draft)
       const next = await window.devutils.privateBox.writeFile(doc.relativePath, draft)
+      if (version !== openVersion.current) return
       setDoc(next)
-      setDirty(false)
+      setDirty(draftRef.current !== next.content)
       await loadList()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
     } finally {
+      saving.current = false
       setBusy(false)
     }
   }
@@ -351,7 +374,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }
 
   const goTo = (path: string): void => {
+    if (saving.current) return
     if (dirty && !window.confirm('Discard unsaved changes?')) return
+    openVersion.current++; setBusy(false)
     setDoc(null)
     setDraft('')
     setDirty(false)
@@ -360,7 +385,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }
 
   const closeEditor = (): void => {
+    if (saving.current) return
     if (dirty && !window.confirm('Discard unsaved changes?')) return
+    openVersion.current++; setBusy(false)
     setDoc(null)
     setDraft('')
     setDirty(false)
@@ -708,6 +735,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
               onExport={() => void exportCurrent()}
               onChange={(v) => {
                 if (isBinaryKind(doc.type)) return
+                draftRef.current = v
                 setDraft(v)
                 setDirty(v !== doc.content)
               }}

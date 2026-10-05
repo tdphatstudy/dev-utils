@@ -7,7 +7,8 @@ import type {
   DocType,
   SetupInput,
   VaultListItem,
-  VaultStatus
+  VaultStatus,
+  RecoverMetadataInput, RecoverMetadataResult
 } from '@shared/secret-box/types'
 import type {
   ExportPlainResult,
@@ -26,6 +27,7 @@ import type {
   SshHostInput,
   SshKeyCreateInput,
   SshKeyCreateResult,
+  SshKeyDeleteResult,
   SshKeyRenameInput,
   SshListResult,
   SshLocation
@@ -120,7 +122,7 @@ const api = {
       location?: SshLocation | null
     ): Promise<SshKeyCreateResult> =>
       ipcRenderer.invoke('ssh:createKey', { ...input, location: location ?? null }),
-    deleteKey: (path: string, location?: SshLocation | null): Promise<void> =>
+    deleteKey: (path: string, location?: SshLocation | null): Promise<SshKeyDeleteResult> =>
       ipcRenderer.invoke('ssh:deleteKey', { path, location: location ?? null }),
     renameKey: (
       input: SshKeyRenameInput,
@@ -137,6 +139,7 @@ const api = {
       ipcRenderer.invoke('privateBox:pickVaultFolder'),
     setup: (input: SetupInput): Promise<void> => ipcRenderer.invoke('privateBox:setup', input),
     access: (input: AccessInput): Promise<void> => ipcRenderer.invoke('privateBox:access', input),
+    recoverMetadata: (input: RecoverMetadataInput): Promise<RecoverMetadataResult> => ipcRenderer.invoke('privateBox:recoverMetadata', input),
     clearAccess: (): Promise<void> => ipcRenderer.invoke('privateBox:clearAccess'),
     setActive: (id: string): Promise<void> => ipcRenderer.invoke('privateBox:setActive', id),
     removeFromList: (id: string): Promise<void> =>

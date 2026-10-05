@@ -17,6 +17,7 @@ export type JwtDecodeResult =
       notBefore?: string
       expired?: boolean
       notYetValid?: boolean
+      claimWarnings: string[]
     }
   | {
       ok: false
@@ -68,12 +69,14 @@ const ES_PARAMS: Record<
 }
 
 function b64UrlToBytes(input: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]*$/.test(input) || input.length % 4 === 1) throw new Error('Expected unpadded Base64URL (A–Z, a–z, 0–9, _ and -).')
   let b64 = input.replace(/-/g, '+').replace(/_/g, '/')
   const pad = b64.length % 4
   if (pad) b64 += '='.repeat(4 - pad)
   const binary = atob(b64)
   const out = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  if (bytesToB64Url(out) !== input) throw new Error('Noncanonical Base64URL padding bits.')
   return out
 }
 
@@ -86,7 +89,7 @@ function bytesToB64Url(bytes: ArrayBuffer | Uint8Array): string {
 
 function b64UrlToJson(part: string): unknown {
   const bytes = b64UrlToBytes(part)
-  const text = new TextDecoder().decode(bytes)
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
   return JSON.parse(text)
 }
 
@@ -108,6 +111,7 @@ function claimTimes(payload: Record<string, unknown>): {
   notBefore?: string
   expired?: boolean
   notYetValid?: boolean
+  claimWarnings: string[]
 } {
   let expiresAt: string | undefined
   let issuedAt: string | undefined
@@ -115,23 +119,28 @@ function claimTimes(payload: Record<string, unknown>): {
   let expired: boolean | undefined
   let notYetValid: boolean | undefined
   const now = Date.now()
+  const claimWarnings: string[] = []
+  for (const name of ['exp', 'iat', 'nbf']) {
+    if (Object.hasOwn(payload, name) && (typeof payload[name] !== 'number' || !Number.isFinite(payload[name]) || Math.abs(payload[name] as number) > 8.64e12)) claimWarnings.push(`${name}: expected a finite NumericDate representable as a date.`)
+  }
 
-  if (typeof payload.exp === 'number') {
+  if (typeof payload.exp === 'number' && Number.isFinite(payload.exp) && Math.abs(payload.exp) <= 8.64e12) {
     expiresAt = new Date(payload.exp * 1000).toISOString()
     expired = now >= payload.exp * 1000
   }
-  if (typeof payload.iat === 'number') {
+  if (typeof payload.iat === 'number' && Number.isFinite(payload.iat) && Math.abs(payload.iat) <= 8.64e12) {
     issuedAt = new Date(payload.iat * 1000).toISOString()
   }
-  if (typeof payload.nbf === 'number') {
+  if (typeof payload.nbf === 'number' && Number.isFinite(payload.nbf) && Math.abs(payload.nbf) <= 8.64e12) {
     notBefore = new Date(payload.nbf * 1000).toISOString()
     notYetValid = now < payload.nbf * 1000
   }
-  return { expiresAt, issuedAt, notBefore, expired, notYetValid }
+  return { expiresAt, issuedAt, notBefore, expired, notYetValid, claimWarnings }
 }
 
 export function decodeJwt(token: string): JwtDecodeResult {
   const raw = token.trim()
+  if (raw.length > 1_000_000) return { ok: false, error: 'Token exceeds 1,000,000 characters.' }
   if (!raw) return { ok: false, error: 'Empty token' }
 
   // strip Bearer prefix
@@ -143,8 +152,16 @@ export function decodeJwt(token: string): JwtDecodeResult {
 
   try {
     const [headerRaw, payloadRaw, signature] = parts as [string, string, string]
-    const header = b64UrlToJson(headerRaw) as Record<string, unknown>
-    const payload = b64UrlToJson(payloadRaw) as Record<string, unknown>
+    const decodePart = (part: string, name: string): Record<string, unknown> => {
+      try {
+        const value = b64UrlToJson(part)
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected a JSON object.')
+        return value as Record<string, unknown>
+      } catch (error) { throw new Error(`${name}: ${error instanceof Error ? error.message : 'Invalid encoding or JSON'}`) }
+    }
+    const header = decodePart(headerRaw, 'Header')
+    const payload = decodePart(payloadRaw, 'Payload')
+    try { b64UrlToBytes(signature) } catch (error) { throw new Error(`Signature: ${error instanceof Error ? error.message : 'Invalid Base64URL'}`) }
     const times = claimTimes(payload)
 
     return {
@@ -157,8 +174,8 @@ export function decodeJwt(token: string): JwtDecodeResult {
       algorithm: typeof header.alg === 'string' ? header.alg : undefined,
       ...times
     }
-  } catch {
-    return { ok: false, error: 'Failed to decode JWT (invalid base64/json)' }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Invalid JWT' }
   }
 }
 
@@ -253,8 +270,10 @@ export async function verifyJwt(
   const decoded = decodeJwt(token)
   if (!decoded.ok) return { ok: false, error: decoded.error }
 
-  const alg = (options?.algorithm || decoded.algorithm || '').toUpperCase()
-  if (!alg || alg === 'NONE') {
+  const alg = decoded.algorithm || ''
+  if (options?.algorithm && options.algorithm !== alg) return { ok: false, error: 'Expected algorithm does not match the token header.', decode: decoded }
+  if (Object.hasOwn(decoded.header, 'crit') || decoded.header.b64 === false) return { ok: false, error: 'Critical headers and unencoded payload extensions are unsupported.', decode: decoded }
+  if (!alg || alg === 'none') {
     return {
       ok: true,
       valid: false,
@@ -264,7 +283,7 @@ export async function verifyJwt(
     }
   }
 
-  const key = secretOrKey.trim()
+  const key = secretOrKey
   if (!key) {
     return {
       ok: true,
@@ -339,6 +358,9 @@ export async function signJwt(options: {
   if (!secret) return { ok: false, error: 'Secret is required to sign' }
 
   const alg: HsAlgorithm = options.algorithm ?? 'HS256'
+  if (!Object.hasOwn(HS_HASH, alg)) return { ok: false, error: 'Unsupported HMAC algorithm.' }
+  if (!options.payload || typeof options.payload !== 'object' || Array.isArray(options.payload)) return { ok: false, error: 'Payload must be a JSON object.' }
+  if (options.headerExtra && ('alg' in options.headerExtra || 'crit' in options.headerExtra || 'b64' in options.headerExtra)) return { ok: false, error: 'Extra headers cannot override alg, crit or b64.' }
   const header = {
     alg,
     typ: 'JWT',
@@ -381,8 +403,7 @@ export async function createSampleJwt(): Promise<string> {
     }
   })
   if (!signed.ok) {
-    // fallback static (may not verify with sample secret if outdated)
-    return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkRldlV0aWxzIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+    throw new Error(signed.error)
   }
   return signed.token
 }

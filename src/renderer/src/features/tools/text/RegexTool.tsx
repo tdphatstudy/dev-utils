@@ -7,11 +7,9 @@ import {
   highlightSegments,
   matchesToJson,
   normalizeFlags,
-  replaceRegex,
-  splitRegex,
-  testRegex,
   type RegexFlag
 } from '@shared/regex'
+import { useRegexJob } from './useRegexJob'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
@@ -34,6 +32,7 @@ export default function RegexTool(): JSX.Element {
   const [replacement, setReplacement] = useState('[$&]')
   const [splitLimit, setSplitLimit] = useState(0)
   const [selectedMatch, setSelectedMatch] = useState(0)
+  const [timeoutMs, setTimeoutMs] = useState(1500)
 
   useToolDraft('text.regex.pattern', pattern, setPattern, {
     label: 'Regex pattern',
@@ -54,33 +53,31 @@ export default function RegexTool(): JSX.Element {
     setFlags([...FLAG_SET].filter((x) => next.has(x)).join(''))
   }
 
-  const tested = useMemo(() => testRegex(pattern, flags, text), [pattern, flags, text])
-  const replaced = useMemo(
-    () => replaceRegex(pattern, flags, text, replacement),
-    [pattern, flags, text, replacement]
-  )
-  const split = useMemo(
-    () => splitRegex(pattern, flags, text, splitLimit > 0 ? splitLimit : undefined),
-    [pattern, flags, text, splitLimit]
-  )
-  const tokens = useMemo(() => explainRegex(pattern), [pattern])
+  const job = useMemo(() => ({ mode, pattern, flags, text, replacement, splitLimit }), [mode, pattern, flags, text, replacement, splitLimit])
+  const { result, pending, cancel, rerun } = useRegexJob(job, timeoutMs)
+  const fallback = { ok: false as const, error: pending ? 'Evaluating…' : result?.error ?? 'No result' }
+  const tested = result?.tested ?? fallback
+  const replaced = result?.replaced ?? fallback
+  const split = result?.split ?? fallback
+  const tokens = useMemo(() => mode === 'explain' && pattern.length <= 16384 ? explainRegex(pattern) : [], [pattern, mode])
   const segments = useMemo(() => {
     if (!tested.ok) return []
     return highlightSegments(text, tested.matches)
   }, [tested, text])
 
   const jsonOut = tested.ok ? matchesToJson(tested) : ''
+  const output = mode === 'test' ? jsonOut : mode === 'replace' && replaced.ok ? replaced.result : mode === 'split' && split.ok ? JSON.stringify(split.parts, null, 2) : ''
+  const current = mode === 'test' ? tested : mode === 'replace' ? replaced : mode === 'split' ? split : null
   const activeMatch =
     tested.ok && tested.matches.length
       ? tested.matches[Math.min(selectedMatch, tested.matches.length - 1)]
       : null
 
-  const status = !tested.ok
-    ? { tone: 'danger' as const, text: tested.error }
-    : {
-        tone: 'success' as const,
-        text: `${tested.matchCount} match${tested.matchCount === 1 ? '' : 'es'} · /${pattern}/${tested.flags}`
-      }
+  const error = result?.error ?? (current && !current.ok ? current.error : undefined)
+  const status = pending ? { tone: 'neutral' as const, text: 'Evaluating in worker…' }
+    : error ? { tone: 'danger' as const, text: error }
+    : { tone: current?.ok && (mode !== 'test' || tested.ok && tested.matchCount > 0) ? 'success' as const : 'neutral' as const,
+      text: `${mode === 'test' && tested.ok ? `${tested.matchCount} matches` : mode === 'replace' && replaced.ok ? `${replaced.count} replacements` : mode === 'split' && split.ok ? `${split.parts.length} parts` : 'Pattern compiles'} · ${result?.durationMs.toFixed(1)} ms · JavaScript RegExp` }
 
   const applySample = (i: number): void => {
     const s = REGEX_SAMPLES[i]
@@ -93,7 +90,7 @@ export default function RegexTool(): JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolToolbar>
         <SegmentedControl
           value={mode}
@@ -106,15 +103,19 @@ export default function RegexTool(): JSX.Element {
             { value: 'cheatsheet', label: 'Cheatsheet' }
           ]}
         />
+        <button type="button" className="mac-btn-primary" onClick={pending ? cancel : rerun}>{pending ? 'Cancel' : 'Run'}</button>
+        <select className="mac-input !w-auto text-[12px]" aria-label="Regex time limit" value={timeoutMs} onChange={(event) => setTimeoutMs(Number(event.target.value))}>
+          <option value={1500}>1.5s limit</option><option value={3000}>3s limit</option><option value={5000}>5s limit</option>
+        </select>
         <div className="ml-auto flex items-center gap-2">
           <SaveToBoxButton
-            type="json"
-            content={jsonOut}
-            defaultName="regex-matches.json"
-            disabled={!tested.ok || !jsonOut}
+            type={mode === 'replace' ? 'text' : 'json'}
+            content={output}
+            defaultName={mode === 'replace' ? 'regex-replacement.txt' : mode === 'split' ? 'regex-split.json' : 'regex-matches.json'}
+            disabled={pending || !current?.ok || (mode !== 'replace' && !output)}
           />
           <CopyButton text={pattern} label="Copy pattern" />
-          <CopyButton text={jsonOut} label="Copy matches" />
+          <CopyButton text={output} label={mode === 'replace' ? 'Copy result' : mode === 'split' ? 'Copy parts' : 'Copy matches'} />
         </div>
       </ToolToolbar>
 
@@ -131,14 +132,17 @@ export default function RegexTool(): JSX.Element {
             }}
             spellCheck={false}
             placeholder="regular expression"
+            aria-label="Regex pattern"
+            aria-invalid={!pending && Boolean(error)}
           />
           <span className="font-mono text-[14px] text-mac-label-tertiary">/</span>
           <input
             className="mac-input !w-24 font-mono text-[14px]"
             value={flags}
-            onChange={(e) => setFlags(normalizeFlags(e.target.value))}
+            onChange={(e) => setFlags(e.target.value)}
             spellCheck={false}
             title="Flags"
+            aria-label="Regex flags"
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -147,6 +151,7 @@ export default function RegexTool(): JSX.Element {
               key={f.flag}
               type="button"
               title={f.description}
+              aria-pressed={flagList.has(f.flag)}
               onClick={() => toggleFlag(f.flag)}
               className={cn(
                 'rounded-mac px-2 py-1 text-[11px] font-medium transition-colors',
@@ -174,7 +179,9 @@ export default function RegexTool(): JSX.Element {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
+      {error && !pending && <p className="shrink-0 border-b border-mac-separator px-4 py-2 text-[12px] text-mac-danger" role="alert">{error}</p>}
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 auto-rows-[minmax(220px,1fr)] overflow-auto md:grid-cols-2 md:grid-rows-1">
         {/* Input panel */}
         <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between border-b border-mac-separator px-3 py-1.5">
@@ -185,11 +192,12 @@ export default function RegexTool(): JSX.Element {
           </div>
           {mode === 'replace' && (
             <div className="border-b border-mac-separator px-3 py-2">
-              <label className="mb-1 block text-[11px] text-mac-label-tertiary">
+              <label htmlFor="regex-replacement" className="mb-1 block text-[11px] text-mac-label-tertiary">
                 Replacement ($&amp; $1 $&lt;name&gt; …)
               </label>
               <input
                 className="mac-input font-mono text-[13px]"
+                id="regex-replacement"
                 value={replacement}
                 onChange={(e) => setReplacement(e.target.value)}
                 spellCheck={false}
@@ -198,12 +206,14 @@ export default function RegexTool(): JSX.Element {
           )}
           {mode === 'split' && (
             <div className="border-b border-mac-separator px-3 py-2">
-              <label className="mb-1 block text-[11px] text-mac-label-tertiary">
-                Limit (0 = no limit)
+              <label htmlFor="regex-split-limit" className="mb-1 block text-[11px] text-mac-label-tertiary">
+                Limit (0 = up to 1000 parts)
               </label>
               <input
                 type="number"
                 min={0}
+                max={1000}
+                id="regex-split-limit"
                 className="mac-input !w-28 font-mono"
                 value={splitLimit}
                 onChange={(e) => setSplitLimit(Number(e.target.value) || 0)}
@@ -211,7 +221,7 @@ export default function RegexTool(): JSX.Element {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            <CodeEditor value={text} onChange={setText} language="text" placeholder="Text to test…" />
+            <CodeEditor value={text} onChange={setText} language="text" placeholder="Text to test…" label="Regex test string" onRun={rerun} />
           </div>
         </div>
 
@@ -234,6 +244,10 @@ export default function RegexTool(): JSX.Element {
                             s.matchIndex === selectedMatch && 'bg-mac-accent/45 ring-mac-accent'
                           )}
                           onClick={() => s.matchIndex != null && setSelectedMatch(s.matchIndex)}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Select match ${(s.matchIndex ?? 0) + 1}`}
+                          onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (s.matchIndex != null) setSelectedMatch(s.matchIndex) } }}
                         >
                           {s.text || '∅'}
                         </mark>
@@ -269,7 +283,7 @@ export default function RegexTool(): JSX.Element {
                         )}
                       >
                         <div className="flex items-center gap-2 text-[12px]">
-                          <span className="font-semibold text-mac-label">#{i}</span>
+                          <span className="font-semibold text-mac-label">#{i + 1}</span>
                           <code className="truncate font-mono text-mac-accent">
                             {m.match === '' ? '∅ zero-width' : m.match}
                           </code>
@@ -326,6 +340,7 @@ export default function RegexTool(): JSX.Element {
                   value={replaced.ok ? replaced.result : replaced.error}
                   language="text"
                   readOnly
+                  label="Regex replacement result"
                 />
               </div>
             </div>
@@ -342,7 +357,7 @@ export default function RegexTool(): JSX.Element {
                     >
                       <span className="text-mac-label-tertiary">[{i}]</span>
                       <span className="break-all text-mac-label">
-                        {p === '' ? <em className="text-mac-label-tertiary">(empty)</em> : p}
+                        {p === undefined ? <em className="text-mac-label-tertiary">(unmatched capture)</em> : p === '' ? <em className="text-mac-label-tertiary">(empty)</em> : p}
                       </span>
                     </li>
                   ))}
@@ -375,9 +390,6 @@ export default function RegexTool(): JSX.Element {
                     </div>
                   ))}
                 </div>
-              )}
-              {!tested.ok && (
-                <p className="mt-3 text-[12px] text-mac-danger">Compile error: {tested.error}</p>
               )}
             </div>
           )}
@@ -416,7 +428,7 @@ export default function RegexTool(): JSX.Element {
         </div>
       </div>
 
-      <footer className="flex items-center border-t border-mac-separator px-4 py-2">
+      <footer className="flex shrink-0 items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
       </footer>
     </div>

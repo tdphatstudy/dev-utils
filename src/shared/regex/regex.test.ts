@@ -37,6 +37,20 @@ describe('testRegex', () => {
     if (!r.ok) return
     expect(r.matchCount).toBe(3)
   })
+
+  it('advances zero-width Unicode matches by code point and sticky alone matches once', () => {
+    const result = testRegex('(?:)', 'gu', '😀a')
+    expect(result.ok && result.matches.map((match) => match.index)).toEqual([0, 2, 3])
+    const sticky = testRegex('a', 'y', 'aaa')
+    expect(sticky.ok && sticky.matchCount).toBe(1)
+    const globalSticky = testRegex('a', 'gy', 'aa aa')
+    expect(globalSticky.ok && globalSticky.matchCount).toBe(2)
+  })
+
+  it('accepts empty ECMAScript expressions and rejects bad flags instead of changing them', () => {
+    expect(testRegex('', '', 'a').ok).toBe(true)
+    for (const flags of ['gg', 'x', 'G', 'uv']) expect(testRegex('a', flags, 'a').ok).toBe(false)
+  })
 })
 
 describe('replace / split', () => {
@@ -53,6 +67,29 @@ describe('replace / split', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.parts).toEqual(['a', 'b', 'c'])
+  })
+
+  it('reports actual non-global replacement count and preserves native dollar semantics', () => {
+    expect(replaceRegex('a', '', 'aaa', '#')).toEqual({ ok: true, result: '#aa', count: 1 })
+    const replacements = ['$$ $& $` $\' $1 $2 $3 $01 $12 $00', '$<word>/$<missing>/$<__proto__>', '$1x$2', '']
+    for (const pattern of ['(?<word>a)(b)?', '(a)(b)?', '(?<__proto__>a)(b)?', '(?:)']) {
+      for (const flags of ['', 'g', 'y', 'gu']) for (const replacement of replacements) {
+        const text = 'aa ab😀'
+        const result = replaceRegex(pattern, flags, text, replacement)
+        expect(result.ok && result.result).toBe(text.replace(new RegExp(pattern, flags), replacement))
+      }
+    }
+  })
+
+  it('bounds expansion before constructing an amplified result', () => {
+    const result = replaceRegex('a', 'g', 'a'.repeat(500), '$\''.repeat(1000))
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('5,000,000')
+  })
+
+  it('preserves explicit zero split limit and unmatched captures', () => {
+    expect(splitRegex(',', '', 'a,b', 0)).toEqual({ ok: true, parts: [] })
+    expect(splitRegex('(,)|;', '', 'a;b')).toEqual({ ok: true, parts: ['a', undefined, 'b'] })
   })
 })
 
@@ -74,5 +111,9 @@ describe('explain & highlight', () => {
 
   it('normalizes flags', () => {
     expect(normalizeFlags('gGiix')).toBe('gi')
+  })
+
+  it('explains named groups without losing their prefix', () => {
+    expect(explainRegex('(?<word>a)')[0]).toMatchObject({ raw: '(?<word>', kind: 'group', meaning: 'Named group "word"' })
   })
 })

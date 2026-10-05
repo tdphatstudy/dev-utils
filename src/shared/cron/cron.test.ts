@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatCronDate, nextRuns, parseCron } from './index'
+afterEach(() => vi.unstubAllEnvs())
 
 describe('parseCron', () => {
   it('parses 5-field every minute', () => {
@@ -38,6 +39,19 @@ describe('parseCron', () => {
     if (!p.ok) return
     expect(p.fields.find((f) => f.name === 'month')!.values).toEqual([1])
   })
+  it('rejects coercible numbers and extra separators with a field and column', () => {
+    for (const expression of ['0x10 * * * *', '1e1 * * * *', '*/2/3 * * * *', '1-2-3 * * * *', '0 0 * constructor *', '0 0 * * MON#2']) {
+      const parsed = parseCron(expression)
+      expect(parsed.ok).toBe(false)
+      if (!parsed.ok) expect(parsed.column).toBeGreaterThan(0)
+    }
+    expect(parseCron('0 0 * * 5-7')).toMatchObject({ ok: true, fields: expect.arrayContaining([expect.objectContaining({ name: 'dayOfWeek', values: [0, 5, 6] })]) })
+    expect(parseCron('0 0 * * 0-7/2')).toMatchObject({ ok: true, fields: expect.arrayContaining([expect.objectContaining({ name: 'dayOfWeek', values: [0, 2, 4, 6] })]) })
+  })
+  it('describes every-second expressions honestly', () => {
+    const parsed = parseCron('* * * * * *')
+    expect(parsed.ok && parsed.human).toContain('seconds 0, 1')
+  })
 })
 
 describe('nextRuns', () => {
@@ -62,5 +76,30 @@ describe('nextRuns', () => {
     expect(runs[0]!.getDay()).toBeGreaterThanOrEqual(1)
     expect(runs[0]!.getDay()).toBeLessThanOrEqual(5)
     expect(runs[0]!.getHours()).toBe(9)
+  })
+  it('never returns a time before a fractional-second start, even inclusive', () => {
+    const parsed = parseCron('* * * * * *')
+    if (!parsed.ok) throw new Error(parsed.error)
+    expect(nextRuns(parsed, new Date('2024-01-01T00:00:00.500Z'), 1, { inclusive: true, timezone: 'UTC' })[0]?.toISOString()).toBe('2024-01-01T00:00:01.000Z')
+    expect(nextRuns(parsed, new Date('2024-01-01T00:00:00Z'), 1, { inclusive: true, timezone: 'UTC' })[0]?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
+  })
+  it('finds leap-day runs beyond two years and detects impossible dates efficiently', () => {
+    const leap = parseCron('0 0 29 FEB *'), impossible = parseCron('1 0 0 31 FEB *')
+    if (!leap.ok || !impossible.ok) throw new Error('Fixture invalid')
+    expect(nextRuns(leap, new Date('2025-01-01T00:00:00Z'), 1, { timezone: 'UTC' })[0]?.toISOString()).toBe('2028-02-29T00:00:00.000Z')
+    expect(nextRuns(impossible, new Date('2025-01-01T00:00:00Z'), 1, { timezone: 'UTC' })).toEqual([])
+  })
+  it('uses wildcard-leading day-field semantics and OR for two restricted days', () => {
+    const wildcard = parseCron('0 0 */2 * MON'), restricted = parseCron('0 0 1 * MON')
+    if (!wildcard.ok || !restricted.ok) throw new Error('Fixture invalid')
+    expect(nextRuns(wildcard, new Date('2024-01-01T00:00:00Z'), 1, { timezone: 'UTC' })[0]?.toISOString()).toBe('2024-01-15T00:00:00.000Z')
+    expect(nextRuns(restricted, new Date('2024-01-01T00:00:00Z'), 1, { timezone: 'UTC' })[0]?.toISOString()).toBe('2024-01-08T00:00:00.000Z')
+  })
+  it('skips missing DST times and preserves both repeated wall times', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    const spring = parseCron('0 2 * * *'), fall = parseCron('30 1 * * *')
+    if (!spring.ok || !fall.ok) throw new Error('Fixture invalid')
+    expect(nextRuns(spring, new Date('2024-03-10T05:00:00Z'), 1)[0]?.toISOString()).toBe('2024-03-11T06:00:00.000Z')
+    expect(nextRuns(fall, new Date('2024-11-03T04:00:00Z'), 2).map((date) => date.toISOString())).toEqual(['2024-11-03T05:30:00.000Z', '2024-11-03T06:30:00.000Z'])
   })
 })

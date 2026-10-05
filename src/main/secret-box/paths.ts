@@ -4,6 +4,7 @@ import {
   APP_DATA_DIR,
   DEFAULT_SECRET_BOX_DIR,
   DEVICE_SECRET_FILE,
+  HARDWARE_SECRET_CACHE_FILE,
   SECRET_BOX_REGISTRY_FILE
 } from '@shared/core/constants'
 
@@ -25,4 +26,8 @@ export function secretBoxRegistryPath(): string {
 
 export function deviceSecretPath(): string {
   return join(userDataRoot(), DEVICE_SECRET_FILE)
+}
+
+export function hardwareSecretCachePath(): string {
+  return join(userDataRoot(), HARDWARE_SECRET_CACHE_FILE)
 }

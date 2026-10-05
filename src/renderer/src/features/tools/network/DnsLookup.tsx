@@ -3,6 +3,7 @@ import { normalizeDnsInput, DNS_RECORD_TYPES, DNS_RECORD_HELP, type DnsRecordTyp
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
+import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 
 export default function DnsLookup(): JSX.Element {
@@ -94,7 +95,8 @@ export default function DnsLookup(): JSX.Element {
         </button>
         <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => { invalidate(); setHost(type === 'PTR' ? '1.1.1.1' : type === 'SRV' ? '_sip._tcp.example.com' : 'example.com') }}>Sample</button>
         <button type="button" className="mac-btn-secondary" disabled={busy || (!host && !output)} onClick={() => { invalidate(); setHost('') }}>Clear</button>
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <SaveToBoxButton type="json" content={output} disabled={!output || busy} />
           <CopyButton text={output} label="Copy response" />
         </div>
       </ToolToolbar>

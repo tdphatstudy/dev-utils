@@ -18,6 +18,20 @@ export interface SizeResult {
   height: number
 }
 
+export const IMAGE_MAX_FILE_BYTES = 32 * 1024 * 1024
+export const IMAGE_MAX_PIXELS = 16_000_000
+export const IMAGE_MAX_SIDE = 8192
+
+export function validateImageResize(srcW: number, srcH: number, opts: ResizeOptions): string | null {
+  if (![srcW, srcH].every((value) => Number.isInteger(value) && value > 0 && value <= IMAGE_MAX_SIDE) || srcW * srcH > IMAGE_MAX_PIXELS) return 'Image dimensions exceed the limit: 8192 per side and 16 million pixels.'
+  if (opts.mode === 'percent' && (!Number.isFinite(opts.percent) || opts.percent! < 1 || opts.percent! > 500)) return 'Percent must be between 1 and 500.'
+  const dimensions = opts.mode === 'exact' ? [opts.width, opts.height] : opts.mode === 'max' ? [opts.maxWidth, opts.maxHeight] : []
+  if (!dimensions.every((value) => value !== undefined && Number.isInteger(value) && value > 0 && value <= IMAGE_MAX_SIDE)) return 'Width and height must be whole pixels from 1 to 8192.'
+  const size = computeTargetSize(srcW, srcH, opts)
+  if (size.width > IMAGE_MAX_SIDE || size.height > IMAGE_MAX_SIDE || size.width * size.height > IMAGE_MAX_PIXELS) return 'Output exceeds 8192 per side or 16 million pixels. Reduce the resize dimensions.'
+  return null
+}
+
 export function mimeForFormat(format: ImageOutFormat): string {
   switch (format) {
     case 'png':

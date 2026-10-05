@@ -2,18 +2,18 @@ import net from 'net'
 import type { SshConnectRequest, SshConnectResult } from '@shared/ssh/types'
 
 export function testTcpConnect(req: SshConnectRequest): Promise<SshConnectResult> {
-  const host = req.host.trim()
-  const port = req.port && req.port > 0 ? req.port : 22
-  const timeoutMs = Math.min(30_000, Math.max(500, req.timeoutMs ?? 5000))
+  const host = typeof req?.host === 'string' ? req.host.trim() : ''
+  const port = req?.port ?? 22
+  const timeoutMs = req?.timeoutMs ?? 5000
 
-  if (!host || /[\s]/.test(host)) {
+  if (!host || host.length > 253 || /[\s\x00-\x1f\x7f/]/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535 || !Number.isInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 30_000) {
     return Promise.resolve({
       ok: false,
       host,
       port,
       timeMs: 0,
       status: 'error',
-      error: 'Invalid host'
+      error: 'Enter a hostname/IP, a port from 1 to 65535 and a timeout from 500 to 30000 ms.'
     })
   }
 
@@ -22,10 +22,12 @@ export function testTcpConnect(req: SshConnectRequest): Promise<SshConnectResult
   return new Promise((resolve) => {
     const socket = new net.Socket()
     let settled = false
+    const timer = setTimeout(() => done({ ok: false, host, port, timeMs: Date.now() - started, status: 'timeout', error: `Timeout after ${timeoutMs}ms` }), timeoutMs)
 
     const done = (result: SshConnectResult): void => {
       if (settled) return
       settled = true
+      clearTimeout(timer)
       try {
         socket.destroy()
       } catch {
@@ -71,7 +73,7 @@ export function testTcpConnect(req: SshConnectRequest): Promise<SshConnectResult
     })
 
     try {
-      socket.connect(port, host)
+      socket.connect(port, host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host)
     } catch (e) {
       done({
         ok: false,

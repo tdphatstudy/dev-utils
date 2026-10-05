@@ -1,24 +1,29 @@
 import { chmodSync, existsSync } from 'fs'
-import { mkdir, readFile, rename, unlink, writeFile } from 'fs/promises'
+import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
+import { randomUUID } from 'node:crypto'
 import type {
   SshHostEntry,
   SshHostInput,
   SshKeyCreateInput,
   SshKeyCreateResult,
   SshKeyRenameInput,
+  SshKeyRecovery,
+  SshKeyDeleteResult,
   SshLocation
 } from '@shared/ssh/types'
+import { parseSshKeyName } from '@shared/ssh/key-name'
+import { assertSshKeyPath, readKeyBytes, sameKeyBytes, withKeyLock, writePrivateKeyFile } from './key-files'
+import { toOpenSshPrivateKey } from './private-format'
 import { generateKeyPair } from '../crypto-keys'
 import { atomicWriteFile, backupFile } from '../secret-box/atomic-write'
 import {
   hostFromInput,
   parseSshConfig,
-  rewriteSshConfig
+  patchSshHostConfig
 } from './parse-config'
 import {
   assertInsideSshRoot,
-  expandTilde,
   getConfigPath,
   getSshDir,
   resolveSshPaths
@@ -26,33 +31,53 @@ import {
 
 async function ensureSshDir(location?: SshLocation | null): Promise<string> {
   const dir = getSshDir(location)
-  await mkdir(dir, { recursive: true })
-  try {
-    chmodSync(dir, 0o700)
-  } catch {
-    /* Windows may ignore */
-  }
+  await mkdir(dir, { recursive: true, mode: 0o700 })
   return dir
 }
 
 async function readConfigText(location?: SshLocation | null): Promise<string> {
   const p = getConfigPath(location)
-  if (!existsSync(p)) return ''
-  return readFile(p, 'utf8')
+  try {
+    const info = await stat(p)
+    if (!info.isFile() || info.size > 2_000_000) throw new Error('SSH config must be a regular file up to 2 MB.')
+    const bytes = await readFile(p)
+    if (bytes.length > 2_000_000) throw new Error('SSH config exceeds the 2 MB editor limit.')
+    try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) }
+    catch { throw new Error('SSH config is not valid UTF-8. Convert its encoding before editing.') }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return ''
+    throw e
+  }
 }
 
-async function writeConfigText(text: string, location?: SshLocation | null): Promise<void> {
+async function writeConfigText(text: string, location: SshLocation | null | undefined, expected: string): Promise<void> {
+  if (text === expected) return
   await ensureSshDir(location)
   const p = getConfigPath(location)
   // ensure parent exists when custom config path
   await mkdir(join(p, '..'), { recursive: true })
-  if (existsSync(p)) await backupFile(p, '.bak')
-  await atomicWriteFile(p, text.endsWith('\n') ? text : `${text}\n`, 'utf8')
+  if (await readConfigText(location) !== expected) throw new Error('SSH config changed outside the app. Refresh before saving.')
+  if (existsSync(p)) {
+    await backupFile(p, '.bak')
+    if (process.platform !== 'win32') chmodSync(`${p}.bak`, 0o600)
+  }
+  await atomicWriteFile(p, text, 'utf8', 0o600)
   try {
     chmodSync(p, 0o600)
   } catch {
     /* win */
   }
+}
+
+const configJobs = new Map<string, Promise<unknown>>()
+async function withConfigLock<T>(location: SshLocation | null | undefined, work: () => Promise<T>): Promise<T> {
+  const path = getConfigPath(location)
+  const key = process.platform === 'win32' ? path.toLowerCase() : path
+  const previous = configJobs.get(key) ?? Promise.resolve()
+  const job = previous.catch(() => undefined).then(work)
+  configJobs.set(key, job)
+  try { return await job }
+  finally { if (configJobs.get(key) === job) configJobs.delete(key) }
 }
 
 export async function listHostsFromConfig(
@@ -62,7 +87,8 @@ export async function listHostsFromConfig(
   const cfg = getConfigPath(location)
   return parseSshConfig(text).map((h) => ({
     ...h,
-    identityFile: h.identityFile ? expandTilde(h.identityFile) : undefined,
+    // Keep the literal config value in the edit form; expansion is for key lookup.
+    identityFile: h.identityFile,
     sourceConfig: cfg
   }))
 }
@@ -71,182 +97,201 @@ export async function upsertHost(
   input: SshHostInput,
   location?: SshLocation | null
 ): Promise<SshHostEntry> {
-  const next = hostFromInput(input)
-  const text = await readConfigText(location)
-  const hosts = parseSshConfig(text)
-  const findKey = (input.originalAlias ?? input.alias).trim()
-
-  const idx = hosts.findIndex(
-    (h) => h.alias === findKey || h.patterns.includes(findKey)
-  )
-
-  if (!input.originalAlias) {
-    if (hosts.some((h) => h.alias === next.alias || h.patterns.includes(next.alias))) {
-      throw new Error(`Host “${next.alias}” already exists`)
-    }
-    hosts.push(next)
-  } else {
-    if (idx < 0) {
-      if (hosts.some((h) => h.alias === next.alias)) {
-        throw new Error(`Host “${next.alias}” already exists`)
-      }
-      hosts.push(next)
-    } else {
-      if (
-        next.alias !== findKey &&
-        hosts.some(
-          (h, i) => i !== idx && (h.alias === next.alias || h.patterns.includes(next.alias))
-        )
-      ) {
-        throw new Error(`Host “${next.alias}” already exists`)
-      }
-      const prev = hosts[idx]!
-      hosts[idx] = {
-        ...next,
-        options: { ...prev.options, ...next.options }
-      }
-    }
-  }
-
-  await writeConfigText(rewriteSshConfig(text, hosts), location)
-  return { ...next, sourceConfig: getConfigPath(location) }
+  return withConfigLock(location, async () => {
+    const next = hostFromInput(input)
+    const text = await readConfigText(location)
+    await writeConfigText(patchSshHostConfig(text, input), location, text)
+    return { ...next, sourceConfig: getConfigPath(location) }
+  })
 }
 
 export async function deleteHost(
   alias: string,
   location?: SshLocation | null
 ): Promise<void> {
-  const a = alias.trim()
-  if (!a) throw new Error('Alias required')
-  const text = await readConfigText(location)
-  const hosts = parseSshConfig(text)
-  const next = hosts.filter((h) => h.alias !== a && !h.patterns.includes(a))
-  if (next.length === hosts.length) {
-    throw new Error(`Host “${a}” not found`)
-  }
-  await writeConfigText(rewriteSshConfig(text, next), location)
+  return withConfigLock(location, async () => {
+    const a = alias.trim()
+    if (!a) throw new Error('Alias required')
+    const text = await readConfigText(location)
+    await writeConfigText(patchSshHostConfig(text, null, a), location, text)
+  })
 }
 
 function safeKeyBaseName(name: string): string {
-  const base = basename(name.trim()).replace(/\.pub$/i, '')
-  if (!base || base === '.' || base === '..') throw new Error('Invalid key name')
-  if (!/^[A-Za-z0-9._@+-]+$/.test(base)) {
-    throw new Error('Key name may only contain letters, digits, . _ @ + -')
+  return parseSshKeyName(name)
+}
+
+type KeyFile = { path: string; bytes: Buffer; public: boolean }
+async function readPair(base: string, location?: SshLocation | null): Promise<KeyFile[]> {
+  const files: KeyFile[] = []
+  for (const [path, isPublic] of [[base, false], [`${base}.pub`, true]] as const) {
+    const safe = assertSshKeyPath(path, location)
+    try { files.push({ path: safe, bytes: await readKeyBytes(safe, isPublic), public: isPublic }) }
+    catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
   }
-  return base
+  return files
+}
+
+async function backupPair(files: KeyFile[], location?: SshLocation | null): Promise<SshKeyRecovery> {
+  const directory = join(getSshDir(location), `.devutils-key-backup-${randomUUID()}`)
+  await mkdir(directory, { mode: 0o700 })
+  for (const file of files) {
+    await sameKeyBytes(file.path, file.bytes, file.public, location)
+    const path = assertSshKeyPath(join(directory, basename(file.path)), location)
+    if (file.public) await writeFile(path, file.bytes, { flag: 'wx', mode: 0o600 })
+    else await writePrivateKeyFile(path, file.bytes, false, location)
+  }
+  const preferred = files.find((file) => !file.public) ?? files[0]
+  return { directory, keyPath: join(directory, basename(preferred.path)), name: basename(preferred.path).replace(/\.pub$/, '') }
 }
 
 export async function createSshKey(
   input: SshKeyCreateInput,
   location?: SshLocation | null
 ): Promise<SshKeyCreateResult> {
-  const dir = await ensureSshDir(location)
-  const base = safeKeyBaseName(input.name)
-  const privatePath = join(dir, base)
-  const publicPath = join(dir, `${base}.pub`)
-  assertInsideSshRoot(privatePath, location)
-  assertInsideSshRoot(publicPath, location)
+  return withKeyLock(location, async () => {
+    const dir = await ensureSshDir(location)
+    const base = safeKeyBaseName(input.name)
+    const privatePath = join(dir, base)
+    const publicPath = join(dir, `${base}.pub`)
+    assertSshKeyPath(privatePath, location)
+    assertSshKeyPath(publicPath, location)
+    if (!['rsa', 'ed25519'].includes(input.algorithm)) throw new Error('Choose RSA or Ed25519.')
 
-  if (!input.overwrite && (existsSync(privatePath) || existsSync(publicPath))) {
-    throw new Error(`Key “${base}” already exists — enable overwrite or pick another name`)
-  }
+    if (!input.overwrite && (existsSync(privatePath) || existsSync(publicPath))) {
+      throw new Error(`Key “${base}” already exists — enable overwrite or pick another name`)
+    }
 
-  const generated = await generateKeyPair({
-    algorithm: input.algorithm === 'rsa' ? 'rsa' : 'ed25519',
-    modulusLength: input.modulusLength ?? 4096,
-    comment: input.comment ?? `${base}@devutils`
+    const generated = await generateKeyPair({
+      algorithm: input.algorithm === 'rsa' ? 'rsa' : 'ed25519',
+      modulusLength: input.modulusLength ?? 4096,
+      comment: input.comment ?? `${base}@devutils`
+    })
+
+    if (!generated.publicKeyOpenSsh) {
+      throw new Error('Could not produce OpenSSH public key')
+    }
+
+    assertSshKeyPath(privatePath, location)
+    assertSshKeyPath(publicPath, location)
+    const previous = input.overwrite ? await readPair(privatePath, location) : []
+    const recovery = previous.length ? await backupPair(previous, location) : undefined
+    for (const file of previous) await sameKeyBytes(file.path, file.bytes, file.public, location)
+
+    // Async generation allows other work between the existence check and writes.
+    // Exclusive creation keeps a concurrently created key from being overwritten.
+    const privateText = toOpenSshPrivateKey(generated.privateKeyPem, generated.publicKeyOpenSsh, input.comment?.trim() ?? `${base}@devutils`)
+    await writePrivateKeyFile(privatePath, Buffer.from(privateText), !!previous.some((file) => !file.public), location)
+    try {
+      const previousPublic = previous.find((file) => file.public)
+      assertSshKeyPath(publicPath, location)
+      if (previousPublic) {
+        await sameKeyBytes(publicPath, previousPublic.bytes, true, location)
+        await atomicWriteFile(publicPath, generated.publicKeyOpenSsh + '\n', 'utf8', 0o644)
+      } else await writeFile(publicPath, generated.publicKeyOpenSsh + '\n', { encoding: 'utf8', flag: 'wx', mode: 0o644 })
+    } catch {
+      throw new Error(`Private key saved at ${privatePath}, but the public key could not be saved. Keep the private key for recovery; check the public path before retrying.${recovery ? ` Original key backup: ${recovery.directory}` : ''}`)
+    }
+    try {
+      chmodSync(privatePath, 0o600)
+      chmodSync(publicPath, 0o644)
+    } catch {
+      /* Windows */
+    }
+
+    return {
+      privatePath,
+      publicPath,
+      publicKeyOpenSsh: generated.publicKeyOpenSsh,
+      fingerprintSha256: generated.fingerprintOpenSshSha256 ?? generated.fingerprintSha256,
+      recovery
+    }
   })
-
-  if (!generated.publicKeyOpenSsh) {
-    throw new Error('Could not produce OpenSSH public key')
-  }
-
-  // Async generation allows other work between the existence check and writes.
-  // Exclusive creation keeps a concurrently created key from being overwritten.
-  await writeFile(privatePath, generated.privateKeyPem, { encoding: 'utf8', flag: input.overwrite ? 'w' : 'wx', mode: 0o600 })
-  try {
-    await writeFile(publicPath, generated.publicKeyOpenSsh + '\n', { encoding: 'utf8', flag: input.overwrite ? 'w' : 'wx', mode: 0o644 })
-  } catch {
-    throw new Error(`Private key saved at ${privatePath}, but the public key could not be saved. Keep the private key for recovery; check the public path before retrying.`)
-  }
-  try {
-    chmodSync(privatePath, 0o600)
-    chmodSync(publicPath, 0o644)
-  } catch {
-    /* Windows */
-  }
-
-  return {
-    privatePath,
-    publicPath,
-    publicKeyOpenSsh: generated.publicKeyOpenSsh,
-    fingerprintSha256: generated.fingerprintOpenSshSha256 ?? generated.fingerprintSha256
-  }
 }
 
 export async function deleteSshKey(
   path: string,
   location?: SshLocation | null
-): Promise<void> {
-  const safe = assertInsideSshRoot(path, location)
-  const isPub = safe.endsWith('.pub')
-  const privatePath = isPub ? safe.slice(0, -4) : safe
-  const publicPath = isPub ? safe : `${safe}.pub`
-
-  const base = basename(privatePath)
-  if (base === 'config' || base === 'known_hosts' || base === 'authorized_keys') {
-    throw new Error('Refusing to delete protected SSH file')
-  }
-
-  let removed = 0
-  for (const p of [privatePath, publicPath]) {
-    if (!existsSync(p)) continue
-    assertInsideSshRoot(p, location)
-    await unlink(p)
-    removed++
-  }
-  if (removed === 0) throw new Error('Key file not found')
+): Promise<SshKeyDeleteResult> {
+  return withKeyLock(location, async () => {
+    const safe = assertSshKeyPath(path, location)
+    const isPub = safe.endsWith('.pub')
+    const privatePath = isPub ? safe.slice(0, -4) : safe
+    const files = await readPair(privatePath, location)
+    if (!files.length) throw new Error('Key file not found')
+    const recovery = await backupPair(files, location)
+    let removed = 0
+    try {
+      for (const file of files) {
+        await sameKeyBytes(file.path, file.bytes, file.public, location)
+        await unlink(file.path)
+        removed++
+      }
+    } catch {
+      return { recovery, removed, error: `Removed ${removed}/${files.length} files. The complete original pair is backed up; restore under a different name or check the remaining files before retrying.` }
+    }
+    return { recovery, removed }
+  })
 }
 
 export async function renameSshKey(
   input: SshKeyRenameInput,
   location?: SshLocation | null
 ): Promise<{ privatePath: string; publicPath?: string }> {
-  const safe = assertInsideSshRoot(input.path, location)
-  const isPub = safe.endsWith('.pub')
-  const oldPrivate = isPub ? safe.slice(0, -4) : safe
-  const oldPublic = isPub ? safe : `${safe}.pub`
-  const newBase = safeKeyBaseName(input.newName)
-  const dir = getSshDir(location)
-  const newPrivate = join(dir, newBase)
-  const newPublic = join(dir, `${newBase}.pub`)
+  return withKeyLock(location, async () => {
+    const safe = assertSshKeyPath(input.path, location)
+    const isPub = safe.endsWith('.pub')
+    const oldPrivate = isPub ? safe.slice(0, -4) : safe
+    const oldPublic = `${oldPrivate}.pub`
+    const newBase = safeKeyBaseName(input.newName)
+    const dir = getSshDir(location)
+    const newPrivate = join(dir, newBase)
+    const newPublic = join(dir, `${newBase}.pub`)
 
-  if (newPrivate === oldPrivate) {
-    return {
-      privatePath: oldPrivate,
-      publicPath: existsSync(oldPublic) ? oldPublic : undefined
+    const files = await readPair(oldPrivate, location)
+    if (!files.length) throw new Error('Key file not found')
+
+    if (newPrivate === oldPrivate) {
+      return {
+        privatePath: oldPrivate,
+        publicPath: existsSync(oldPublic) ? oldPublic : undefined
+      }
     }
-  }
 
-  assertInsideSshRoot(newPrivate, location)
-  if (existsSync(newPrivate) || existsSync(newPublic)) {
-    throw new Error(`Target name “${newBase}” already exists`)
-  }
+    assertSshKeyPath(newPrivate, location)
+    assertSshKeyPath(newPublic, location)
+    if (existsSync(newPrivate) || existsSync(newPublic)) {
+      throw new Error(`Target name “${newBase}” already exists`)
+    }
 
-  if (existsSync(oldPrivate)) {
-    await rename(oldPrivate, newPrivate)
-  } else if (!existsSync(oldPublic)) {
-    throw new Error('Key file not found')
-  }
+    const created: KeyFile[] = []
+    try {
+      for (const file of files) {
+        const path = file.public ? newPublic : newPrivate
+        assertSshKeyPath(path, location)
+        if (file.public) await writeFile(path, file.bytes, { flag: 'wx', mode: 0o644 })
+        else await writePrivateKeyFile(path, file.bytes, false, location)
+        created.push({ ...file, path })
+      }
+      for (const file of files) await sameKeyBytes(file.path, file.bytes, file.public, location)
+    } catch (e) {
+      for (const file of created) {
+        try { await sameKeyBytes(file.path, file.bytes, file.public, location); await unlink(file.path) }
+        catch { throw new Error(`Rename stopped; originals remain at ${oldPrivate}. A new copy may remain at ${file.path}. Check both paths before retrying.`) }
+      }
+      throw e
+    }
+    try {
+      for (const file of files) { await sameKeyBytes(file.path, file.bytes, file.public, location); await unlink(file.path) }
+    } catch {
+      throw new Error(`New key pair saved at ${newPrivate}, but some original files could not be removed. Key bytes remain at the new paths; check ${oldPrivate} before retrying.`)
+    }
 
-  if (existsSync(oldPublic)) {
-    await rename(oldPublic, newPublic)
-  }
-
-  return {
-    privatePath: existsSync(newPrivate) ? newPrivate : oldPrivate,
-    publicPath: existsSync(newPublic) ? newPublic : undefined
-  }
+    return {
+      privatePath: newPrivate,
+      publicPath: existsSync(newPublic) ? newPublic : undefined
+    }
+  })
 }
 
 export { resolveSshPaths }

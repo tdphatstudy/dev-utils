@@ -1,5 +1,10 @@
 export type LineEnding = 'lf' | 'crlf' | 'cr'
 
+/** Fatal UTF-8 decoding; preservation tools can retain the leading BOM bytes. */
+export function decodeUtf8Text(bytes: ArrayBuffer, preserveBom = false): string {
+  return new TextDecoder('utf-8', { fatal: true, ignoreBOM: preserveBom }).decode(bytes)
+}
+
 export function lineEndingCounts(text: string): { crlf: number; cr: number; lf: number } {
   const counts = { crlf: 0, cr: 0, lf: 0 }
   for (let i = 0; i < text.length; i++) {

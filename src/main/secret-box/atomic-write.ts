@@ -10,7 +10,9 @@ import { basename, dirname, join } from 'path'
 export async function atomicWriteFile(
   filePath: string,
   data: string | Buffer,
-  encoding: BufferEncoding = 'utf8'
+  encoding: BufferEncoding = 'utf8',
+  mode?: number,
+  beforeCommit?: () => void
 ): Promise<void> {
   const dir = dirname(filePath)
   await mkdir(dir, { recursive: true })
@@ -19,10 +21,13 @@ export async function atomicWriteFile(
   const bak = join(dir, `.${basename(filePath)}.${token}.bak`)
 
   if (typeof data === 'string') {
-    await writeFile(tmp, data, encoding)
+    await writeFile(tmp, data, { encoding, mode, flag: 'wx' })
   } else {
-    await writeFile(tmp, data)
+    await writeFile(tmp, data, { mode, flag: 'wx' })
   }
+
+  try { beforeCommit?.() }
+  catch (e) { await unlink(tmp).catch(() => undefined); throw e }
 
   try {
     await fsRename(tmp, filePath)
@@ -30,6 +35,9 @@ export async function atomicWriteFile(
   } catch {
     /* Windows or target exists — swap */
   }
+
+  try { beforeCommit?.() }
+  catch (e) { await unlink(tmp).catch(() => undefined); throw e }
 
   try {
     try {
@@ -42,6 +50,7 @@ export async function atomicWriteFile(
     } catch {
       /* target may not exist */
     }
+    beforeCommit?.()
     await fsRename(tmp, filePath)
     try {
       await unlink(bak)

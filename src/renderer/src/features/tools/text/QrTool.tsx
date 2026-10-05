@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, ImageIcon, QrCode, Upload } from 'lucide-react'
 import {
   decodeQrFromDataUrl,
   decodeQrFromFile,
   downloadDataUrl,
   encodeQr,
+  QR_MAX_FILE_BYTES,
   type QrErrorLevel
 } from '@shared/qr'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
-import { useToolDraft } from '@renderer/hooks/useToolDraft'
+import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn, formatBytes } from '@renderer/lib/utils'
 
@@ -29,52 +30,59 @@ export default function QrTool(): JSX.Element {
   const [text, setText] = useState('https://example.com')
   const [ecc, setEcc] = useState<QrErrorLevel>('M')
   const [size, setSize] = useState(280)
-  const [margin, setMargin] = useState(2)
-  const [dataUrl, setDataUrl] = useState<string | null>(null)
+  const [margin, setMargin] = useState(4)
   const [decoded, setDecoded] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
   const [meta, setMeta] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [decodeError, setError] = useState<string | null>(null)
+  const [decodeBusy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const generation = useRef(0)
+  const previewUrl = useRef<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const lastGenerated = useRef<string | null>(null)
 
-  useToolDraft('text.qr', text, setText, { label: 'QR', historyOnUnmount: true })
-
-  // Encode live
+  // Payloads can contain Wi-Fi credentials or tokens; never persist generic drafts.
+  const compute = useCallback(async () => mode === 'encode' && text
+    ? encodeQr(text, { errorCorrectionLevel: ecc, width: size, margin }) : null,
+  [mode, text, ecc, size, margin])
+  const encoded = useAsyncValue(compute, 200)
+  const dataUrl = encoded.value?.ok ? encoded.value.dataUrl : null
+  const encodeMeta = encoded.value?.ok
+    ? `${formatBytes(encoded.value.byteLength)} PNG · ${encoded.value.pixelSize}px · QR v${encoded.value.version} · ${encoded.value.payloadBytes} UTF-8 bytes` : ''
+  const error = mode === 'encode' ? encoded.error ?? (encoded.value && !encoded.value.ok ? encoded.value.error : null) : decodeError
+  const busy = mode === 'encode' ? !!text && encoded.pending : decodeBusy
   useEffect(() => {
-    if (mode !== 'encode') return
-    let cancelled = false
-    setBusy(true)
-    void encodeQr(text, {
-      errorCorrectionLevel: ecc,
-      width: size,
-      margin
-    }).then((r) => {
-      if (cancelled) return
-      setBusy(false)
-      if (r.ok) {
-        setDataUrl(r.dataUrl)
-        setError(null)
-        setMeta(`${formatBytes(r.byteLength)} · ECC ${ecc} · ${size}px`)
-      } else {
-        setDataUrl(null)
-        setError(r.error)
-        setMeta('')
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [mode, text, ecc, size, margin])
+    if (dataUrl) lastGenerated.current = dataUrl
+  }, [dataUrl])
+  useEffect(() => () => {
+    generation.current++
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+  }, [])
+
+  const clearImage = useCallback(() => {
+    generation.current++
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    previewUrl.current = null
+    setPreview(null); setDecoded(''); setMeta(''); setError(null); setBusy(false)
+  }, [])
 
   const runDecodeFile = useCallback(async (file: File) => {
+    clearImage()
+    const id = generation.current
+    if (!file.size || file.size > QR_MAX_FILE_BYTES) {
+      setError('Choose a nonempty image up to 32 MiB.')
+      return
+    }
     setBusy(true)
     setError(null)
     setDecoded('')
     try {
       const url = URL.createObjectURL(file)
+      previewUrl.current = url
       setPreview(url)
       const r = await decodeQrFromFile(file)
+      if (id !== generation.current) return
       if (r.ok) {
         setDecoded(r.text)
         setText(r.text)
@@ -84,17 +92,22 @@ export default function QrTool(): JSX.Element {
         setMeta(file.name)
         setError(r.error)
       }
+    } catch (e) {
+      if (id === generation.current) setError(e instanceof Error ? e.message : 'Could not read image')
     } finally {
-      setBusy(false)
+      if (id === generation.current) setBusy(false)
     }
-  }, [])
+  }, [clearImage])
 
   const runDecodeDataUrl = useCallback(async (url: string) => {
+    clearImage()
+    const id = generation.current
     setBusy(true)
     setError(null)
     setPreview(url)
     try {
       const r = await decodeQrFromDataUrl(url)
+      if (id !== generation.current) return
       if (r.ok) {
         setDecoded(r.text)
         setText(r.text)
@@ -105,9 +118,9 @@ export default function QrTool(): JSX.Element {
         setError(r.error)
       }
     } finally {
-      setBusy(false)
+      if (id === generation.current) setBusy(false)
     }
-  }, [])
+  }, [clearImage])
 
   const onPasteImage = useCallback(
     async (e: React.ClipboardEvent) => {
@@ -143,6 +156,7 @@ export default function QrTool(): JSX.Element {
         <SegmentedControl
           value={mode}
           onChange={(m) => {
+            clearImage()
             setMode(m)
             setError(null)
           }}
@@ -152,10 +166,12 @@ export default function QrTool(): JSX.Element {
           ]}
         />
         {mode === 'decode' && (
-          <label className="mac-btn-secondary cursor-pointer">
+          <button type="button" className="mac-btn-secondary" onClick={() => inputRef.current?.click()}>
             <Upload className="h-3.5 w-3.5" />
             Open image
             <input
+              ref={inputRef}
+              aria-label="Choose QR image"
               type="file"
               accept="image/*"
               className="hidden"
@@ -165,7 +181,7 @@ export default function QrTool(): JSX.Element {
                 e.target.value = ''
               }}
             />
-          </label>
+          </button>
         )}
         <div className="ml-auto flex gap-2">
           {mode === 'encode' && dataUrl && (
@@ -205,6 +221,8 @@ export default function QrTool(): JSX.Element {
                 key={e.id}
                 type="button"
                 title={e.hint}
+                aria-label={`Error correction ${e.id}: ${e.hint}`}
+                aria-pressed={ecc === e.id}
                 onClick={() => setEcc(e.id)}
                 className={cn(
                   'rounded-mac px-2.5 py-1 font-mono text-[11px] font-medium',
@@ -226,7 +244,7 @@ export default function QrTool(): JSX.Element {
               step={8}
               className="mac-input !w-20 !py-1 text-center font-mono"
               value={size}
-              onChange={(e) => setSize(Math.min(1024, Math.max(128, Number(e.target.value) || 280)))}
+              onChange={(e) => setSize(Number(e.target.value))}
             />
             px
           </label>
@@ -238,13 +256,14 @@ export default function QrTool(): JSX.Element {
               max={8}
               className="mac-input !w-16 !py-1 text-center font-mono"
               value={margin}
-              onChange={(e) => setMargin(Math.min(8, Math.max(0, Number(e.target.value) || 0)))}
+              onChange={(e) => setMargin(Number(e.target.value))}
             />
           </label>
+          <span className="text-[11px] text-mac-label-secondary">{margin < 4 ? 'Warning: less than 4 quiet-zone modules may prevent scanning.' : '4 quiet-zone modules recommended. Higher ECC reduces capacity.'}</span>
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-auto auto-rows-[minmax(240px,1fr)] md:grid-cols-2">
         {/* Left */}
         <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
           <div className="border-b border-mac-separator px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
@@ -253,18 +272,23 @@ export default function QrTool(): JSX.Element {
           {mode === 'encode' ? (
             <div className="min-h-0 flex-1">
               <CodeEditor
+                key="encode"
                 value={text}
                 onChange={setText}
                 language="text"
+                label="QR payload"
                 placeholder="URL, text, JSON, Wi‑Fi string…"
               />
             </div>
           ) : (
             <div className="min-h-0 flex-1">
               <CodeEditor
+                key="decode"
                 value={decoded}
                 onChange={setDecoded}
                 language="text"
+                readOnly
+                label="Decoded QR payload"
                 placeholder="Decoded payload appears here…"
               />
             </div>
@@ -293,7 +317,7 @@ export default function QrTool(): JSX.Element {
                   alt="QR code"
                   className="max-h-[min(70vh,420px)] max-w-full rounded-mac bg-white p-2 shadow-mac"
                 />
-                <p className="text-[11px] text-mac-label-tertiary">{meta}</p>
+                <p className="text-[11px] text-mac-label-tertiary">{encodeMeta}</p>
               </>
             ) : (
               <Empty state={error ? 'error' : 'encode'} message={error} />
@@ -310,12 +334,7 @@ export default function QrTool(): JSX.Element {
               <button
                 type="button"
                 className="mac-btn-ghost text-[12px]"
-                onClick={() => {
-                  setPreview(null)
-                  setDecoded('')
-                  setMeta('')
-                  setError(null)
-                }}
+                onClick={clearImage}
               >
                 Clear image
               </button>
@@ -323,27 +342,18 @@ export default function QrTool(): JSX.Element {
           ) : (
             <div className="flex flex-col items-center gap-3 text-center">
               <Empty state="decode" message={error} />
-              <label className="mac-btn-primary cursor-pointer">
+              <button type="button" className="mac-btn-primary" onClick={() => inputRef.current?.click()}>
                 <ImageIcon className="h-3.5 w-3.5" />
                 Choose image
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) void runDecodeFile(f)
-                  }}
-                />
-              </label>
+              </button>
               <p className="max-w-xs text-[11px] text-mac-label-tertiary">
-                Drop image here, paste from clipboard, or open a file. Works with PNG / JPEG / WebP.
+                Local processing only. Images up to 32 MiB / 16 MP; decode downsizes to 1600px. Crop a small QR if scanning fails. URLs in payloads are never opened automatically.
               </p>
-              {dataUrl && (
+              {lastGenerated.current && (
                 <button
                   type="button"
                   className="mac-btn-secondary text-[12px]"
-                  onClick={() => void runDecodeDataUrl(dataUrl)}
+                  onClick={() => void runDecodeDataUrl(lastGenerated.current!)}
                 >
                   Decode last generated QR
                 </button>
@@ -353,7 +363,7 @@ export default function QrTool(): JSX.Element {
         </div>
       </div>
 
-      <footer className="flex items-center border-t border-mac-separator px-4 py-2">
+      <footer className="flex shrink-0 items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus
           tone={
             error
@@ -373,7 +383,7 @@ export default function QrTool(): JSX.Element {
               ? error
               : mode === 'encode'
                 ? dataUrl
-                  ? `QR ready · ${text.length} chars · ${meta}`
+                  ? `QR ready · ${text.length} chars · ${encodeMeta}`
                   : 'Enter text to generate QR'
                 : decoded
                   ? `Decoded · ${decoded.length} chars`

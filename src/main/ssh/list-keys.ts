@@ -1,195 +1,104 @@
-import { createHash, createPublicKey } from 'crypto'
-import { existsSync } from 'fs'
-import { readdir, readFile } from 'fs/promises'
-import { basename, dirname, join } from 'path'
+import { createHash, createPublicKey } from 'node:crypto'
+import { lstat, readdir } from 'node:fs/promises'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { SshKeyInfo, SshLocation } from '@shared/ssh/types'
-import { assertInsideSshRoot, expandTilde, getSshDir, resolveSshPaths } from './paths'
+import { assertSshKeyPath, parsePublicKey, readKeyBytes } from './key-files'
+import { listHostsFromConfig } from './crud'
+import { expandTilde, getSshDir } from './paths'
 
-function fingerprintFromOpenSshLine(line: string): string | undefined {
-  const parts = line.trim().split(/\s+/)
-  if (parts.length < 2) return undefined
-  try {
-    const raw = Buffer.from(parts[1]!, 'base64')
-    const hash = createHash('sha256').update(raw).digest('base64').replace(/=+$/, '')
-    return `SHA256:${hash}`
-  } catch {
-    return undefined
-  }
+const canonical = (path: string): string => process.platform === 'win32' ? path.toLowerCase() : path
+function identityPath(raw: string): string | null {
+  const expanded = expandTilde(raw.trim())
+  return isAbsolute(expanded) && !expanded.includes('%') ? resolve(expanded) : null
 }
 
-function keyTypeFromLine(line: string): string | undefined {
-  const t = line.trim().split(/\s+/)[0]
-  return t || undefined
-}
-
-function commentFromLine(line: string): string | undefined {
-  const parts = line.trim().split(/\s+/)
-  if (parts.length >= 3) return parts.slice(2).join(' ')
-  return undefined
-}
-
-async function infoFromPubFile(
-  path: string,
-  opts: { external?: boolean }
-): Promise<SshKeyInfo> {
-  const name = basename(path)
-  const dir = dirname(path)
-  const privateName = name.replace(/\.pub$/i, '')
-  const privatePath = join(dir, privateName)
-  try {
-    const text = (await readFile(path, 'utf8')).trim()
-    const first = text.split(/\r?\n/).find((l) => l.trim() && !l.startsWith('#')) ?? ''
-    return {
-      name,
-      path,
-      isPublic: true,
-      privatePath: existsSync(privatePath) ? privatePath : undefined,
-      keyType: keyTypeFromLine(first),
-      comment: commentFromLine(first),
-      fingerprintSha256: fingerprintFromOpenSshLine(first),
-      preview: first.slice(0, 120),
-      external: opts.external
-    }
-  } catch {
-    return { name, path, isPublic: true, external: opts.external }
-  }
+async function publicInfo(path: string, external: boolean): Promise<SshKeyInfo> {
+  const bytes = await readKeyBytes(path, true)
+  const key = parsePublicKey(bytes.toString('utf8'))
+  return { name: basename(path), path, isPublic: true, keyType: key.type, comment: key.comment,
+    fingerprintSha256: `SHA256:${createHash('sha256').update(key.wire).digest('base64').replace(/=+$/, '')}`,
+    preview: key.line.slice(0, 120), external }
 }
 
 export async function listSshKeys(location?: SshLocation | null): Promise<SshKeyInfo[]> {
   const dir = getSshDir(location)
-  if (!existsSync(dir)) return []
-
-  const names = await readdir(dir)
+  let names: string[]
+  try { names = await readdir(dir) }
+  catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []; throw e }
+  if (names.length > 2000) throw new Error('SSH directory contains more than 2,000 entries. Select a dedicated keys directory.')
   const keys: SshKeyInfo[] = []
-  const seen = new Set<string>()
-
-  for (const name of names) {
-    if (name === 'config' || name === 'known_hosts' || name === 'known_hosts.old') continue
-    if (name.startsWith('.')) continue
+  const paired = new Set<string>()
+  for (const name of names.filter((name) => !name.startsWith('.') && !name.endsWith('.pub'))) {
     const path = join(dir, name)
     try {
-      assertInsideSshRoot(path, location)
-    } catch {
-      continue
-    }
-
-    const isPublic = name.endsWith('.pub')
-    if (isPublic) {
-      const info = await infoFromPubFile(path, { external: false })
+      assertSshKeyPath(path, location)
+      await readKeyBytes(path, false)
+      const info: SshKeyInfo = { name, path, isPublic: false, keyType: 'private', external: false }
+      try {
+        const pubPath = assertSshKeyPath(`${path}.pub`, location)
+        const pub = await publicInfo(pubPath, false)
+        Object.assign(info, { publicPath: pubPath, keyType: pub.keyType, comment: pub.comment,
+          fingerprintSha256: pub.fingerprintSha256, preview: pub.preview })
+        paired.add(`${name}.pub`)
+      } catch { /* private-only key stays visible; public reading reports its own error */ }
       keys.push(info)
-      seen.add(path)
-    } else {
-      const pubPath = join(dir, `${name}.pub`)
-      let keyType: string | undefined
-      let fingerprintSha256: string | undefined
-      let comment: string | undefined
-      let preview: string | undefined
-      if (existsSync(pubPath)) {
-        try {
-          const text = (await readFile(pubPath, 'utf8')).trim()
-          const first = text.split(/\r?\n/).find((l) => l.trim() && !l.startsWith('#')) ?? ''
-          keyType = keyTypeFromLine(first)
-          fingerprintSha256 = fingerprintFromOpenSshLine(first)
-          comment = commentFromLine(first)
-          preview = first.slice(0, 120)
-        } catch {
-          /* ignore */
-        }
-      } else {
-        try {
-          const head = (await readFile(path, 'utf8')).slice(0, 200)
-          if (head.includes('OPENSSH PRIVATE KEY')) keyType = 'openssh-private'
-          else if (head.includes('RSA PRIVATE')) keyType = 'rsa-private'
-          else if (head.includes('EC PRIVATE')) keyType = 'ec-private'
-          else if (head.includes('PRIVATE KEY')) keyType = 'private'
-        } catch {
-          /* ignore */
-        }
-      }
-      keys.push({
-        name,
-        path,
-        isPublic: false,
-        publicPath: existsSync(pubPath) ? pubPath : undefined,
-        keyType,
-        fingerprintSha256,
-        comment,
-        preview,
-        external: false
-      })
-      seen.add(path)
+    } catch { /* unrelated files, protected config, directories and symbolic links are not keys */ }
+  }
+  for (const name of names.filter((name) => !name.startsWith('.') && name.endsWith('.pub') && !paired.has(name))) {
+    const path = join(dir, name)
+    try { assertSshKeyPath(path, location) } catch { continue }
+    try { keys.push(await publicInfo(path, false)) }
+    catch (e) {
+      try {
+        const file = await lstat(path)
+        if (file.isFile() && !file.isSymbolicLink()) keys.push({ name, path, isPublic: true, external: false,
+          readOnlyReason: e instanceof Error ? e.message : 'Could not inspect public key.' })
+      } catch { /* missing file */ }
     }
   }
-
-  keys.sort((a, b) => a.name.localeCompare(b.name))
-  return keys
+  return keys.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/**
- * Add IdentityFile paths from hosts that live outside the sshDir so user still sees them.
- */
-export async function mergeExternalIdentityKeys(
-  keys: SshKeyInfo[],
-  identityFiles: string[],
-  location?: SshLocation | null
-): Promise<SshKeyInfo[]> {
-  const { sshDir } = resolveSshPaths(location)
-  const root = sshDir.toLowerCase()
-  const byPath = new Map(keys.map((k) => [k.path.toLowerCase(), k]))
-
+/** Declared, absolute IdentityFile locations only. Relative paths/tokens need ssh resolution. */
+export async function mergeExternalIdentityKeys(keys: SshKeyInfo[], identityFiles: string[], location?: SshLocation | null): Promise<SshKeyInfo[]> {
+  const byPath = new Map(keys.map((key) => [canonical(resolve(key.path)), key]))
   for (const raw of identityFiles) {
-    if (!raw?.trim()) continue
-    const expanded = expandTilde(raw.trim())
-    const priv = expanded
-    const pub = expanded.endsWith('.pub') ? expanded : `${expanded}.pub`
-    for (const p of [pub, priv]) {
-      if (!existsSync(p)) continue
-      const lower = p.toLowerCase()
-      if (byPath.has(lower)) continue
-      // outside configured dir → mark external (read-only list)
-      const outside = !lower.startsWith(root.replace(/\\/g, '\\')) && !lower.startsWith(root)
-      const isPub = p.endsWith('.pub')
-      if (isPub) {
-        const info = await infoFromPubFile(p, { external: true })
-        byPath.set(lower, info)
-      } else if (outside || true) {
-        byPath.set(lower, {
-          name: basename(p),
-          path: p,
-          isPublic: false,
-          publicPath: existsSync(pub) ? pub : undefined,
-          external: true,
-          keyType: 'identity-file'
-        })
-      }
+    const path = identityPath(raw)
+    if (!path || byPath.has(canonical(path)) || byPath.has(canonical(`${path}.pub`))) continue
+    const pubPath = path.endsWith('.pub') ? path : `${path}.pub`
+    try {
+      const pub = await publicInfo(pubPath, true)
+      byPath.set(canonical(pubPath), { ...pub, readOnlyReason: 'External IdentityFile: key mutations are limited to the configured directory.' })
+    } catch {
+      try {
+        await readKeyBytes(path, false)
+        byPath.set(canonical(path), { name: basename(path), path, isPublic: false, external: true, keyType: 'private',
+          readOnlyReason: 'External IdentityFile: key mutations are limited to the configured directory.' })
+      } catch { /* unresolved/unreadable/non-key external files are not exposed */ }
     }
   }
-
   return [...byPath.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function readPublicKeySafe(
-  filePath: string,
-  location?: SshLocation | null
-): Promise<string> {
-  // Allow .pub under configured root, or any .pub that is an expanded IdentityFile path
-  // (external) — still require .pub suffix
-  const expanded = expandTilde(filePath)
-  if (!expanded.endsWith('.pub')) {
-    throw new Error('Only public key files (.pub) can be read into the app')
+export async function readPublicKeySafe(filePath: string, location?: SshLocation | null): Promise<string> {
+  const path = resolve(expandTilde(filePath))
+  if (!path.endsWith('.pub')) throw new Error('Only public key files (.pub) can be read into the app.')
+  let allowed = false
+  try { assertSshKeyPath(path, location); allowed = true } catch { /* external path needs explicit config reference */ }
+  if (!allowed) {
+    const hosts = await listHostsFromConfig(location)
+    allowed = hosts.flatMap((host) => host.identityFiles ?? (host.identityFile ? [host.identityFile] : []))
+      .some((raw) => {
+        const declared = identityPath(raw)
+        return declared !== null && canonical(declared.endsWith('.pub') ? declared : `${declared}.pub`) === canonical(path)
+      })
   }
-  try {
-    return await readFile(assertInsideSshRoot(expanded, location), 'utf8')
-  } catch {
-    // external identity file
-    if (!existsSync(expanded)) throw new Error('Public key not found')
-    return readFile(expanded, 'utf8')
-  }
+  if (!allowed) throw new Error('Public key must be inside the SSH directory or referenced by IdentityFile in the selected config.')
+  return (await readKeyBytes(path, true)).toString('utf8')
 }
 
 export function fingerprintPemPublic(pem: string): string {
   const key = createPublicKey(pem)
   const der = key.export({ type: 'spki', format: 'der' }) as Buffer
-  const hash = createHash('sha256').update(der).digest('base64').replace(/=+$/, '')
-  return `SHA256:${hash}`
+  return `SHA256:${createHash('sha256').update(der).digest('base64').replace(/=+$/, '')}`
 }

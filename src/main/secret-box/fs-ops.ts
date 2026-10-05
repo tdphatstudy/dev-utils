@@ -15,7 +15,7 @@ import type {
 import { ensureExtension, typeFromName } from '@shared/secret-box/types'
 import { openDoc, parseEnvelope, sealDoc, serializeEnvelope } from './crypto'
 import { resolveVaultPath, toRelativeFromRoot } from './vault-paths'
-import { requireAccess } from './session'
+import { requireAccess, assertAccess, type EphemeralAccess } from './session'
 import { isPutlFile } from './vault'
 import { atomicWriteFile } from './atomic-write'
 
@@ -39,12 +39,14 @@ function defaultContentFor(type: DocType): string {
 }
 
 export async function listDir(relativePath: string): Promise<DirEntry[]> {
-  requireAccess()
+  const access = requireAccess()
   const abs = resolveVaultPath(relativePath || '')
   const entries = await readdir(abs, { withFileTypes: true })
+  assertAccess(access)
   const out: DirEntry[] = []
 
   for (const ent of entries) {
+    assertAccess(access)
     if (ent.name === VAULT_DIR) continue
     if (ent.name.startsWith('.')) continue
 
@@ -62,7 +64,7 @@ export async function listDir(relativePath: string): Promise<DirEntry[]> {
     if (!ent.isFile() || !isPutlFile(ent.name)) continue
     const rel = joinRelative(relativePath || '', ent.name)
     try {
-      const doc = await readFileInternal(rel)
+      const doc = await readFileInternal(rel, access)
       out.push({
         id: rel,
         name: doc.name,
@@ -72,6 +74,7 @@ export async function listDir(relativePath: string): Promise<DirEntry[]> {
         relativePath: rel
       })
     } catch {
+      assertAccess(access)
       out.push({
         id: rel,
         name: ent.name,
@@ -85,15 +88,18 @@ export async function listDir(relativePath: string): Promise<DirEntry[]> {
     if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
+  assertAccess(access)
   return out
 }
 
 async function readFileInternal(
-  relativePath: string
+  relativePath: string,
+  access: EphemeralAccess = requireAccess()
 ): Promise<DocPayload & { relativePath: string }> {
-  const access = requireAccess()
+  assertAccess(access)
   const abs = resolveVaultPath(relativePath)
   const text = await readFile(abs, 'utf8')
+  assertAccess(access)
   const envelope = parseEnvelope(text)
   const doc = openDoc(access.keyA, access.keyB, envelope)
   return { ...doc, relativePath: normalizeRelative(relativePath) }
@@ -119,7 +125,9 @@ function toDocContent(
 }
 
 export async function readDoc(relativePath: string): Promise<DocContent> {
-  const doc = await readFileInternal(relativePath)
+  const access = requireAccess()
+  const doc = await readFileInternal(relativePath, access)
+  assertAccess(access)
   return toDocContent(doc.relativePath, {
     name: doc.name,
     type: doc.type,
@@ -132,7 +140,9 @@ export async function readDoc(relativePath: string): Promise<DocContent> {
 
 export async function writeDoc(relativePath: string, content: string): Promise<DocContent> {
   const access = requireAccess()
-  const existing = await readFileInternal(relativePath)
+  const abs = resolveVaultPath(relativePath)
+  const existing = await readFileInternal(relativePath, access)
+  assertAccess(access)
   if (isBinaryKind(existing.type) || existing.encoding === 'base64') {
     throw new Error('Binary / media files are read-only in the editor — re-import to replace')
   }
@@ -147,7 +157,10 @@ export async function writeDoc(relativePath: string, content: string): Promise<D
     mimeType: existing.mimeType
   }
   const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-  await atomicWriteFile(resolveVaultPath(relativePath), serializeEnvelope(envelope), 'utf8')
+  await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8', undefined, () => {
+    assertAccess(access); resolveVaultPath(relativePath)
+  })
+  assertAccess(access)
   return toDocContent(relativePath, payload)
 }
 
@@ -181,6 +194,7 @@ export async function createFileWithContent(
   const rel = joinRelative(dir, diskName)
   const absDir = resolveVaultPath(dir)
   await mkdir(absDir, { recursive: true })
+  assertAccess(access)
 
   const now = new Date().toISOString()
   const resolvedType = typeFromName(logicalName) === 'text' && type !== 'text' ? type : typeFromName(logicalName)
@@ -206,26 +220,32 @@ export async function createFileWithContent(
     mimeType
   }
   const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-  await atomicWriteFile(resolveVaultPath(rel), serializeEnvelope(envelope), 'utf8')
+  const abs = resolveVaultPath(rel)
+  await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8', undefined, () => {
+    assertAccess(access); resolveVaultPath(rel)
+  })
+  assertAccess(access)
   return toDocContent(rel, payload)
 }
 
 export async function mkdirPath(relativePath: string): Promise<void> {
-  requireAccess()
+  const access = requireAccess()
   const abs = resolveVaultPath(relativePath)
   await mkdir(abs, { recursive: true })
+  assertAccess(access)
 }
 
 export async function renameEntry(relativePath: string, newName: string): Promise<DirEntry> {
   const access = requireAccess()
-  const abs = resolveVaultPath(relativePath)
+  const abs = resolveVaultPath(relativePath, false)
   const name = newName.trim()
-  if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+  if (!name || name.includes('/') || name.includes('\\') || name.includes('..') || /[\x00-\x1f\x7f]/.test(name) || name.toLowerCase() === VAULT_DIR.toLowerCase()) {
     throw new Error('Invalid name')
   }
 
   if (isPutlFile(basename(abs))) {
-    const doc = await readFileInternal(relativePath)
+    const doc = await readFileInternal(relativePath, access)
+    assertAccess(access)
     const type = typeFromName(name)
     const logical = ensureExtension(name, type)
     const now = new Date().toISOString()
@@ -239,7 +259,10 @@ export async function renameEntry(relativePath: string, newName: string): Promis
       mimeType: doc.mimeType
     }
     const envelope = sealDoc(access.keyA, access.keyB, access.mode, payload)
-    await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8')
+    await atomicWriteFile(abs, serializeEnvelope(envelope), 'utf8', undefined, () => {
+      assertAccess(access); resolveVaultPath(relativePath, false)
+    })
+    assertAccess(access)
     return {
       id: relativePath,
       name: logical,
@@ -252,8 +275,10 @@ export async function renameEntry(relativePath: string, newName: string): Promis
 
   const parent = dirname(abs)
   const dest = join(parent, name)
+  resolveVaultPath(toRelativeFromRoot(dest), false)
   if (existsSync(dest)) throw new Error('Name already exists')
   await rename(abs, dest)
+  assertAccess(access)
   const rel = toRelativeFromRoot(dest)
   return {
     id: `dir:${rel}`,
@@ -264,17 +289,20 @@ export async function renameEntry(relativePath: string, newName: string): Promis
 }
 
 export async function removeEntry(relativePath: string): Promise<void> {
-  requireAccess()
-  const abs = resolveVaultPath(relativePath)
+  const access = requireAccess()
+  const abs = resolveVaultPath(relativePath, false)
   await rm(abs, { recursive: true, force: true })
+  assertAccess(access)
 }
 
 export async function listFoldersRecursive(relativePath = ''): Promise<DirEntry[]> {
-  requireAccess()
+  const access = requireAccess()
   const result: DirEntry[] = []
   async function walk(rel: string): Promise<void> {
+    assertAccess(access)
     const abs = resolveVaultPath(rel || '')
     const entries = await readdir(abs, { withFileTypes: true })
+    assertAccess(access)
     for (const ent of entries) {
       if (ent.name === VAULT_DIR || ent.name.startsWith('.')) continue
       if (!ent.isDirectory()) continue

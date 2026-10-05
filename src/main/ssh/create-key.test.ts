@@ -1,8 +1,11 @@
 import { afterEach, expect, it } from 'vitest'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { createHash, createPublicKey } from 'node:crypto'
+import { createHash } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { createSshKey } from './crud'
 const directories: string[] = []
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
@@ -22,10 +25,18 @@ it('concurrent creation cannot overwrite an existing pair and reports the OpenSS
   const publicLine = await readFile(winner.value.publicPath, 'utf8')
   expect(publicLine.trim()).toBe(winner.value.publicKeyOpenSsh)
   const wire = Buffer.from(publicLine.split(' ')[1]!, 'base64')
-  const publicJwk = createPublicKey(privatePem).export({ format: 'jwk' })
-  expect(wire.subarray(-32).toString('base64url')).toBe(publicJwk.x)
+  expect(privatePem).toMatch(/^-----BEGIN OPENSSH PRIVATE KEY-----/)
   expect(winner.value.fingerprintSha256).toBe(`SHA256:${createHash('sha256').update(wire).digest('base64').replace(/=+$/, '')}`)
   await expect(createSshKey({ name: 'test-key', algorithm: 'ed25519' }, { sshDir: directory })).rejects.toThrow('already exists')
   expect(await readFile(winner.value.privatePath, 'utf8')).toBe(privatePem)
   if (process.platform !== 'win32') expect((await stat(winner.value.privatePath)).mode & 0o777).toBe(0o600)
+})
+
+const hasKeygen = (process.env.PATH ?? '').split(delimiter).some((dir) => existsSync(join(dir, process.platform === 'win32' ? 'ssh-keygen.exe' : 'ssh-keygen')))
+it.skipIf(!hasKeygen).each(['ed25519', 'rsa'] as const)('creates a %s private key that native OpenSSH can read', async (algorithm) => {
+  const directory = await mkdtemp(join(tmpdir(), 'devutils-ssh-native-key-'))
+  directories.push(directory)
+  const result = await createSshKey({ name: 'native-key', algorithm, modulusLength: 2048 }, { sshDir: directory })
+  const { stdout } = await promisify(execFile)('ssh-keygen', ['-y', '-P', '', '-f', result.privatePath], { windowsHide: true, timeout: 5000 })
+  expect(stdout.trim().split(/\s+/).slice(0, 2)).toEqual(result.publicKeyOpenSsh.split(/\s+/).slice(0, 2))
 })

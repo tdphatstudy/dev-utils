@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FolderPlus, UserPlus, Shield } from 'lucide-react'
-import type { VaultListItem, VaultMode } from '@shared/secret-box/types'
+import type { VaultListItem, VaultMode, RecoverMetadataInput } from '@shared/secret-box/types'
 import { cn } from '@renderer/lib/utils'
+import { CopyButton } from '@renderer/components/ui/CopyButton'
 
 interface Props {
   vaults: VaultListItem[]
@@ -9,6 +10,8 @@ interface Props {
   error: string | null
   onSelectVault: (id: string) => Promise<void>
   onAccess: (input: { keyA?: string; keyB: string }) => Promise<void>
+  onRecover: (input: RecoverMetadataInput) => Promise<void>
+  onCancelRecovery: () => Promise<void>
   onCreateNew: () => void
   onAddExisting: () => void
 }
@@ -19,6 +22,8 @@ export function DesktopLogin({
   error: externalError,
   onSelectVault,
   onAccess,
+  onRecover,
+  onCancelRecovery,
   onCreateNew,
   onAddExisting
 }: Props): JSX.Element {
@@ -26,7 +31,10 @@ export function DesktopLogin({
   const [keyA, setKeyA] = useState('')
   const [keyB, setKeyB] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  const [recoveryMode, setRecoveryMode] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const selected = vaults.find((v) => v.id === selectedId) ?? null
   const mode: VaultMode | null = selected?.mode ?? null
@@ -39,45 +47,51 @@ export function DesktopLogin({
     setKeyA('')
     setKeyB('')
     setError(null)
+    setRecoveryMode(false)
   }, [selectedId])
 
   const pick = async (id: string): Promise<void> => {
-    setSelectedId(id)
+    if (submitting.current) return
+    submitting.current = true; setBusy(true)
     setError(null)
-    if (id !== activeId) {
-      try {
-        await onSelectVault(id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not select box')
-      }
-    }
+    try {
+      if (id !== activeId) await onSelectVault(id)
+      setSelectedId(id)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not select box') }
+    finally { submitting.current = false; setBusy(false) }
   }
 
   const submit = async (): Promise<void> => {
-    if (!selected) return
+    if (!selected || selected.metadataError && !recoveryMode || submitting.current || !keyB.trim() || mode === 'portable' && !keyA.trim()) return
+    submitting.current = true
     setBusy(true)
     setError(null)
     try {
       if (selected.id !== activeId) await onSelectVault(selected.id)
-      await onAccess({
+      const input = {
         keyA: mode === 'portable' ? keyA : undefined,
         keyB
-      })
+      }
+      if (recoveryMode) await onRecover({ ...input, boxId: selected.id })
+      else await onAccess(input)
+      setKeyA(''); setKeyB('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not sign in')
     } finally {
+      submitting.current = false
       setBusy(false)
+      setCancelling(false)
     }
   }
 
   const err = error ?? externalError
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-auto">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#2c3e50] via-[#1c1c1e] to-[#0d0d0f]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(10,132,255,0.18),transparent_55%)]" />
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10">
+      <div className="relative z-10 flex shrink-0 flex-grow flex-col items-center justify-center px-6 py-10">
         <div className="mb-10 flex flex-col items-center text-center">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[22%] bg-white/10 shadow-mac-lg backdrop-blur">
             <Shield className="h-7 w-7 text-white" strokeWidth={1.5} />
@@ -96,6 +110,7 @@ export function DesktopLogin({
               <button
                 key={v.id}
                 type="button"
+                disabled={busy}
                 onClick={() => void pick(v.id)}
                 className={cn(
                   'group flex w-[112px] flex-col items-center gap-2 rounded-mac-xl p-3 transition-all',
@@ -123,6 +138,7 @@ export function DesktopLogin({
           <button
             type="button"
             onClick={onCreateNew}
+            disabled={busy}
             className="flex w-[112px] flex-col items-center gap-2 rounded-mac-xl p-3 text-white/70 transition-colors hover:bg-white/8 hover:text-white"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-white/30 bg-white/5">
@@ -134,6 +150,7 @@ export function DesktopLogin({
           <button
             type="button"
             onClick={onAddExisting}
+            disabled={busy}
             className="flex w-[112px] flex-col items-center gap-2 rounded-mac-xl p-3 text-white/70 transition-colors hover:bg-white/8 hover:text-white"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-white/30 bg-white/5">
@@ -153,12 +170,27 @@ export function DesktopLogin({
             </div>
 
             <div className="space-y-3">
+              {selected.metadataError && <div role="alert" className="space-y-2 rounded-mac bg-mac-danger/20 p-3 text-[12px] text-red-300">
+                <p className="break-words">{selected.metadataError}</p>
+                {selected.metadataBackupPath && <>
+                  <p>A metadata backup passed format validation. Preserve the current file and verify this backup belongs to your box before restoring it.</p>
+                  <p className="break-all font-mono">{selected.metadataBackupPath}</p>
+                  <CopyButton text={selected.metadataBackupPath} label="Copy backup path" />
+                  <label className="flex items-start gap-2">
+                    <input type="checkbox" checked={recoveryMode} disabled={busy} onChange={(e) => setRecoveryMode(e.target.checked)} />
+                    <span>Recover from this backup after verifying my original keys and every encrypted document.</span>
+                  </label>
+                  <p>The damaged metadata is preserved separately. The backup and documents stay intact. Verification may take time for larger boxes.</p>
+                  <p>Automatic verification: up to 1,000 encrypted documents / 256 MiB total, 96 MiB per file. It refuses larger boxes without skipping files.</p>
+                </>}
+              </div>}
               {mode === 'portable' && (
                 <label className="block text-[12px]">
                   <span className="mb-1 block text-white/55">Key A</span>
                   <input
                     className="mac-input border-white/10 bg-white/10 font-mono text-white placeholder:text-white/30"
                     type="password"
+                    disabled={busy || !!selected.metadataError && !recoveryMode}
                     value={keyA}
                     onChange={(e) => setKeyA(e.target.value)}
                     autoComplete="off"
@@ -173,6 +205,7 @@ export function DesktopLogin({
                 <input
                   className="mac-input border-white/10 bg-white/10 font-mono text-white placeholder:text-white/30"
                   type="password"
+                  disabled={busy || !!selected.metadataError && !recoveryMode}
                   value={keyB}
                   onChange={(e) => setKeyB(e.target.value)}
                   autoComplete="off"
@@ -193,11 +226,18 @@ export function DesktopLogin({
             <button
               type="button"
               className="mac-btn-primary mt-4 w-full"
-              disabled={busy || !keyB.trim() || (mode === 'portable' && !keyA.trim())}
+              disabled={busy || !!selected.metadataError && !recoveryMode || !keyB.trim() || (mode === 'portable' && !keyA.trim())}
               onClick={() => void submit()}
             >
-              {busy ? 'Signing in…' : 'Sign in'}
+              {busy ? recoveryMode ? 'Verifying backup & documents…' : 'Signing in…' : recoveryMode ? 'Verify backup & recover' : 'Sign in'}
             </button>
+            {busy && recoveryMode && <button type="button" className="mac-btn-secondary mt-2 w-full" disabled={cancelling} onClick={() => {
+              setCancelling(true)
+              void onCancelRecovery().catch((e: unknown) => {
+                setCancelling(false)
+                setError(e instanceof Error ? e.message : 'Could not cancel recovery')
+              })
+            }}>{cancelling ? 'Cancelling verification…' : 'Cancel recovery'}</button>}
           </div>
         )}
 

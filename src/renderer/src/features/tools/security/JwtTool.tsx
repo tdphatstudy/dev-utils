@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
+import { parseJson } from '@shared/json'
 import { Eye, EyeOff } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -10,8 +12,7 @@ import {
   decodeJwt,
   signJwt,
   verifyJwt,
-  type HsAlgorithm,
-  type JwtVerifyResult
+  type HsAlgorithm
 } from '@shared/crypto/jwt'
 import { cn } from '@renderer/lib/utils'
 
@@ -32,76 +33,93 @@ export default function JwtTool(): JSX.Element {
   const [payloadEdit, setPayloadEdit] = useState(DEFAULT_PAYLOAD)
   const [signAlg, setSignAlg] = useState<HsAlgorithm>('HS256')
   const [signedOut, setSignedOut] = useState('')
-  const [verifyResult, setVerifyResult] = useState<JwtVerifyResult | null>(null)
   const [busy, setBusy] = useState(false)
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const revision = useRef(0)
+  const mounted = useRef(true)
+  const running = useRef(false)
+  const [signedInput, setSignedInput] = useState('')
+  const inputIdentity = JSON.stringify([payloadEdit, secret, signAlg])
+  const currentSigned = signedInput === inputIdentity ? signedOut : ''
+  const payloadParsed = useMemo(() => parseJson(payloadEdit), [payloadEdit])
+  const payloadValid = payloadParsed.ok && payloadParsed.value !== null && typeof payloadParsed.value === 'object' && !Array.isArray(payloadParsed.value)
 
-  // Load a properly signed sample on mount
   useEffect(() => {
-    void createSampleJwt().then(setToken)
+    mounted.current = true
+    return () => { mounted.current = false; revision.current++ }
   }, [])
+  useEffect(() => { revision.current++; setOperationError(null) }, [token, secret, payloadEdit, signAlg, mode])
 
   const decoded = useMemo(() => decodeJwt(token), [token])
 
-  // Live verify when secret/token changes
-  useEffect(() => {
-    if (mode !== 'verify' && mode !== 'decode') return
-    let cancelled = false
-    setBusy(true)
-    void verifyJwt(token, secret).then((r) => {
-      if (!cancelled) {
-        setVerifyResult(r)
-        setBusy(false)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [token, secret, mode])
+  const computeVerify = useCallback(async () => mode === 'verify' && token.trim() ? verifyJwt(token, secret) : null, [token, secret, mode])
+  const verification = useAsyncValue(computeVerify)
+  const currentVerify = verification.value ?? null
 
   const headerText = decoded.ok ? JSON.stringify(decoded.header, null, 2) : ''
   const payloadText = decoded.ok ? JSON.stringify(decoded.payload, null, 2) : ''
 
   const onSign = async (): Promise<void> => {
+    if (running.current || !payloadValid || !secret) return
+    running.current = true
+    const version = revision.current
     setBusy(true)
+    setOperationError(null)
     try {
       let payload: Record<string, unknown>
       try {
         payload = JSON.parse(payloadEdit) as Record<string, unknown>
       } catch {
         setSignedOut('')
-        setVerifyResult({ ok: false, error: 'Payload is not valid JSON' })
+        setOperationError('Payload is not valid JSON')
         return
       }
       const r = await signJwt({ payload, secret, algorithm: signAlg })
+      if (!mounted.current || version !== revision.current) return
       if (r.ok) {
         setSignedOut(r.token)
+        setSignedInput(inputIdentity)
         setToken(r.token)
       } else {
         setSignedOut('')
-        setVerifyResult({ ok: false, error: r.error })
+        setOperationError(r.error)
       }
+    } catch (error) {
+      if (mounted.current && version === revision.current) setOperationError(error instanceof Error ? error.message : 'Signing failed')
     } finally {
-      setBusy(false)
+      running.current = false
+      if (mounted.current) setBusy(false)
     }
   }
 
   const loadSample = async (): Promise<void> => {
-    setSecret(JWT_SAMPLE_SECRET)
-    const t = await createSampleJwt()
-    setToken(t)
-    setMode('verify')
+    if (running.current) return
+    const version = revision.current
+    running.current = true
+    setBusy(true)
+    try {
+      const t = await createSampleJwt()
+      if (!mounted.current || version !== revision.current) return
+      setSecret(JWT_SAMPLE_SECRET); setToken(t); setMode('verify')
+    } catch (error) { if (mounted.current) setOperationError(error instanceof Error ? error.message : 'Sample failed') }
+    finally { running.current = false; if (mounted.current) setBusy(false) }
   }
 
   const alg = decoded.ok ? decoded.algorithm : undefined
-  const needsPem = alg?.startsWith('RS') || alg?.startsWith('ES')
+  const needsPem = mode === 'verify' && (alg?.startsWith('RS') || alg?.startsWith('ES'))
 
   const status = (() => {
-    if (!decoded.ok) return { tone: 'danger' as const, text: decoded.error }
+    if (operationError) return { tone: 'danger' as const, text: operationError }
     if (mode === 'sign') {
-      if (signedOut) return { tone: 'success' as const, text: `Signed · ${signAlg}` }
+      if (currentSigned) return { tone: 'success' as const, text: `Signed · ${signAlg}` }
       return { tone: 'neutral' as const, text: 'Edit payload + secret, then Sign' }
     }
-    if (busy) return { tone: 'neutral' as const, text: 'Verifying…' }
+    if (!token.trim()) return { tone: 'neutral' as const, text: 'Paste a token or load Sample' }
+    if (!decoded.ok) return { tone: 'danger' as const, text: decoded.error }
+    if (mode === 'decode') return { tone: 'neutral' as const, text: 'Decoded only — signature not checked' }
+    if (verification.pending) return { tone: 'neutral' as const, text: 'Verifying…' }
+    if (verification.error) return { tone: 'danger' as const, text: verification.error }
+    const verifyResult = currentVerify
     if (!verifyResult) return { tone: 'neutral' as const, text: '…' }
     if (!verifyResult.ok) return { tone: 'danger' as const, text: verifyResult.error }
 
@@ -114,7 +132,7 @@ export default function JwtTool(): JSX.Element {
     if (decoded.notYetValid) parts.push('nbf in future')
 
     const tone = verifyResult.valid
-      ? decoded.expired || decoded.notYetValid
+      ? decoded.expired || decoded.notYetValid || decoded.claimWarnings.length
         ? ('warning' as const)
         : ('success' as const)
       : secret.trim()
@@ -125,7 +143,7 @@ export default function JwtTool(): JSX.Element {
   })()
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolToolbar>
         <SegmentedControl
           value={mode}
@@ -136,19 +154,19 @@ export default function JwtTool(): JSX.Element {
             { value: 'sign', label: 'Sign (HS)' }
           ]}
         />
-        <button type="button" className="mac-btn-ghost" onClick={() => void loadSample()}>
+        <button type="button" disabled={busy} className="mac-btn-ghost" onClick={() => void loadSample()}>
           Sample
         </button>
         <div className="ml-auto flex gap-2">
-          <CopyButton text={mode === 'sign' ? signedOut : token} label="Copy token" />
-          <CopyButton text={payloadText} label="Copy payload" />
+          <CopyButton text={mode === 'sign' ? currentSigned : token} label="Copy token" />
+          <CopyButton text={mode === 'sign' ? payloadValid ? payloadEdit : '' : payloadText} label="Copy payload" />
         </div>
       </ToolToolbar>
 
       {/* Secret / key */}
-      <div className="space-y-2 border-b border-mac-separator px-4 py-3">
+      {mode !== 'decode' && <div className="space-y-2 border-b border-mac-separator px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
+          <label htmlFor="jwt-secret" className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
             {needsPem ? 'Public key (PEM)' : 'Secret / key'}
             {mode === 'sign' ? ' (HMAC secret)' : ''}
           </label>
@@ -157,8 +175,9 @@ export default function JwtTool(): JSX.Element {
           </span>
         </div>
         <div className="relative">
-          {needsPem || secret.includes('BEGIN') || secret.length > 80 ? (
+          {needsPem ? (
             <textarea
+              id="jwt-secret"
               className="mac-input min-h-[88px] resize-y font-mono text-[12px]"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
@@ -172,6 +191,7 @@ export default function JwtTool(): JSX.Element {
           ) : (
             <div className="flex gap-2">
               <input
+                id="jwt-secret"
                 type={showSecret ? 'text' : 'password'}
                 className="mac-input flex-1 font-mono text-[13px]"
                 value={secret}
@@ -185,6 +205,7 @@ export default function JwtTool(): JSX.Element {
                 className="mac-btn-secondary !px-2.5"
                 onClick={() => setShowSecret((s) => !s)}
                 title={showSecret ? 'Hide' : 'Show'}
+                aria-label={showSecret ? 'Hide JWT secret' : 'Show JWT secret'}
               >
                 {showSecret ? (
                   <EyeOff className="h-4 w-4" />
@@ -203,6 +224,7 @@ export default function JwtTool(): JSX.Element {
                 key={a}
                 type="button"
                 onClick={() => setSignAlg(a)}
+                aria-pressed={signAlg === a}
                 className={cn(
                   'rounded-mac px-2 py-1 font-mono text-[11px] font-medium',
                   signAlg === a
@@ -216,7 +238,7 @@ export default function JwtTool(): JSX.Element {
             <button
               type="button"
               className="mac-btn-primary ml-auto"
-              disabled={busy || !secret.trim()}
+              disabled={busy || !secret || !payloadValid}
               onClick={() => void onSign()}
             >
               Sign JWT
@@ -230,11 +252,14 @@ export default function JwtTool(): JSX.Element {
             (auto-expands). Signature is checked with Web Crypto.
           </p>
         )}
-      </div>
+      </div>}
+      <p className="shrink-0 border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">{mode === 'decode' ? 'Decoded claims are untrusted. No key is used in Decode mode.' : 'Signature verification does not validate issuer, audience or application authorization. No remote key URLs are fetched.'}</p>
+      {decoded.ok && mode !== 'sign' && decoded.claimWarnings.map((warning) => <p key={warning} role="alert" className="px-4 py-1 text-[12px] text-mac-warning">{warning}</p>)}
+      {mode === 'sign' && payloadParsed.ok && !payloadValid && <p role="alert" className="px-4 py-2 text-[12px] text-mac-danger">Payload must be a JSON object, not an array, null or primitive.</p>}
 
-      <div className="grid min-h-0 flex-1 gap-3 p-3">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3">
         {mode === 'sign' ? (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid min-h-0 flex-1 auto-rows-[minmax(200px,1fr)] grid-cols-1 gap-3 md:grid-cols-2">
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
                 Payload (JSON)
@@ -244,6 +269,8 @@ export default function JwtTool(): JSX.Element {
                 onChange={setPayloadEdit}
                 language="json"
                 placeholder="{ }"
+                label="JWT payload JSON"
+                onRun={() => void onSign()}
               />
             </div>
             <div className="flex min-h-0 flex-col gap-1">
@@ -251,15 +278,16 @@ export default function JwtTool(): JSX.Element {
                 Signed token
               </span>
               <CodeEditor
-                value={signedOut}
+                value={currentSigned}
                 language="text"
                 readOnly
                 placeholder="Click Sign JWT…"
+                label="Signed JWT"
               />
             </div>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-rows-[minmax(90px,0.35fr)_1fr] gap-3">
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(110px,0.35fr)_minmax(180px,1fr)] gap-3">
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
                 Token {token.trim().toLowerCase().startsWith('bearer ') ? '(Bearer stripped)' : ''}
@@ -269,6 +297,7 @@ export default function JwtTool(): JSX.Element {
                 onChange={setToken}
                 language="text"
                 placeholder="Paste JWT… (Bearer prefix ok)"
+                label="JWT token"
               />
             </div>
             <div className="grid min-h-0 grid-cols-1 gap-3 sm:grid-cols-2">
@@ -289,7 +318,7 @@ export default function JwtTool(): JSX.Element {
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-mac-separator px-4 py-2 text-[12px]">
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-mac-separator px-4 py-2 text-[12px]">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
         {decoded.ok && (
           <>
@@ -302,11 +331,11 @@ export default function JwtTool(): JSX.Element {
             {decoded.notBefore && (
               <span className="text-mac-label-secondary">nbf {decoded.notBefore}</span>
             )}
-            {verifyResult?.ok && verifyResult.valid && (
+            {mode === 'verify' && currentVerify?.ok && currentVerify.valid && (
               <span className="font-medium text-mac-success">✓ signature OK</span>
             )}
-            {verifyResult?.ok && !verifyResult.valid && secret.trim() && (
-              <span className="font-medium text-mac-danger">✗ signature mismatch</span>
+            {mode === 'verify' && currentVerify?.ok && !currentVerify.valid && (
+              <span className="font-medium text-mac-danger">Signature not verified</span>
             )}
           </>
         )}

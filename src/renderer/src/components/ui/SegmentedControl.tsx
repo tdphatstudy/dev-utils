@@ -10,16 +10,18 @@ interface Props<T extends string> {
   options: SegmentOption<T>[]
   onChange: (value: T) => void
   className?: string
+  label?: string
 }
 
 export function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
-  className
+  className,
+  label
 }: Props<T>): JSX.Element {
   return (
-    <div className={cn('mac-segment', className)} role="tablist">
+    <div className={cn('mac-segment', className)} role="tablist" aria-label={label}>
       {options.map((opt) => (
         <button
           key={opt.value}

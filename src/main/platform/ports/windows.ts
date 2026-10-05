@@ -4,10 +4,12 @@ import type { PortScanner, ProcessInfo, RawListen } from './types'
 function extractPort(local: string): { address: string; port: number } | null {
   const m = /^(.*):(\d+)$/.exec(local)
   if (!m) return null
-  return { address: m[1]!, port: Number(m[2]) }
+  const port = Number(m[2])
+  if (port < 1 || port > 65535) return null
+  return { address: m[1]!.replace(/^\[(.*)\]$/, '$1'), port }
 }
 
-function parseNetstatTcp(stdout: string): RawListen[] {
+export function parseNetstatTcp(stdout: string): RawListen[] {
   const rows: RawListen[] = []
   for (const line of stdout.split(/\r?\n/)) {
     const t = line.trim()

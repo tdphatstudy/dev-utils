@@ -47,7 +47,7 @@ export default function LineEndings(): JSX.Element {
             Sample
           </button>
         </div>
-        <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted-${target}.txt`} accept="text/*,.txt,.csv,.log,.md" />
+        <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted-${target}.txt`} accept="text/*,.txt,.csv,.log,.md" preserveBom />
       </ToolToolbar>
 
       <SplitPane>
@@ -59,7 +59,7 @@ export default function LineEndings(): JSX.Element {
         <ToolStatus tone={!input ? 'neutral' : detected === 'mixed' ? 'warning' : 'success'}>
           {!input ? 'Open a UTF-8 file or paste text to begin' : `Input: ${counts.crlf} CRLF · ${counts.lf} LF · ${counts.cr} CR · output ${new TextEncoder().encode(output).length.toLocaleString()} bytes (${target.toUpperCase()})`}
         </ToolStatus>
-        <p className="mt-1 text-[11px] text-mac-label-tertiary">Editing normalizes editor line breaks to LF. Download preserves the selected output ending, including the final newline.</p>
+        <p className="mt-1 text-[11px] text-mac-label-tertiary">Editing normalizes editor line breaks to LF. UTF-8 file import/download preserves the BOM and final newline; only line endings are converted.</p>
       </footer>
     </div>
   )

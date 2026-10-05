@@ -151,10 +151,7 @@ export function expandTilde(p: string): string {
   if (p.includes('%d')) {
     return p.replace(/%d/g, home.replace(/\\/g, '/'))
   }
-  // %h sometimes used — treat like home for local expand
-  if (p.includes('%h')) {
-    return p.replace(/%h/g, home.replace(/\\/g, '/'))
-  }
+  // %h is the remote hostname, not the user's home. Keep unresolved tokens literal.
   return p
 }
 

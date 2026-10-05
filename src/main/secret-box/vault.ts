@@ -10,7 +10,8 @@ import type {
   SetupInput,
   VaultConfig,
   VaultListItem,
-  VaultStatus
+  VaultStatus,
+  RecoverMetadataInput, RecoverMetadataResult
 } from '@shared/secret-box/types'
 import {
   defaultSecretBoxPath,
@@ -33,11 +34,12 @@ import {
 } from './crypto'
 import {
   listDeviceKeyCandidates,
-  loadOrCreateDeviceSecret,
-  cacheDeviceSecretHint
+  loadOrCreateDeviceSecret
 } from './device-secret'
 import { atomicWriteFile, backupFile } from './atomic-write'
-import { clearAccess, getAccess, setAccess } from './session'
+import { clearAccess, getAccess, setAccess, getAccessRevision, assertAccessRevision } from './session'
+import { readMetadata, VaultMetadataError } from './metadata'
+import { recoverMetadataAtRoot } from './recovery'
 
 interface VaultRegistryEntry {
   id: string
@@ -65,22 +67,33 @@ async function emptyRegistry(): Promise<VaultRegistry> {
   return { version: 1, activeId: null, vaults: [] }
 }
 
-export async function readRegistry(): Promise<VaultRegistry> {
+const registryQueues = new Map<string, Promise<void>>()
+function inRegistryQueue<T>(operation: () => Promise<T>): Promise<T> {
+  const path = registryPath()
+  const previous = registryQueues.get(path) ?? Promise.resolve()
+  const result = previous.then(operation)
+  const tail = result.then(() => undefined, () => undefined)
+  registryQueues.set(path, tail)
+  void tail.then(() => { if (registryQueues.get(path) === tail) registryQueues.delete(path) })
+  return result
+}
+
+export function readRegistry(): Promise<VaultRegistry> {
+  return inRegistryQueue(readRegistryInternal)
+}
+
+// Only called while holding the registry queue, including legacy-pointer migration.
+async function readRegistryInternal(): Promise<VaultRegistry> {
+  let raw: string
   try {
-    const raw = await readFile(registryPath(), 'utf8')
-    const data = JSON.parse(raw) as VaultRegistry
-    if (!data || !Array.isArray(data.vaults)) return emptyRegistry()
-    return {
-      version: 1,
-      activeId: data.activeId ?? null,
-      vaults: data.vaults.filter((v) => v?.id && v?.rootPath)
-    }
-  } catch {
+    raw = await readFile(registryPath(), 'utf8')
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`Cannot read box registry. Check permissions at “${registryPath()}”; existing registry was not replaced.`)
     // migrate single pointer from older builds
     try {
       const raw = await readFile(legacyPointerPath(), 'utf8')
       const ptr = JSON.parse(raw) as { rootPath?: string }
-      if (ptr?.rootPath && existsSync(ptr.rootPath)) {
+      if (typeof ptr?.rootPath === 'string' && ptr.rootPath.trim()) {
         const entry: VaultRegistryEntry = {
           id: randomUUID(),
           name: basename(ptr.rootPath) || 'Private Box',
@@ -91,16 +104,26 @@ export async function readRegistry(): Promise<VaultRegistry> {
         await writeRegistry(reg)
         return reg
       }
-    } catch {
-      /* no legacy */
+      throw new Error('Invalid legacy box pointer')
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`Cannot migrate the legacy box pointer at “${legacyPointerPath()}”. Preserve the file and restore its backup; no new registry was created.`)
     }
     return emptyRegistry()
   }
+  let data: VaultRegistry
+  try { data = JSON.parse(raw) as VaultRegistry }
+  catch { throw new Error(`Box registry JSON is corrupt at “${registryPath()}”. Restore its backup; existing registry was not replaced.`) }
+  if (!data || data.version !== 1 || !Array.isArray(data.vaults) || (data.activeId !== null && typeof data.activeId !== 'string') ||
+      data.vaults.some((v) => !v || typeof v.id !== 'string' || !v.id || typeof v.rootPath !== 'string' || !v.rootPath || typeof v.name !== 'string' || typeof v.createdAt !== 'string') ||
+      new Set(data.vaults.map((v) => v.id)).size !== data.vaults.length || (data.activeId !== null && !data.vaults.some((v) => v.id === data.activeId))) {
+    throw new Error(`Box registry is invalid or unsupported at “${registryPath()}”. Preserve it and restore a known-good backup; no entries were discarded.`)
+  }
+  return data
 }
 
-async function writeRegistry(reg: VaultRegistry): Promise<void> {
+async function writeRegistry(reg: VaultRegistry, beforeCommit?: () => void): Promise<void> {
   await mkdir(userDataRoot(), { recursive: true })
-  await atomicWriteFile(registryPath(), JSON.stringify(reg, null, 2), 'utf8')
+  await atomicWriteFile(registryPath(), JSON.stringify(reg, null, 2), 'utf8', undefined, beforeCommit)
 }
 
 export async function isDirectoryEmpty(dir: string): Promise<boolean> {
@@ -114,25 +137,36 @@ export function vaultConfigPath(root: string): string {
 }
 
 export async function readVaultConfig(root: string): Promise<VaultConfig | null> {
-  try {
-    const raw = await readFile(vaultConfigPath(root), 'utf8')
-    return JSON.parse(raw) as VaultConfig
-  } catch {
-    return null
-  }
+  return readMetadata(root)
 }
 
 async function toListItems(reg: VaultRegistry): Promise<VaultListItem[]> {
   const items: VaultListItem[] = []
   for (const v of reg.vaults) {
-    const config = await readVaultConfig(v.rootPath)
+    let config: VaultConfig | null = null
+    let metadataError: string | undefined
+    let metadataBackupPath: string | undefined
+    try {
+      config = await readVaultConfig(v.rootPath)
+      if (!config) metadataError = new VaultMetadataError('MISSING', vaultConfigPath(v.rootPath), 'Restore the original metadata or its backup before unlocking.').message
+    } catch (e) {
+      if (!(e instanceof VaultMetadataError)) throw e
+      metadataError = e.message
+    }
+    if (metadataError) {
+      try {
+        const backup = await readMetadata(v.rootPath, true)
+        if (backup) { config = backup; metadataBackupPath = `${vaultConfigPath(v.rootPath)}.bak` }
+      } catch { /* An invalid backup is not a recovery candidate. */ }
+    }
     items.push({
       id: v.id,
       name: v.name,
       rootPath: v.rootPath,
       mode: config?.mode ?? null,
       createdAt: v.createdAt,
-      isDefault: !!v.isDefault
+      isDefault: !!v.isDefault,
+      metadataError, metadataBackupPath
     })
   }
   return items
@@ -161,23 +195,31 @@ export async function getStatus(): Promise<VaultStatus> {
     }
   }
 
-  const config = await readVaultConfig(active.rootPath)
+  const item = vaults.find((v) => v.id === active.id)
+  if (item?.metadataError && access?.rootPath === resolve(active.rootPath)) clearAccess()
   const root = resolve(active.rootPath)
   return {
     configured: true,
-    hasAccess: !!access && access.rootPath === root,
-    mode: config?.mode ?? null,
+    hasAccess: !!access && access.rootPath === root && !item?.metadataError,
+    mode: item?.mode ?? null,
     rootPath: active.rootPath,
     activeId: active.id,
     vaults
   }
 }
 
-export async function setupVault(input: SetupInput): Promise<void> {
+export function setupVault(input: SetupInput): Promise<void> {
+  const revision = getAccessRevision()
+  return inRegistryQueue(() => { assertAccessRevision(revision); return setupVaultInternal(input) })
+}
+async function setupVaultInternal(input: SetupInput): Promise<void> {
+  const revision = getAccessRevision()
   const root = resolve(input.rootPath)
   if (!existsSync(root)) throw new Error('Folder does not exist')
   const empty = await isDirectoryEmpty(root)
   if (!empty) throw new Error('Folder must be empty')
+  const reg = await readRegistryInternal()
+  assertAccessRevision(revision)
 
   if (input.mode === 'portable') {
     if (!input.keyA.trim() || !input.keyB.trim()) {
@@ -192,6 +234,7 @@ export async function setupVault(input: SetupInput): Promise<void> {
   if (input.mode === 'device') {
     keyA = await loadOrCreateDeviceSecret()
   }
+  assertAccessRevision(revision)
 
   const keys = deriveLayerKeys(keyA, input.keyB, salt)
   const auth = createKeyVerifiers(keys.keyA, keys.keyB)
@@ -211,9 +254,10 @@ export async function setupVault(input: SetupInput): Promise<void> {
   }
 
   await mkdir(join(root, VAULT_DIR), { recursive: true })
-  await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8')
+  assertAccessRevision(revision)
+  await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8', undefined, () => assertAccessRevision(revision))
+  assertAccessRevision(revision)
 
-  const reg = await readRegistry()
   const existing = reg.vaults.find((v) => resolve(v.rootPath) === root)
   if (existing) {
     existing.name = input.name?.trim() || existing.name
@@ -228,8 +272,9 @@ export async function setupVault(input: SetupInput): Promise<void> {
     reg.vaults.push(entry)
     reg.activeId = entry.id
   }
-  await writeRegistry(reg)
+  await writeRegistry(reg, () => assertAccessRevision(revision))
   await clearAuthFailures(root)
+  assertAccessRevision(revision)
 
   setAccess({
     rootPath: root,
@@ -307,15 +352,18 @@ async function canDecryptSamplePutls(
   return true
 }
 
-async function writeConfig(root: string, config: VaultConfig): Promise<void> {
+async function writeConfig(root: string, config: VaultConfig, beforeCommit?: () => void): Promise<void> {
   await mkdir(join(root, VAULT_DIR), { recursive: true })
   const path = vaultConfigPath(root)
   await backupFile(path, '.bak')
-  await atomicWriteFile(path, JSON.stringify(config, null, 2), 'utf8')
+  beforeCommit?.()
+  await atomicWriteFile(path, JSON.stringify(config, null, 2), 'utf8', undefined, beforeCommit)
 }
 
 export async function accessVault(input: AccessInput): Promise<void> {
+  const revision = getAccessRevision()
   const active = await getActiveEntry()
+  assertAccessRevision(revision)
   if (!active) throw new Error('No vault selected')
   const root = resolve(active.rootPath)
   if (!existsSync(root)) {
@@ -323,8 +371,10 @@ export async function accessVault(input: AccessInput): Promise<void> {
   }
 
   await assertNotLocked(root)
+  assertAccessRevision(revision)
 
   let config = await readVaultConfig(root)
+  assertAccessRevision(revision)
   if (!config) throw new Error('Vault metadata missing')
 
   if (!input.keyB.trim()) throw new Error('Key B / password is required')
@@ -344,6 +394,7 @@ export async function accessVault(input: AccessInput): Promise<void> {
 
   const hasAuth = !!(config.auth?.hashA && config.auth?.hashB)
   const hasFiles = await vaultHasPutlFiles(root)
+  assertAccessRevision(revision)
 
   let accepted: { keyA: Buffer; keyB: Buffer } | null = null
 
@@ -372,6 +423,7 @@ export async function accessVault(input: AccessInput): Promise<void> {
     break
   }
 
+  assertAccessRevision(revision)
   if (!accepted) {
     await recordAuthFailure(root)
     throw authError(
@@ -380,27 +432,21 @@ export async function accessVault(input: AccessInput): Promise<void> {
     )
   }
 
+  const stillActive = await getActiveEntry()
+  assertAccessRevision(revision)
+  if (stillActive?.id !== active.id || resolve(stillActive.rootPath) !== root) throw authError('SESSION_CHANGED', 'SESSION_CHANGED: Selected box changed while signing in. Retry in the selected box.')
+
   // Migrate legacy → verifiers only after proof (or empty bind)
   if (!hasAuth) {
     config = {
       ...config,
       auth: createKeyVerifiers(accepted.keyA, accepted.keyB)
     }
-    await writeConfig(root, config)
-  }
-
-  if (config.mode === 'device') {
-    // Cache material that worked (best-effort; hardware remains preferred source)
-    for (const keyAStr of keyAList) {
-      const trial = deriveLayerKeys(keyAStr, input.keyB, salt)
-      if (trial.keyA.equals(accepted.keyA)) {
-        void cacheDeviceSecretHint(keyAStr)
-        break
-      }
-    }
+    await writeConfig(root, config, () => assertAccessRevision(revision))
   }
 
   await clearAuthFailures(root)
+  assertAccessRevision(revision)
   setAccess({
     rootPath: root,
     mode: config.mode,
@@ -414,15 +460,46 @@ export function clearVaultAccess(): void {
   clearAccess()
 }
 
-export async function openExistingVaultPath(
+export function recoverVaultMetadata(input: RecoverMetadataInput): Promise<RecoverMetadataResult> {
+  clearAccess()
+  const revision = getAccessRevision()
+  return inRegistryQueue(async () => {
+    const check = (): void => assertAccessRevision(revision)
+    check()
+    const registry = await readRegistryInternal(); check()
+    const entry = registry.vaults.find((box) => box.id === input.boxId)
+    if (!entry || registry.activeId !== input.boxId) throw new Error('SESSION_CHANGED: Select the box whose metadata you want to recover.')
+    const root = resolve(entry.rootPath)
+    const outcome = await recoverMetadataAtRoot(root, input, check)
+    try {
+      check()
+      setAccess({ rootPath: root, mode: outcome.config.mode, config: outcome.config, keyA: outcome.keyA, keyB: outcome.keyB })
+      return outcome.result
+    } catch (e) { outcome.keyA.fill(0); outcome.keyB.fill(0); throw e }
+  })
+}
+
+export function openExistingVaultPath(rootPath: string, name?: string): Promise<VaultConfig> {
+  const revision = getAccessRevision()
+  return inRegistryQueue(() => { assertAccessRevision(revision); return openExistingVaultPathInternal(rootPath, name) })
+}
+async function openExistingVaultPathInternal(
   rootPath: string,
   name?: string
 ): Promise<VaultConfig> {
+  const initialRevision = getAccessRevision()
   const root = resolve(rootPath)
-  const config = await readVaultConfig(root)
+  let config: VaultConfig | null
+  try { config = await readVaultConfig(root) }
+  catch (e) {
+    if (!(e instanceof VaultMetadataError) || e.code !== 'CORRUPT') throw e
+    config = await readMetadata(root, true)
+  }
+  if (!config) config = await readMetadata(root, true)
   if (!config) throw new Error('Not a Private Box folder')
 
-  const reg = await readRegistry()
+  const reg = await readRegistryInternal()
+  assertAccessRevision(initialRevision)
   let entry = reg.vaults.find((v) => resolve(v.rootPath) === root)
   if (!entry) {
     entry = {
@@ -434,27 +511,40 @@ export async function openExistingVaultPath(
     reg.vaults.push(entry)
   }
   reg.activeId = entry.id
-  await writeRegistry(reg)
   clearAccess()
+  const revision = getAccessRevision()
+  await writeRegistry(reg, () => assertAccessRevision(revision))
+  assertAccessRevision(revision)
   return config
 }
 
-export async function setActiveVault(id: string): Promise<void> {
-  const reg = await readRegistry()
+export function setActiveVault(id: string): Promise<void> {
+  // Invalidate pending unlocks and file jobs before asynchronous registry IO.
+  clearAccess()
+  const revision = getAccessRevision()
+  return inRegistryQueue(() => { assertAccessRevision(revision); return setActiveVaultInternal(id, revision) })
+}
+async function setActiveVaultInternal(id: string, revision: number): Promise<void> {
+  const reg = await readRegistryInternal()
+  assertAccessRevision(revision)
   const found = reg.vaults.find((v) => v.id === id)
   if (!found) throw new Error('Vault not found')
   if (!existsSync(found.rootPath)) {
     throw new Error('Vault folder is missing on disk')
   }
   reg.activeId = id
-  await writeRegistry(reg)
-  clearAccess()
+  await writeRegistry(reg, () => assertAccessRevision(revision))
+  assertAccessRevision(revision)
 }
 
-export async function removeVaultFromList(id: string): Promise<void> {
-  const reg = await readRegistry()
+export function removeVaultFromList(id: string): Promise<void> {
+  return inRegistryQueue(() => removeVaultFromListInternal(id))
+}
+async function removeVaultFromListInternal(id: string): Promise<void> {
+  const reg = await readRegistryInternal()
   const access = getAccess()
   const target = reg.vaults.find((v) => v.id === id)
+  if (!target) throw new Error('Vault not found')
   reg.vaults = reg.vaults.filter((v) => v.id !== id)
   if (reg.activeId === id) {
     reg.activeId = reg.vaults[0]?.id ?? null
@@ -465,8 +555,11 @@ export async function removeVaultFromList(id: string): Promise<void> {
   await writeRegistry(reg)
 }
 
-export async function renameVault(id: string, name: string): Promise<void> {
-  const reg = await readRegistry()
+export function renameVault(id: string, name: string): Promise<void> {
+  return inRegistryQueue(() => renameVaultInternal(id, name))
+}
+async function renameVaultInternal(id: string, name: string): Promise<void> {
+  const reg = await readRegistryInternal()
   const entry = reg.vaults.find((v) => v.id === id)
   if (!entry) throw new Error('Vault not found')
   const next = name.trim()
@@ -479,12 +572,20 @@ export function isPutlFile(name: string): boolean {
   return name.toLowerCase().endsWith(PUTL_EXT)
 }
 
-export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
+export function ensureDefaultSecretBox(): Promise<VaultListItem> {
+  return inRegistryQueue(ensureDefaultSecretBoxInternal)
+}
+async function ensureDefaultSecretBoxInternal(): Promise<VaultListItem> {
+  const reg = await readRegistryInternal()
+  let registryChanged = false
   const root = defaultSecretBoxPath()
   await mkdir(root, { recursive: true })
 
   let config = await readVaultConfig(root)
   if (!config) {
+    if (!(await isDirectoryEmpty(root))) {
+      throw new VaultMetadataError('MISSING', vaultConfigPath(root), 'This folder already contains data or metadata remnants. Restore the original vault.json; a new salt would make existing encrypted documents unreadable.')
+    }
     // Probe device key material early (hardware-bound) so default box is OS-reinstall safe
     await loadOrCreateDeviceSecret()
     const salt = generateSalt()
@@ -507,7 +608,6 @@ export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
     await mkdir(join(root, 'saves'), { recursive: true })
   }
 
-  const reg = await readRegistry()
   const resolved = resolve(root)
   let entry = reg.vaults.find((v) => resolve(v.rootPath) === resolved)
   if (!entry) {
@@ -519,13 +619,15 @@ export async function ensureDefaultSecretBox(): Promise<VaultListItem> {
       isDefault: true
     }
     reg.vaults.unshift(entry)
+    registryChanged = true
   } else {
+    if (!entry.isDefault || !entry.name) registryChanged = true
     entry.isDefault = true
     entry.name = entry.name || 'Default Secret Box'
   }
 
-  if (!reg.activeId) reg.activeId = entry.id
-  await writeRegistry(reg)
+  if (!reg.activeId) { reg.activeId = entry.id; registryChanged = true }
+  if (registryChanged) await writeRegistry(reg)
 
   return {
     id: entry.id,

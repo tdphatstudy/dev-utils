@@ -47,35 +47,90 @@ export function emptyKeepNote(partial?: Partial<KeepNote>): KeepNote {
   }
 }
 
-export function parseKeepNote(raw: string): KeepNote {
+function readKeepObject(raw: string): Partial<KeepNote> | null {
   try {
-    const j = JSON.parse(raw) as Partial<KeepNote>
-    return emptyKeepNote({
-      title: typeof j.title === 'string' ? j.title : '',
-      body: typeof j.body === 'string' ? j.body : '',
-      color: isKeepColor(j.color) ? j.color : 'default',
-      pinned: !!j.pinned,
-      createdAt: typeof j.createdAt === 'string' ? j.createdAt : undefined,
-      updatedAt: typeof j.updatedAt === 'string' ? j.updatedAt : new Date().toISOString()
-    })
+    const j = JSON.parse(raw) as Partial<KeepNote> | null
+    if (!j || typeof j !== 'object' || Array.isArray(j) ||
+        typeof j.title !== 'string' && typeof j.body !== 'string' ||
+        j.title !== undefined && typeof j.title !== 'string' ||
+        j.body !== undefined && typeof j.body !== 'string' ||
+        j.pinned !== undefined && typeof j.pinned !== 'boolean' ||
+        j.color !== undefined && !isKeepColor(j.color) ||
+        j.createdAt !== undefined && typeof j.createdAt !== 'string' ||
+        j.updatedAt !== undefined && typeof j.updatedAt !== 'string') {
+      return null
+    }
+    return j
   } catch {
-    return emptyKeepNote({ body: raw })
+    return null
   }
 }
 
-export function serializeKeepNote(note: KeepNote): string {
-  return JSON.stringify(
-    {
-      title: note.title,
-      body: note.body,
-      color: note.color,
-      pinned: note.pinned,
-      createdAt: note.createdAt ?? note.updatedAt,
-      updatedAt: note.updatedAt
-    },
-    null,
-    2
-  )
+export function parseKeepNote(raw: string): KeepNote {
+  const j = readKeepObject(raw)
+  if (!j) return emptyKeepNote({ body: raw })
+  return emptyKeepNote({
+    title: typeof j.title === 'string' ? j.title : '',
+    body: typeof j.body === 'string' ? j.body : '',
+    color: isKeepColor(j.color) ? j.color : 'default',
+    pinned: !!j.pinned,
+    createdAt: typeof j.createdAt === 'string' ? j.createdAt : undefined,
+    updatedAt: typeof j.updatedAt === 'string' ? j.updatedAt : new Date().toISOString()
+  })
+}
+
+export function serializeKeepNote(note: KeepNote, originalRaw?: string): string {
+  const fields = {
+    title: note.title,
+    body: note.body,
+    color: note.color,
+    pinned: note.pinned,
+    createdAt: note.createdAt ?? note.updatedAt,
+    updatedAt: note.updatedAt
+  }
+  if (originalRaw !== undefined && readKeepObject(originalRaw)) {
+    return patchKeepFields(originalRaw, fields)
+  }
+  return JSON.stringify(fields, null, 2)
+}
+
+/** Patch owned root values only; unknown members retain their exact JSON bytes. */
+function patchKeepFields(raw: string, fields: Record<string, string | boolean>): string {
+  const tokens = [...raw.matchAll(/"(?:\\[\s\S]|[^"\\])*"|[^\s"{}\[\],:]+|[{}\[\],:]/g)]
+  const changes: { start: number; end: number; text: string }[] = []
+  const seen = new Set<string>()
+  let i = 1 // The caller has validated a root object.
+  while (i < tokens.length - 1) {
+    const key = JSON.parse(tokens[i][0]) as string
+    const valueStart = i + 2
+    i = valueStart
+    let depth = 0
+    while (i < tokens.length) {
+      const token = tokens[i][0]
+      if (depth === 0 && (token === ',' || token === '}')) break
+      if (token === '{' || token === '[') depth++
+      if (token === '}' || token === ']') depth--
+      i++
+    }
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      seen.add(key)
+      const last = tokens[i - 1]
+      changes.push({ start: tokens[valueStart].index!, end: last.index! + last[0].length,
+        text: JSON.stringify(fields[key]) })
+    }
+    if (tokens[i][0] === '}') break
+    i++
+  }
+  const missing = Object.entries(fields).filter(([key]) => !seen.has(key))
+  if (missing.length) {
+    changes.push({ start: tokens[i].index!, end: tokens[i].index!,
+      text: ',\n  ' + missing.map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`).join(',\n  ') + '\n' })
+  }
+  let output = raw
+  for (const change of changes.reverse()) {
+    output = output.slice(0, change.start) + change.text + output.slice(change.end)
+  }
+  return output
 }
 
 function isKeepColor(v: unknown): v is KeepColor {

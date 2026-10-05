@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from 'electron'
 import { writeFile } from 'fs/promises'
-import { basename } from 'path'
+import { basename, resolve } from 'path'
 import type {
   ExportPlainResult,
   ImportPlainInput,
@@ -15,7 +15,7 @@ import {
 import type { DocType } from '@shared/secret-box/types'
 import { ensureExtension, MAX_MEDIA_BYTES, typeFromName } from '@shared/secret-box/types'
 import * as fsOps from './fs-ops'
-import { getAccess } from './session'
+import { getAccess, requireAccess, assertAccess, getAccessRevision, assertAccessRevision } from './session'
 import {
   accessVault,
   ensureDefaultSecretBox,
@@ -26,7 +26,9 @@ import {
 } from './vault'
 
 export async function exportDocPlain(relativePath: string): Promise<ExportPlainResult> {
+  const access = requireAccess()
   const doc = await fsOps.readDoc(relativePath)
+  assertAccess(access)
   return {
     name: doc.name,
     type: doc.type,
@@ -41,7 +43,9 @@ export async function exportDocToDisk(
   relativePath: string,
   sender: Electron.WebContents
 ): Promise<string | null> {
+  const access = requireAccess()
   const plain = await exportDocPlain(relativePath)
+  assertAccess(access)
   const win = BrowserWindow.fromWebContents(sender)
   const kind = getContentKind(plain.type)
   const result = await dialog.showSaveDialog(win!, {
@@ -52,6 +56,7 @@ export async function exportDocToDisk(
     ]
   })
   if (result.canceled || !result.filePath) return null
+  assertAccess(access)
 
   if (plain.encoding === 'base64' || isBinaryKind(plain.type)) {
     const buf = Buffer.from(plain.content, 'base64')
@@ -65,7 +70,7 @@ export async function exportDocToDisk(
 export async function importPlainToActiveBox(
   input: ImportPlainInput
 ): Promise<ExportPlainResult & { relativePath: string }> {
-  requireOpenAccess()
+  const access = requireAccess()
   const type = input.type ?? typeFromName(input.name)
   const doc = await fsOps.createFileWithContent(
     input.relativeDir || '',
@@ -77,6 +82,7 @@ export async function importPlainToActiveBox(
       mimeType: input.mimeType
     }
   )
+  assertAccess(access)
   return {
     name: doc.name,
     type: doc.type,
@@ -91,7 +97,7 @@ export async function importPlainFromDisk(
   sender: Electron.WebContents,
   relativeDir = ''
 ): Promise<(ExportPlainResult & { relativePath: string }) | null> {
-  requireOpenAccess()
+  const access = requireAccess()
   const win = BrowserWindow.fromWebContents(sender)
   const result = await dialog.showOpenDialog(win!, {
     properties: ['openFile'],
@@ -122,11 +128,13 @@ export async function importPlainFromDisk(
     ]
   })
   if (result.canceled || !result.filePaths[0]) return null
+  assertAccess(access)
   const filePath = result.filePaths[0]
   const { readFile, stat } = await import('fs/promises')
   const base = basename(filePath)
   const type = typeFromName(base)
   const st = await stat(filePath)
+  assertAccess(access)
 
   if (isBinaryKind(type) || st.size > 0) {
     // Prefer binary path for known media / any large-ish non-text
@@ -137,6 +145,7 @@ export async function importPlainFromDisk(
         )
       }
       const buf = await readFile(filePath)
+      assertAccess(access)
       const content = buf.toString('base64')
       return importPlainToActiveBox({
         name: base,
@@ -151,6 +160,7 @@ export async function importPlainFromDisk(
 
   // Text-like
   const content = await readFile(filePath, 'utf8')
+  assertAccess(access)
   return importPlainToActiveBox({
     name: base,
     content,
@@ -168,7 +178,10 @@ export async function saveDocument(input: SaveDocumentInput): Promise<SaveDocume
   }
 
   const active = await getActiveEntry()
+  assertAccess(access)
   if (!active) throw new Error('No active Secret Box')
+  if (input.boxId !== undefined && input.boxId !== active.id) throw new Error('SESSION_CHANGED: Save belongs to a different box. Reopen the save dialog and retry.')
+  if (resolve(active.rootPath) !== resolve(access.rootPath)) throw new Error('SESSION_CHANGED: Active box and signed-in box differ. Sign in again before saving.')
 
   const type = input.type
   if (isBinaryKind(type)) {
@@ -177,6 +190,7 @@ export async function saveDocument(input: SaveDocumentInput): Promise<SaveDocume
   const name = ensureExtension(input.name, type)
   const dir = input.relativeDir ?? 'saves'
   const doc = await fsOps.createFileWithContent(dir, name, type, input.content)
+  assertAccess(access)
 
   return {
     doc,
@@ -209,17 +223,11 @@ export async function prepareDefaultBoxForSave(): Promise<{
 }
 
 export async function accessDefaultBox(keyB: string): Promise<void> {
+  const revision = getAccessRevision()
   const def = await ensureDefaultSecretBox()
+  assertAccessRevision(revision)
   await setActiveVault(def.id)
   await accessVault({ keyB })
-}
-
-function requireOpenAccess(): void {
-  if (!getAccess()) {
-    const err = new Error('NEEDS_ACCESS')
-    err.name = 'NEEDS_ACCESS'
-    throw err
-  }
 }
 
 export function suggestSaveName(type: DocType, prefix = 'export'): string {

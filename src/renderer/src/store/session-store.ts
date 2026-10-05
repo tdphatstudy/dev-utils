@@ -11,7 +11,8 @@ export const NO_HISTORY_TOOLS = new Set([
   'privatebox.keep',
   'network.ssh',
   'network.http',
-  'network.url'
+  'network.url',
+  'text.qr'
 ])
 
 export interface HistoryEntry {
@@ -29,6 +30,7 @@ interface SessionState {
   setDraft: (toolId: string, value: string) => void
   getDraft: (toolId: string) => string | undefined
   clearDraft: (toolId: string) => void
+  clearDrafts: () => void
 }
 
 const MAX_HISTORY = 40
@@ -61,6 +63,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   getDraft: (toolId) => get().drafts[toolId],
+  clearDrafts: () => set({ drafts: {} }),
 
   clearDraft: (toolId) =>
     set((s) => {

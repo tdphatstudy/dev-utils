@@ -13,6 +13,8 @@ export function SettingsPage(): JSX.Element {
   const setLaunchMode = useAppStore((s) => s.setLaunchMode)
   const history = useSessionStore((s) => s.history)
   const clearHistory = useSessionStore((s) => s.clearHistory)
+  const draftCount = useSessionStore((s) => Object.keys(s.drafts).length)
+  const clearDrafts = useSessionStore((s) => s.clearDrafts)
   const navigate = useNavigate()
 
   return (
@@ -26,7 +28,8 @@ export function SettingsPage(): JSX.Element {
             Settings
           </h1>
           <p className="mt-1 text-[13px] text-mac-label-secondary">
-            Stored locally on this device. Session history never includes security tools.
+            Preferences and recently opened tool IDs are stored locally. Tool input drafts and
+            history stay in memory for this window; security and vault tools are excluded.
           </p>
         </div>
 
@@ -34,10 +37,11 @@ export function SettingsPage(): JSX.Element {
           <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
             Appearance
           </h2>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-[13px] text-mac-label-secondary">Theme</span>
             <SegmentedControl
               value={theme}
+              label="Theme"
               onChange={(v) => setTheme(v as ThemeMode)}
               options={[
                 { value: 'dark', label: 'Dark' },
@@ -51,6 +55,7 @@ export function SettingsPage(): JSX.Element {
             <button
               type="button"
               className="mac-btn-secondary"
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             >
               {sidebarCollapsed ? 'Expand' : 'Collapse'}
@@ -72,6 +77,7 @@ export function SettingsPage(): JSX.Element {
             </div>
             <SegmentedControl
               value={launchMode}
+              label="Start at"
               onChange={(v) => setLaunchMode(v as LaunchMode)}
               options={[
                 { value: 'home', label: 'Home' },
@@ -91,12 +97,14 @@ export function SettingsPage(): JSX.Element {
               className="mac-btn-ghost !text-[11px]"
               onClick={clearHistory}
               disabled={history.length === 0}
+              aria-label="Clear session history"
             >
               Clear
             </button>
           </div>
           <p className="mb-3 text-[12px] text-mac-label-secondary">
-            In-memory only (cleared when the app quits). Security tools are never recorded.
+            {history.length} entries · cleared when this window closes or reloads. History contains
+            input snippets from eligible tools. Security, vault, SSH, HTTP, URL and QR payloads are excluded.
           </p>
           {history.length === 0 ? (
             <p className="text-[13px] text-mac-label-tertiary">No history yet</p>
@@ -123,6 +131,14 @@ export function SettingsPage(): JSX.Element {
               })}
             </ul>
           )}
+        </section>
+
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">Input drafts</h2>
+            <button type="button" className="mac-btn-ghost !text-[11px]" disabled={draftCount === 0} onClick={clearDrafts}>Clear input drafts</button>
+          </div>
+          <p className="text-[12px] text-mac-label-secondary">{draftCount} cached tool inputs in memory. Clearing removes inputs restored when returning to a tool. It does not remove saved vault files, preferences or history.</p>
         </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">

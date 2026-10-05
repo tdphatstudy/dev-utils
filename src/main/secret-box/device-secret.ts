@@ -3,9 +3,9 @@ import { existsSync } from 'fs'
 import { readFile, mkdir, writeFile } from 'fs/promises'
 import { authError } from './crypto'
 import { resolveHardwareDeviceSecret } from './machine-id'
-import { deviceSecretPath, userDataRoot } from './paths'
+import { deviceSecretPath, hardwareSecretCachePath, userDataRoot } from './paths'
 
-export type DeviceKeySource = 'hardware' | 'legacy-file'
+export type DeviceKeySource = 'hardware' | 'legacy-file' | 'hardware-cache'
 
 export interface DeviceKeyCandidate {
   source: DeviceKeySource
@@ -39,6 +39,14 @@ export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
     /* HW unavailable */
   }
 
+  try {
+    if (safeStorage?.isEncryptionAvailable?.()) {
+      const raw = await readFile(hardwareSecretCachePath())
+      const keyA = safeStorage.decryptString(raw)
+      if (keyA) out.push({ source: 'hardware-cache', keyA })
+    }
+  } catch { /* Optional cache; legacy material is kept independently. */ }
+
   const seen = new Set<string>()
   const unique: DeviceKeyCandidate[] = []
   for (const c of out) {
@@ -65,7 +73,7 @@ export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
 export async function resolveDeviceKeyAForSetup(): Promise<string> {
   try {
     const keyA = await resolveHardwareDeviceSecret()
-    void cacheDeviceSecretHint(keyA)
+    await cacheDeviceSecretHint(keyA)
     return keyA
   } catch (hwErr) {
     try {
@@ -126,7 +134,9 @@ export async function cacheDeviceSecretHint(secret: string): Promise<void> {
   try {
     if (!app?.isReady?.() || !safeStorage?.isEncryptionAvailable?.()) return
     await mkdir(userDataRoot(), { recursive: true })
-    await writeFile(deviceSecretPath(), safeStorage.encryptString(secret))
+    // Exclusive creation also preserves an older cached hardware identity.
+    // Only OS-encrypted material is written; never fall back to plaintext.
+    await writeFile(hardwareSecretCachePath(), safeStorage.encryptString(secret), { flag: 'wx', mode: 0o600 })
   } catch {
     /* best-effort */
   }

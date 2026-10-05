@@ -77,6 +77,9 @@ export interface VaultListItem {
   mode: VaultMode | null
   createdAt: string
   isDefault?: boolean
+  metadataError?: string
+  /** Validated metadata backup exists; it is not automatically restored. */
+  metadataBackupPath?: string
 }
 
 export interface VaultStatus {
@@ -86,6 +89,7 @@ export interface VaultStatus {
   rootPath: string | null
   activeId: string | null
   vaults: VaultListItem[]
+  initializationError?: string
 }
 
 export interface SetupInput {
@@ -99,6 +103,13 @@ export interface SetupInput {
 export interface AccessInput {
   keyA?: string
   keyB: string
+}
+
+export interface RecoverMetadataInput extends AccessInput { boxId: string }
+export interface RecoverMetadataResult {
+  checkedDocuments: number
+  backupPath: string
+  preservedMetadataPath?: string
 }
 
 export interface DocContent {

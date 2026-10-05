@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FolderOpen,
   FileText,
@@ -18,8 +18,10 @@ import type {
   SshHostInput,
   SshKeyInfo,
   SshListResult,
-  SshLocation
+  SshLocation,
+  SshKeyRecovery
 } from '@shared/ssh/types'
+import { sshKeyNameError } from '@shared/ssh/key-name'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -39,6 +41,9 @@ const emptyHostForm = (): SshHostInput => ({
 })
 
 export default function SshManager(): JSX.Element {
+  const desktop = !!window.devutils?.ssh
+  const loadVersion = useRef(0)
+  const publicVersion = useRef(0)
   const sshDir = useAppStore((s) => s.sshDir)
   const sshConfigPath = useAppStore((s) => s.sshConfigPath)
   const setSshDir = useAppStore((s) => s.setSshDir)
@@ -71,17 +76,29 @@ export default function SshManager(): JSX.Element {
   const [keyBits, setKeyBits] = useState<2048 | 3072 | 4096>(4096)
   const [keyComment, setKeyComment] = useState('')
   const [keyOverwrite, setKeyOverwrite] = useState(false)
+  const [recovery, setRecovery] = useState<SshKeyRecovery | null>(null)
+  const [recoveryName, setRecoveryName] = useState('')
+  const keyMutating = useRef(false)
+  const keyIssue = sshKeyNameError(keyName)
+  const recoveryIssue = sshKeyNameError(recoveryName)
 
   const [testHost, setTestHost] = useState('github.com')
   const [testPort, setTestPort] = useState(22)
   const [testResult, setTestResult] = useState<SshConnectResult | null>(null)
   const [testing, setTesting] = useState(false)
+  const hostFormIssue = !/^[A-Za-z0-9._-]{1,255}$/.test(hostForm.alias.trim())
+    ? 'Alias: use letters, digits, dot, underscore or hyphen (1–255 characters).'
+    : !Number.isInteger(hostForm.port) || (hostForm.port ?? 0) < 1 || (hostForm.port ?? 0) > 65535
+      ? 'Port: enter an integer from 1 to 65535.' : null
 
   const load = useCallback(async (): Promise<void> => {
+    if (!desktop) { setError('SSH Keys & Hosts requires the desktop app.'); return }
+    const version = ++loadVersion.current
     setBusy(true)
     setError(null)
     try {
       const r = await window.devutils.ssh.list(location)
+      if (version !== loadVersion.current) return
       setData(r)
       setSelectedHost((prev) =>
         prev ? (r.hosts.find((x) => x.alias === prev.alias) ?? null) : null
@@ -90,15 +107,23 @@ export default function SshManager(): JSX.Element {
         prev ? (r.keys.find((x) => x.path === prev.path) ?? null) : null
       )
     } catch (e) {
+      if (version !== loadVersion.current) return
       setError(e instanceof Error ? e.message : 'Failed to list SSH data')
       setData(null)
+      setSelectedHost(null); setSelectedKey(null); setPubContent(null)
+      setHostFormMode(null); setKeyFormMode(null)
+      publicVersion.current++
     } finally {
-      setBusy(false)
+      if (version === loadVersion.current) setBusy(false)
     }
-  }, [location])
+  }, [location, desktop])
 
   useEffect(() => {
+    setData(null); setSelectedHost(null); setSelectedKey(null); setPubContent(null)
+    setHostFormMode(null); setKeyFormMode(null); setTestResult(null)
+    setRecovery(null)
     void load()
+    return () => { loadVersion.current++; publicVersion.current++ }
   }, [load])
 
   useEffect(() => {
@@ -133,6 +158,7 @@ export default function SshManager(): JSX.Element {
   }
 
   const showPub = async (key: SshKeyInfo): Promise<void> => {
+    const version = ++publicVersion.current
     setSelectedKey(key)
     setSelectedHost(null)
     setPubContent(null)
@@ -141,24 +167,34 @@ export default function SshManager(): JSX.Element {
     if (!path) return
     try {
       const text = await window.devutils.ssh.readPublic(path, location)
+      if (version !== publicVersion.current) return
       setPubContent(text.trim())
     } catch (e) {
-      setPubContent(e instanceof Error ? e.message : 'Could not read public key')
+      if (version === publicVersion.current) setError(e instanceof Error ? e.message : 'Could not read public key')
     }
   }
 
   const pickSshDir = async (): Promise<void> => {
-    const p = await window.devutils.ssh.pickFolder()
-    if (!p) return
-    setSshDir(p)
-    setStatusMsg(`SSH directory → ${p}`)
+    try {
+      const p = await window.devutils.ssh.pickFolder()
+      if (!p) return
+      setSshDir(p)
+      setStatusMsg(`SSH directory → ${p}`)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not select SSH directory') }
   }
 
   const pickConfig = async (): Promise<void> => {
-    const p = await window.devutils.ssh.pickConfigFile()
-    if (!p) return
-    setSshConfigPath(p)
-    setStatusMsg(`SSH config → ${p}`)
+    try {
+      const p = await window.devutils.ssh.pickConfigFile()
+      if (!p) return
+      setSshConfigPath(p)
+      setStatusMsg(`SSH config → ${p}`)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not select SSH config') }
+  }
+
+  const openFolder = async (target: SshLocation): Promise<void> => {
+    try { await window.devutils.ssh.openFolder(target) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not open SSH directory') }
   }
 
   const resetLocation = (): void => {
@@ -199,7 +235,7 @@ export default function SshManager(): JSX.Element {
       )
       setHostFormMode(null)
       setSelectedHost(saved)
-      setStatusMsg(`Host “${saved.alias}” saved to ~/.ssh/config`)
+      setStatusMsg(`Host “${saved.alias}” saved to ${saved.sourceConfig ?? data?.configPath ?? 'SSH config'}`)
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save host failed')
@@ -209,7 +245,7 @@ export default function SshManager(): JSX.Element {
   }
 
   const removeHost = async (h: SshHostEntry): Promise<void> => {
-    if (!window.confirm(`Delete host “${h.alias}” from ~/.ssh/config?`)) return
+    if (!window.confirm(`Delete host “${h.alias}” from ${data?.configPath ?? 'SSH config'}? A .bak copy is kept.`)) return
     setBusy(true)
     setError(null)
     try {
@@ -226,6 +262,8 @@ export default function SshManager(): JSX.Element {
   }
 
   const saveKey = async (): Promise<void> => {
+    if (keyMutating.current || keyIssue) return
+    keyMutating.current = true
     setBusy(true)
     setError(null)
     setStatusMsg(null)
@@ -239,7 +277,8 @@ export default function SshManager(): JSX.Element {
           location
         )
         setKeyFormMode(null)
-        setStatusMsg(`Renamed → ${r.privatePath}`)
+        setStatusMsg(`Renamed → ${selectedKey.isPublic ? r.publicPath : r.privatePath}. Update any IdentityFile references; config was preserved.`)
+        setPubContent(null)
         await load()
         return
       }
@@ -255,39 +294,61 @@ export default function SshManager(): JSX.Element {
       )
       setKeyFormMode(null)
       setStatusMsg(`Created ${r.privatePath}`)
-      setPubContent(r.publicKeyOpenSsh)
+      setSelectedKey({ name: keyName.trim().replace(/\.pub$/i, ''), path: r.privatePath, isPublic: false,
+        publicPath: r.publicPath, fingerprintSha256: r.fingerprintSha256, external: false })
       await load()
+      setPubContent(r.publicKeyOpenSsh)
+      if (r.recovery) { setRecovery(r.recovery); setRecoveryName(`${r.recovery.name}_recovered`) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Key operation failed')
     } finally {
+      keyMutating.current = false
       setBusy(false)
     }
   }
 
   const removeKey = async (k: SshKeyInfo): Promise<void> => {
+    if (keyMutating.current || k.external || k.readOnlyReason) return
     const label = k.name.replace(/\.pub$/i, '')
     if (
       !window.confirm(
-        `Delete key “${label}” (private + .pub if present)?\nThis cannot be undone.`
+        `Remove key “${label}” (private + .pub if present)?\nA private recovery copy will be kept in your SSH directory. IdentityFile references are not changed.`
       )
     ) {
       return
     }
+    keyMutating.current = true
     setBusy(true)
     setError(null)
     try {
-      await window.devutils.ssh.deleteKey(k.path, location)
+      const result = await window.devutils.ssh.deleteKey(k.path, location)
+      setRecovery(result.recovery); setRecoveryName(result.error ? `${result.recovery.name}_recovered` : result.recovery.name)
       if (selectedKey?.path === k.path) {
         setSelectedKey(null)
         setPubContent(null)
       }
-      setStatusMsg(`Deleted “${label}”`)
+      setStatusMsg(`Removed “${label}” · recovery copy preserved. Update any IdentityFile references.`)
       await load()
+      if (result.error) { setError(result.error); setStatusMsg(null) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete key failed')
     } finally {
+      keyMutating.current = false
       setBusy(false)
     }
+  }
+
+  const restoreKey = async (): Promise<void> => {
+    if (!recovery || keyMutating.current || sshKeyNameError(recoveryName)) return
+    keyMutating.current = true; setBusy(true); setError(null)
+    try {
+      const result = await window.devutils.ssh.renameKey({ path: recovery.keyPath, newName: recoveryName }, location)
+      const restoredPath = recovery.keyPath.endsWith('.pub') ? result.publicPath : result.privatePath
+      setRecovery(null)
+      await load()
+      setStatusMsg(`Recovered → ${restoredPath}. Config references were preserved; update them if needed.`)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Recovery failed. The backup remains available.') }
+    finally { keyMutating.current = false; setBusy(false) }
   }
 
   return (
@@ -306,7 +367,7 @@ export default function SshManager(): JSX.Element {
           ]}
         />
         {tab === 'hosts' ? (
-          <button type="button" className="mac-btn-primary" onClick={openCreateHost}>
+          <button type="button" className="mac-btn-primary" disabled={!desktop || busy} onClick={openCreateHost}>
             <Plus className="h-3.5 w-3.5" />
             Add host
           </button>
@@ -314,6 +375,7 @@ export default function SshManager(): JSX.Element {
           <button
             type="button"
             className="mac-btn-primary"
+            disabled={!desktop || busy}
             onClick={() => {
               setKeyFormMode('create')
               setKeyName('id_ed25519_devutils')
@@ -327,15 +389,16 @@ export default function SshManager(): JSX.Element {
             New key
           </button>
         )}
-        <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => void load()}>
+        <button type="button" className="mac-btn-secondary" disabled={!desktop || busy} onClick={() => void load()}>
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
           Refresh
         </button>
         <button
           type="button"
           className="mac-btn-ghost"
-          onClick={() => void window.devutils.ssh.openFolder(location)}
+          onClick={() => void openFolder(location)}
           title="Open SSH directory"
+          disabled={!desktop || busy}
         >
           <FolderOpen className="h-3.5 w-3.5" />
           Open folder
@@ -345,6 +408,7 @@ export default function SshManager(): JSX.Element {
           className="mac-btn-secondary"
           onClick={() => void pickSshDir()}
           title="Use a custom directory for keys (not only ~/.ssh)"
+          disabled={!desktop || busy}
         >
           <FolderOpen className="h-3.5 w-3.5" />
           Set SSH dir…
@@ -354,6 +418,7 @@ export default function SshManager(): JSX.Element {
           className="mac-btn-secondary"
           onClick={() => void pickConfig()}
           title="Point at a specific config file (ssh -F style)"
+          disabled={!desktop || busy}
         >
           <FileText className="h-3.5 w-3.5" />
           Set config…
@@ -363,6 +428,7 @@ export default function SshManager(): JSX.Element {
             type="button"
             className="mac-btn-ghost"
             onClick={resetLocation}
+            disabled={busy}
             title="Reset to $HOME/.ssh"
           >
             <RotateCcw className="h-3.5 w-3.5" />
@@ -390,18 +456,31 @@ export default function SshManager(): JSX.Element {
         )}
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
+      {recovery && <div className="shrink-0 space-y-2 border-b border-mac-separator bg-mac-control/30 px-4 py-2 text-[12px]">
+        <p>Recovery copy kept locally: <span className="break-all font-mono">{recovery.directory}</span></p>
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyButton text={recovery.directory} label="Copy backup path" />
+          <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => void openFolder({ sshDir: recovery.directory })}>Open backup folder</button>
+          <label className="flex items-center gap-2">Restore as<input className="mac-input !w-40 font-mono" value={recoveryName} disabled={busy} aria-invalid={!!recoveryIssue} aria-describedby={recoveryIssue ? 'ssh-recovery-issue' : undefined} onChange={(e) => setRecoveryName(e.target.value)} /></label>
+          <button type="button" className="mac-btn-primary" disabled={busy || !!recoveryIssue} onClick={() => void restoreKey()}>Restore key</button>
+        </div>
+        {recoveryIssue && <p id="ssh-recovery-issue" className="text-mac-error">{recoveryIssue}</p>}
+        <p className="text-[11px] text-mac-label-secondary">Restore never overwrites an existing name. Backup files survive closing the tool; use the folder path for manual recovery later.</p>
+      </div>}
+
+      <p className="border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">Values shown belong to the selected block. Includes, Match rules and inherited defaults are not resolved. Edits preserve other directives and block order; new hosts precede conditional defaults.</p>
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto auto-rows-[minmax(260px,1fr)] md:grid-cols-2">
         {/* List */}
         <div className="min-h-0 overflow-auto border-r border-mac-separator">
           {tab === 'hosts' && (
             <ul className="p-2">
               {(data?.hosts.length ?? 0) === 0 && !hostFormMode && (
                 <li className="px-3 py-8 text-center text-[13px] text-mac-label-tertiary">
-                  No Host entries — click Add host
+                  {busy ? 'Reading SSH config…' : error ? 'SSH inventory unavailable. Resolve the error, then refresh.' : 'No Host entries — click Add host'}
                 </li>
               )}
-              {data?.hosts.map((h) => (
-                <li key={h.alias + h.patterns.join(',')}>
+              {data?.hosts.map((h, index) => (
+                <li key={h.alias + h.patterns.join(',') + index}>
                   <button
                     type="button"
                     className={cn(
@@ -434,7 +513,7 @@ export default function SshManager(): JSX.Element {
             <ul className="p-2">
               {(data?.keys.length ?? 0) === 0 && !keyFormMode && (
                 <li className="px-3 py-8 text-center text-[13px] text-mac-label-tertiary">
-                  No keys — click New key
+                  {busy ? 'Reading SSH keys…' : error ? 'SSH inventory unavailable. Resolve the error, then refresh.' : 'No keys — click New key'}
                 </li>
               )}
               {data?.keys.map((k) => (
@@ -518,7 +597,7 @@ export default function SshManager(): JSX.Element {
                     className="mac-input mt-1 font-mono"
                     value={hostForm.port ?? 22}
                     onChange={(e) =>
-                      setHostForm((f) => ({ ...f, port: Number(e.target.value) || 22 }))
+                      setHostForm((f) => ({ ...f, port: Number(e.target.value) }))
                     }
                   />
                 </label>
@@ -537,7 +616,7 @@ export default function SshManager(): JSX.Element {
                 <button
                   type="button"
                   className="mac-btn-primary"
-                  disabled={busy || !hostForm.alias.trim()}
+                  disabled={busy || !desktop || !!hostFormIssue}
                   onClick={() => void saveHost()}
                 >
                   Save to config
@@ -550,6 +629,7 @@ export default function SshManager(): JSX.Element {
                   Cancel
                 </button>
               </div>
+              {hostFormIssue && <p role="status" className="text-[12px] text-mac-label-secondary">{hostFormIssue}</p>}
             </div>
           )}
 
@@ -617,7 +697,7 @@ export default function SshManager(): JSX.Element {
                       onChange={(e) => setKeyOverwrite(e.target.checked)}
                       className="accent-mac-accent"
                     />
-                    Overwrite if exists
+                    Replace existing pair (keeps a recovery copy)
                   </label>
                 </>
               )}
@@ -625,7 +705,7 @@ export default function SshManager(): JSX.Element {
                 <button
                   type="button"
                   className="mac-btn-primary"
-                  disabled={busy || !keyName.trim()}
+                  disabled={busy || !desktop || !!keyIssue}
                   onClick={() => void saveKey()}
                 >
                   {keyFormMode === 'create' ? 'Generate & write' : 'Rename'}
@@ -638,6 +718,8 @@ export default function SshManager(): JSX.Element {
                   Cancel
                 </button>
               </div>
+              {keyIssue && <p role="status" className="text-[12px] text-mac-label-secondary">{keyIssue}</p>}
+              <p className="text-[11px] text-mac-label-secondary">Private keys use OpenSSH format and have no passphrase. Keep the key and recovery copies private. Renaming does not update config or external scripts.</p>
             </div>
           )}
 
@@ -650,6 +732,8 @@ export default function SshManager(): JSX.Element {
                     type="button"
                     className="mac-btn-secondary !py-1"
                     onClick={() => openEditHost(selectedHost)}
+                    disabled={busy || !!selectedHost.readOnlyReason}
+                    title={selectedHost.readOnlyReason}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
@@ -658,12 +742,15 @@ export default function SshManager(): JSX.Element {
                     type="button"
                     className="mac-btn-ghost !py-1 text-mac-danger"
                     onClick={() => void removeHost(selectedHost)}
+                    disabled={busy || !!selectedHost.readOnlyReason}
+                    title={selectedHost.readOnlyReason}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </button>
                 </div>
               </div>
+              {selectedHost.readOnlyReason && <p role="status" className="text-[12px] text-mac-warning">{selectedHost.readOnlyReason}</p>}
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-[12px]">
                 <dt className="text-mac-label-tertiary">HostName</dt>
                 <dd className="font-mono">{selectedHost.hostName || '—'}</dd>
@@ -691,6 +778,7 @@ export default function SshManager(): JSX.Element {
                       setKeyFormMode('rename')
                       setKeyName(selectedKey.name.replace(/\.pub$/i, ''))
                     }}
+                    disabled={busy || !!selectedKey.external || !!selectedKey.readOnlyReason}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Rename
@@ -699,12 +787,14 @@ export default function SshManager(): JSX.Element {
                     type="button"
                     className="mac-btn-ghost !py-1 text-mac-danger"
                     onClick={() => void removeKey(selectedKey)}
+                    disabled={busy || !!selectedKey.external || !!selectedKey.readOnlyReason}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </button>
                 </div>
               </div>
+              {selectedKey.readOnlyReason && <p role="status" className="text-[12px] text-mac-warning">{selectedKey.readOnlyReason}</p>}
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-[12px]">
                 <dt className="text-mac-label-tertiary">Type</dt>
                 <dd className="font-mono">{selectedKey.keyType || '—'}</dd>
@@ -753,6 +843,7 @@ export default function SshManager(): JSX.Element {
               <input
                 className="mac-input min-w-0 flex-1 font-mono text-[13px]"
                 value={testHost}
+                aria-label="TCP hostname or IP"
                 onChange={(e) => setTestHost(e.target.value)}
                 placeholder="host"
                 spellCheck={false}
@@ -761,12 +852,15 @@ export default function SshManager(): JSX.Element {
                 type="number"
                 className="mac-input !w-20 font-mono text-[13px]"
                 value={testPort}
-                onChange={(e) => setTestPort(Number(e.target.value) || 22)}
+                aria-label="TCP port"
+                min={1}
+                max={65535}
+                onChange={(e) => setTestPort(Number(e.target.value))}
               />
               <button
                 type="button"
                 className="mac-btn-primary"
-                disabled={testing || !testHost.trim()}
+                disabled={!desktop || testing || !testHost.trim() || !Number.isInteger(testPort) || testPort < 1 || testPort > 65535}
                 onClick={() => void runTest()}
               >
                 {testing ? (
@@ -777,7 +871,8 @@ export default function SshManager(): JSX.Element {
                 {testing ? 'Testing…' : 'Test'}
               </button>
             </div>
-            {testResult && (
+            <p className="text-[11px] text-mac-label-tertiary">Tests TCP reachability only; does not authenticate SSH or verify host keys.</p>
+            {testResult && testResult.host === testHost.trim() && testResult.port === testPort && (
               <p
                 className={cn(
                   'text-[12px]',
@@ -793,7 +888,7 @@ export default function SshManager(): JSX.Element {
         </div>
       </div>
 
-      <footer className="border-t border-mac-separator px-4 py-2">
+      <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : statusMsg ? 'success' : 'neutral'}>
           {error ??
             statusMsg ??

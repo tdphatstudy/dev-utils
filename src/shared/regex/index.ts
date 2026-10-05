@@ -52,7 +52,7 @@ export interface RegexReplaceResult {
 
 export interface RegexSplitResult {
   ok: true
-  parts: string[]
+  parts: (string | undefined)[]
 }
 
 export interface RegexToken {
@@ -189,16 +189,22 @@ export function normalizeFlags(flags: string): string {
 }
 
 export function buildRegExp(pattern: string, flags: string): { ok: true; re: RegExp } | RegexTestErr {
-  if (pattern === '') return { ok: false, error: 'Pattern is empty' }
-  const f = normalizeFlags(flags)
+  const seen = new Set<string>()
+  for (let i = 0; i < flags.length; i++) {
+    const flag = flags[i]!
+    if (!REGEX_FLAGS.some((entry) => entry.flag === flag)) return { ok: false, error: `Unknown flag “${flag}” at column ${i + 1}. Use g i m s u v y d.` }
+    if (seen.has(flag)) return { ok: false, error: `Duplicate flag “${flag}” at column ${i + 1}.` }
+    seen.add(flag)
+  }
+  if (seen.has('u') && seen.has('v')) return { ok: false, error: 'Flags u and v cannot be used together. Choose one Unicode mode.' }
   try {
-    return { ok: true, re: new RegExp(pattern, f) }
+    return { ok: true, re: new RegExp(pattern, flags) }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Invalid regular expression' }
   }
 }
 
-export function testRegex(pattern: string, flags: string, text: string): RegexTestResult {
+export function testRegex(pattern: string, flags: string, text: string, maxMatches = 50_000): RegexTestResult {
   const built = buildRegExp(pattern, flags)
   if (!built.ok) return built
   const re = built.re
@@ -206,19 +212,21 @@ export function testRegex(pattern: string, flags: string, text: string): RegexTe
   const hasD = re.hasIndices
   const matches: RegexMatch[] = []
 
-  if (hasG || re.sticky) {
+  if (hasG) {
     re.lastIndex = 0
     let m: RegExpExecArray | null
     let guard = 0
     while ((m = re.exec(text)) !== null) {
       guard++
-      if (guard > 50_000) {
-        return { ok: false, error: 'Too many matches (>50000) — check for zero-width loops' }
+      if (guard > maxMatches) {
+        return { ok: false, error: `More than ${maxMatches} matches. Narrow the pattern or reduce the test string.` }
       }
       matches.push(matchFromExec(m, hasD))
       if (m[0] === '') {
         // Avoid infinite loop on zero-length matches
-        re.lastIndex = m.index + 1
+        const unicode = re.unicode || re.flags.includes('v')
+        const code = text.codePointAt(m.index)
+        re.lastIndex = m.index + (unicode && code !== undefined && code > 0xffff ? 2 : 1)
       }
     }
   } else {
@@ -237,7 +245,7 @@ export function testRegex(pattern: string, flags: string, text: string): RegexTe
 
 function matchFromExec(m: RegExpExecArray, hasD: boolean): RegexMatch {
   const groups = m.slice(1) as (string | undefined)[]
-  const namedGroups = { ...(m.groups ?? {}) }
+  const namedGroups: RegexMatch['namedGroups'] = Object.assign(Object.create(null), m.groups ?? {})
   const index = m.index
   const end = index + m[0].length
   const row: RegexMatch = {
@@ -252,9 +260,10 @@ function matchFromExec(m: RegExpExecArray, hasD: boolean): RegexMatch {
       pair ? { start: pair[0], end: pair[1] } : { start: -1, end: -1 }
     )
     if (m.indices.groups) {
-      row.namedIndices = {}
+      const namedIndices: NonNullable<RegexMatch['namedIndices']> = Object.create(null)
+      row.namedIndices = namedIndices
       for (const [k, v] of Object.entries(m.indices.groups)) {
-        row.namedIndices[k] = v ? { start: v[0], end: v[1] } : undefined
+        namedIndices[k] = v ? { start: v[0], end: v[1] } : undefined
       }
     }
   }
@@ -269,12 +278,54 @@ export function replaceRegex(
 ): RegexReplaceResult | RegexTestErr {
   const built = buildRegExp(pattern, flags)
   if (!built.ok) return built
-  const re = built.re
   // Count matches first
-  const tested = testRegex(pattern, flags.includes('g') ? flags : flags + 'g', text)
+  const tested = testRegex(pattern, flags, text)
   if (!tested.ok) return tested
-  const result = text.replace(re, replacement)
-  return { ok: true, result, count: tested.matchCount }
+  // Expand substitutions in bounded pieces instead of allocating an amplified result.
+  const chunks: string[] = []
+  let length = 0
+  const append = (piece: string): void => {
+    length += piece.length
+    if (length > 5_000_000) throw new Error('Replacement exceeds 5,000,000 UTF-16 units. Reduce the input or replacement.')
+    chunks.push(piece)
+  }
+  let cursor = 0
+  try {
+    for (const match of tested.matches) {
+      append(text.slice(cursor, match.index))
+      let literalStart = 0
+      for (let i = 0; i < replacement.length; i++) {
+        if (replacement[i] !== '$') continue
+        const token = replacement[i + 1]
+        let value: string | undefined
+        let consumed = 2
+        if (token === '$') value = '$'
+        else if (token === '&') value = match.match
+        else if (token === '`') value = text.slice(0, match.index)
+        else if (token === "'") value = text.slice(match.end)
+        else if (token && /\d/.test(token)) {
+          let number = Number(token)
+          const next = replacement[i + 2]
+          if (next && /\d/.test(next) && Number(token + next) > 0 && Number(token + next) <= match.groups.length) {
+            number = Number(token + next); consumed = 3
+          }
+          if (number > 0 && number <= match.groups.length) value = match.groups[number - 1] ?? ''
+        } else if (token === '<' && match.groups.length && Object.keys(match.namedGroups).length) {
+          const end = replacement.indexOf('>', i + 2)
+          if (end !== -1) { value = match.namedGroups[replacement.slice(i + 2, end)] ?? ''; consumed = end - i + 1 }
+        }
+        if (value === undefined) continue
+        append(replacement.slice(literalStart, i))
+        append(value)
+        i += consumed - 1
+        literalStart = i + 1
+      }
+      append(replacement.slice(literalStart))
+      cursor = match.end
+    }
+    append(text.slice(cursor))
+    return { ok: true, result: chunks.join(''), count: tested.matchCount }
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Replacement failed' } }
 }
 
 export function splitRegex(
@@ -286,7 +337,7 @@ export function splitRegex(
   const built = buildRegExp(pattern, flags)
   if (!built.ok) return built
   const parts =
-    limit != null && limit > 0 ? text.split(built.re, limit) : text.split(built.re)
+    limit != null ? text.split(built.re, limit) : text.split(built.re)
   return { ok: true, parts }
 }
 
@@ -360,7 +411,7 @@ export function explainRegex(pattern: string): RegexToken[] {
         raw += '?<!'
         j += 3
       } else if (pattern.startsWith('?<', j)) {
-        const m = /^\?<([^>]+)>/.exec(pattern.slice(j - 1))
+        const m = /^\(\?<([^>]+)>/.exec(pattern.slice(i))
         if (m) {
           kindLabel = `Named group "${m[1]}"`
           raw = m[0]

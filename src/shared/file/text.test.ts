@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { convertLineEndings, detectLineEnding, countLines, lineEndingCounts } from './text'
+import { convertLineEndings, decodeUtf8Text, detectLineEnding, countLines, lineEndingCounts } from './text'
 
 describe('line endings', () => {
+  it('preserves UTF-8 BOM and Unicode bytes through a file line-ending conversion', () => {
+    const bytes = new TextEncoder().encode('\uFEFFTiếng Việt\r\nemoji 🙂\nlast').buffer
+    const input = decodeUtf8Text(bytes, true)
+    expect(input.charCodeAt(0)).toBe(0xfeff)
+    const output = new TextEncoder().encode(convertLineEndings(input, 'crlf'))
+    expect(output).toEqual(new TextEncoder().encode('\uFEFFTiếng Việt\r\nemoji 🙂\r\nlast'))
+    expect(decodeUtf8Text(bytes)).toBe('Tiếng Việt\r\nemoji 🙂\nlast')
+  })
+  it('refuses malformed UTF-8 and UTF-16 rather than replacing undecodable content', () => {
+    for (const bytes of [[0xc3, 0x28], [0xff, 0xfe, 0x61, 0], [0xe2, 0x82]]) {
+      expect(() => decodeUtf8Text(new Uint8Array(bytes).buffer, true)).toThrow()
+    }
+  })
   it('counts mixed endings without counting the LF part of CRLF twice', () => {
     expect(lineEndingCounts('a\r\nb\nc\rd\r\n')).toEqual({ crlf: 2, lf: 1, cr: 1 })
     expect(countLines('a\r\nb\nc\rd\r\n')).toBe(5)

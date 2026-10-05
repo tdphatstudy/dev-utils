@@ -74,6 +74,10 @@ const DEV_PROCESS = [
   /^code - /i
 ]
 
+export function isCriticalProcess(processName: string): boolean {
+  return CRITICAL_PROCESS.some((pattern) => pattern.test(processName.trim()))
+}
+
 export function classifyPort(input: {
   port: number
   processName: string
