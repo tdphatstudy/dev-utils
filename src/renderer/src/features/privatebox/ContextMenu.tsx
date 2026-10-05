@@ -64,7 +64,7 @@ export function ContextMenu({ x, y, items, onSelect, onClose }: Props): JSX.Elem
                 ? 'cursor-not-allowed text-mac-label-tertiary'
                 : item.danger
                   ? 'text-mac-danger hover:bg-mac-danger/10'
-                  : 'text-mac-label hover:bg-mac-accent hover:text-white'
+                  : 'text-mac-label hover:bg-mac-accent-fill hover:text-white'
             )}
             onClick={() => {
               if (item.disabled) return

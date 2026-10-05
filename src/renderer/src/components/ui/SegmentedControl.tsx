@@ -22,8 +22,9 @@ export function SegmentedControl<T extends string>({
   label = 'Options'
 }: Props<T>): JSX.Element {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
+  const selectedIndex = options.findIndex((option) => option.value === value)
   return (
-    <div className={cn('mac-segment', className)} role="group" aria-label={label}>
+    <div className={cn('mac-segment max-w-full flex-wrap', className)} role="group" aria-label={label}>
       {options.map((opt, index) => (
         <button
           key={opt.value}
@@ -31,8 +32,8 @@ export function SegmentedControl<T extends string>({
           type="button"
           data-active={value === opt.value}
           aria-pressed={value === opt.value}
-          tabIndex={value === opt.value || !options.some((option) => option.value === value) && index === 0 ? 0 : -1}
-          className="mac-segment-item"
+          tabIndex={index === (selectedIndex < 0 ? 0 : selectedIndex) ? 0 : -1}
+          className="mac-segment-item min-w-0 [overflow-wrap:anywhere]"
           onClick={() => onChange(opt.value)}
           onKeyDown={(event) => {
             const next = event.key === 'ArrowRight' ? (index + 1) % options.length

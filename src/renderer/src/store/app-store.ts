@@ -1,12 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences } from './app-preferences'
 
 export type ThemeMode = 'dark' | 'light' | 'system'
 
 /** Where to land when the app starts at `/`. */
 export type LaunchMode = 'home' | 'last'
-
-const MAX_RECENT = 10
 
 interface AppState {
   theme: ThemeMode
@@ -15,6 +14,9 @@ interface AppState {
   lastToolId: string | null
   /** Recently used tools (Home shortcuts). Most recent first. */
   recentToolIds: string[]
+  /** Pinned tool IDs only, never inputs or document content. */
+  favoriteToolIds: string[]
+  toggleFavoriteTool: (id: string) => void
   /**
    * On launch at Home route:
    * - `home` — show dashboard (recommended default)
@@ -46,6 +48,7 @@ export const useAppStore = create<AppState>()(
       sidebarCollapsed: false,
       lastToolId: null,
       recentToolIds: [],
+      favoriteToolIds: [],
       launchMode: 'home',
       sshDir: null,
       sshConfigPath: null,
@@ -54,12 +57,23 @@ export const useAppStore = create<AppState>()(
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setLastToolId: (lastToolId) =>
         set((s) => {
+          if (!isPreferenceToolId(lastToolId)) return s
           const recentToolIds = [
             lastToolId,
             ...s.recentToolIds.filter((id) => id !== lastToolId)
-          ].slice(0, MAX_RECENT)
+          ].slice(0, MAX_RECENT_TOOLS)
           return { lastToolId, recentToolIds }
         }),
+      toggleFavoriteTool: (id) => {
+        if (!isPreferenceToolId(id)) return
+        set((s) => ({
+          favoriteToolIds: s.favoriteToolIds.includes(id)
+            ? s.favoriteToolIds.filter((toolId) => toolId !== id)
+            : s.favoriteToolIds.length < MAX_FAVORITE_TOOLS
+              ? [...s.favoriteToolIds, id]
+              : s.favoriteToolIds
+        }))
+      },
       setLaunchMode: (launchMode) => set({ launchMode }),
       setSshDir: (sshDir) => set({ sshDir }),
       setSshConfigPath: (sshConfigPath) => set({ sshConfigPath }),
@@ -67,11 +81,13 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'devutils-app',
+      merge: (persisted, current) => ({ ...current, ...readAppPreferences(persisted) }),
       partialize: (s) => ({
         theme: s.theme,
         sidebarCollapsed: s.sidebarCollapsed,
         lastToolId: s.lastToolId,
         recentToolIds: s.recentToolIds,
+        favoriteToolIds: s.favoriteToolIds,
         launchMode: s.launchMode,
         sshDir: s.sshDir,
         sshConfigPath: s.sshConfigPath

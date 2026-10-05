@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { json } from '@codemirror/lang-json'
 import { yaml } from '@codemirror/lang-yaml'
@@ -57,7 +57,8 @@ const baseTheme = EditorView.theme({
   },
   '.cm-scroller': {
     overflow: 'auto',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    lineHeight: '1.6'
   },
   '.cm-content': {
     padding: '12px 0'
@@ -124,6 +125,7 @@ export function CodeEditor({
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)
   const viewRef = useRef<EditorView | null>(null)
+  const diagnosticId = useId()
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const update = (event: MediaQueryListEvent): void => setSystemDark(event.matches)
@@ -157,7 +159,12 @@ export function CodeEditor({
       ]
       return [baseTheme, EditorView.lineWrapping, languageExtension(language, sqlDialect),
         EditorView.decorations.of(Decoration.set(decorations, true)),
-        EditorView.contentAttributes.of({ 'aria-label': label ?? `${readOnly ? 'Output' : 'Input'} ${language} editor` }),
+        EditorView.contentAttributes.of({
+          'aria-label': label ?? `${readOnly ? 'Output' : 'Input'} ${language} editor`,
+          ...(readOnly ? { 'aria-readonly': 'true' } : {}),
+          ...(diagnostic ? { 'aria-invalid': 'true', 'aria-describedby': diagnosticId } : {}),
+          ...(onRun ? { 'aria-keyshortcuts': 'Control+Enter Meta+Enter' } : {})
+        }),
         Prec.highest(EditorView.domEventHandlers({ keydown(event) {
           if (onRun && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
             event.preventDefault()
@@ -167,7 +174,7 @@ export function CodeEditor({
           return false
         } }))].flat()
     },
-    [language, sqlDialect, errorOffset, value, diagnostic?.error, readOnly, label, onRun]
+    [language, sqlDialect, errorOffset, value, diagnostic, diagnosticId, readOnly, label, onRun]
   )
 
   const jumpToError = (): void => {
@@ -186,7 +193,14 @@ export function CodeEditor({
         className
       )}
     >
-      {label && <div className="shrink-0 border-b border-mac-separator px-3 py-2 text-[11px] font-semibold text-mac-label-secondary">{label}</div>}
+      {label && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-mac-separator px-3 py-2">
+          <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-mac-label">{label}</span>
+          {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title="Select and copy text from this output">Read only</span>}
+          {onRun && <kbd className="text-[11px] text-mac-label-secondary" title="Run from this editor with Ctrl or Command + Enter" aria-hidden>Ctrl/⌘ ↵</kbd>}
+          <span className="text-[11px] tabular-nums text-mac-label-secondary" aria-hidden>{value.length.toLocaleString()} chars</span>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-hidden">
       <CodeMirror
         value={value}
@@ -207,14 +221,14 @@ export function CodeEditor({
       />
       </div>
       {diagnostic && (
-        <div role="status" className="max-h-36 shrink-0 overflow-auto border-t border-mac-danger/20 bg-mac-danger/5 px-3 py-2">
-          <div className="flex items-start gap-2 text-[12px] text-mac-danger">
+        <div id={diagnosticId} role="status" aria-live="polite" aria-atomic="true" className="max-h-36 shrink-0 overflow-auto border-t border-mac-danger/20 bg-mac-danger/5 px-3 py-2">
+          <div className="flex flex-wrap items-start gap-2 text-[12px] leading-relaxed text-mac-danger">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <div className="min-w-0 flex-1 break-words">
+            <div className="min-w-[120px] flex-1 break-words [overflow-wrap:anywhere]">
               <p className="font-medium">{diagnostic.line ? `Line ${diagnostic.line}${diagnostic.column ? `, column ${diagnostic.column}` : ''}: ` : ''}{diagnostic.error}</p>
               {diagnostic.hint && <p className="mt-1 text-mac-label-secondary">{diagnostic.hint}</p>}
             </div>
-            {errorOffset != null && <button type="button" onClick={jumpToError} className="mac-btn-ghost shrink-0 !px-2 !text-[11px]" title="Move cursor to the first error"><ArrowDownToLine className="h-3.5 w-3.5" />Go to error</button>}
+            {errorOffset != null && <button type="button" onClick={jumpToError} className="mac-btn-ghost ml-auto shrink-0 !px-2 !text-[12px]" title="Move cursor to the first error"><ArrowDownToLine className="h-3.5 w-3.5" aria-hidden />Go to error</button>}
           </div>
         </div>
       )}

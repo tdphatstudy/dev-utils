@@ -105,7 +105,7 @@ export function SetupWizard({
               key={label}
               className={cn(
                 'rounded-full px-2.5 py-1',
-                step === i ? 'bg-mac-accent text-white' : 'bg-mac-control'
+                step === i ? 'bg-mac-accent-fill text-white' : 'bg-mac-control'
               )}
             >
               {i + 1}. {label}

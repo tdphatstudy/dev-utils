@@ -3,7 +3,7 @@ import { cn } from '@renderer/lib/utils'
 /**
  * Responsive dual-pane layout for tools:
  * - narrow: stacked single column with usable min heights
- * - md+: side-by-side 2 columns
+ * - wide workspace: side-by-side 2 columns (independent of sidebar width)
  */
 export function SplitPane({
   children,
@@ -22,9 +22,9 @@ export function SplitPane({
   return (
     <div
       className={cn(
-        'grid min-h-0 flex-1 auto-rows-[minmax(160px,1fr)] grid-cols-1 gap-3 overflow-auto md:auto-rows-[minmax(0,1fr)] md:grid-cols-2',
+        'mac-split-pane grid min-h-0 flex-1 auto-rows-[minmax(160px,1fr)] grid-cols-1 gap-3 overflow-auto',
         !flush && 'p-3',
-        '[&>*]:min-h-[160px] [&>*]:min-w-0 md:[&>*]:min-h-0',
+        '[&>*]:min-h-[160px] [&>*]:min-w-0',
         className
       )}
       onDragOver={onDragOver}

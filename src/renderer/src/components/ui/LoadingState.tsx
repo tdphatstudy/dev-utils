@@ -10,11 +10,13 @@ export function LoadingState({
   return (
     <div
       className={cn(
-        'flex h-full min-h-[120px] flex-col items-center justify-center gap-3 text-mac-label-tertiary',
+        'flex h-full min-h-[120px] flex-col items-center justify-center gap-3 px-4 text-center text-mac-label-secondary',
         className
       )}
       role="status"
       aria-live="polite"
+      aria-atomic="true"
+      aria-busy="true"
     >
       <div className="mac-spinner" aria-hidden />
       <span className="text-[13px] tracking-tight">{label}</span>

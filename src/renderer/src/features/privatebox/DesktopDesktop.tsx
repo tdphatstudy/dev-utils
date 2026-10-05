@@ -662,7 +662,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                   <span
                     className={cn(
                       'line-clamp-2 w-full break-words rounded px-1 text-[11px] font-medium leading-snug',
-                      isSel ? 'bg-mac-accent text-white' : 'text-mac-label'
+                      isSel ? 'bg-mac-accent-fill text-white' : 'text-mac-label'
                     )}
                   >
                     {entry.name}

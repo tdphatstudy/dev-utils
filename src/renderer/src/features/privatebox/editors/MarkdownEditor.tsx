@@ -288,7 +288,7 @@ export function MarkdownEditor({ value, onChange, className }: Props): JSX.Eleme
               type="button"
               className={cn(
                 'flex w-full flex-col px-3 py-2 text-left',
-                i === slash.index ? 'bg-mac-accent text-white' : 'hover:bg-mac-control'
+                i === slash.index ? 'bg-mac-accent-fill text-white' : 'hover:bg-mac-control'
               )}
               onMouseDown={(e) => {
                 e.preventDefault()

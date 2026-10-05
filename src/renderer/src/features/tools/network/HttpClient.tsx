@@ -151,6 +151,7 @@ export default function HttpClient(): JSX.Element {
     setMethod(m)
     if (!methodAllowsBody(m)) {
       setBodyMode('none')
+      if (requestTab === 'body') setRequestTab('params')
     } else if (bodyMode === 'none' && (m === 'POST' || m === 'PUT' || m === 'PATCH')) {
       setBodyMode('json')
       setRequestTab('body')
@@ -181,7 +182,7 @@ export default function HttpClient(): JSX.Element {
             aria-label="HTTP method"
             disabled={busy}
             className={cn(
-              'mac-input !w-[100px] shrink-0 !py-1.5 font-mono text-[12px] font-semibold sm:!w-[110px]',
+              'mac-input !w-[100px] shrink-0 !py-1.5 font-mono text-[13px] font-semibold sm:!w-[110px]',
               methodColor(method)
             )}
             value={method}
@@ -197,7 +198,7 @@ export default function HttpClient(): JSX.Element {
             aria-label="HTTP request URL"
             aria-invalid={!!validateHttpPayload(payload)}
             disabled={busy}
-            className="mac-input min-w-0 flex-1 basis-[12rem] font-mono text-[13px]"
+            className="mac-input min-w-0 flex-1 basis-[12rem] font-mono text-[14px]"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://api.example.com/v1/…"
@@ -219,32 +220,34 @@ export default function HttpClient(): JSX.Element {
           {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : 'Cancel'}</button>}
         </div>
       </ToolToolbar>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-3 py-2 text-[11px] text-mac-label-secondary">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-3 py-2 text-[12px] text-mac-label-secondary">
         <label>Timeout <select aria-label="HTTP timeout" className="mac-input !w-auto !py-1" disabled={busy} value={timeout} onChange={(e) => setTimeoutValue(Number(e.target.value))}>{[5000, 15000, 30000, 60000].map((value) => <option key={value} value={value}>{value / 1000}s</option>)}</select></label>
         <span>Redirects are shown as responses. Follow the Location header with a new request.</span>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(220px,1fr)] overflow-auto divide-y divide-mac-separator">
         <fieldset disabled={busy} className="flex min-h-[280px] min-w-0 flex-col">
-          <div className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
-            <TabBtn active={requestTab === 'params'} onClick={() => setRequestTab('params')}>
+          <div role="tablist" aria-label="HTTP request sections" onKeyDown={navigateTabs} className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
+            <TabBtn id="http-request-tab-params" panel="http-request-panel" active={requestTab === 'params'} onClick={() => setRequestTab('params')}>
               Params
             </TabBtn>
-            <TabBtn active={requestTab === 'headers'} onClick={() => setRequestTab('headers')}>
+            <TabBtn id="http-request-tab-headers" panel="http-request-panel" active={requestTab === 'headers'} onClick={() => setRequestTab('headers')}>
               Headers
             </TabBtn>
             <TabBtn
+              id="http-request-tab-body"
+              panel="http-request-panel"
               active={requestTab === 'body'}
               onClick={() => setRequestTab('body')}
               disabled={!methodAllowsBody(method)}
             >
               Body
             </TabBtn>
-            <span className="ml-auto hidden pr-2 text-[11px] text-mac-label-tertiary sm:inline">
+            <span className="ml-auto hidden pr-2 text-[12px] text-mac-label-tertiary sm:inline">
               ⌘/Ctrl+Enter to send
             </span>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden p-2">
+          <div id="http-request-panel" role="tabpanel" aria-labelledby={`http-request-tab-${requestTab}`} tabIndex={0} className="min-h-0 flex-1 overflow-hidden p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
             {requestTab === 'params' && (
               <div className="h-full overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
                 <KeyValueEditor
@@ -269,28 +272,11 @@ export default function HttpClient(): JSX.Element {
             )}
             {requestTab === 'body' && methodAllowsBody(method) && (
               <div className="flex h-full min-h-0 flex-col gap-2">
-                <div className="flex flex-wrap gap-1">
-                  {BODY_MODES.map((m) => (
-                    <button
-                      key={m.value}
-                      type="button"
-                      className={cn(
-                        'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
-                        bodyMode === m.value
-                          ? 'bg-mac-accent text-white'
-                          : 'bg-mac-control text-mac-label-secondary hover:bg-mac-control-hover'
-                      )}
-                      onClick={() => setBodyMode(m.value)}
-                      aria-pressed={bodyMode === m.value}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                {bodyMode === 'form' && <p className="text-[11px] text-mac-label-secondary">Multipart text fields; Content-Type boundary is generated automatically. File uploads are not available here.</p>}
+                <SegmentedControl label="Request body format" className="!flex !flex-wrap" value={bodyMode} onChange={setBodyMode} options={BODY_MODES} />
+                {bodyMode === 'form' && <p className="text-[12px] text-mac-label-secondary">Multipart text fields; Content-Type boundary is generated automatically. File uploads are not available here.</p>}
                 <div className="min-h-0 flex-1">
                   {bodyMode === 'none' && (
-                    <div className="flex h-full items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
+                    <div className="flex h-full items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[14px] text-mac-label-tertiary">
                       This request has no body
                     </div>
                   )}
@@ -323,21 +309,21 @@ export default function HttpClient(): JSX.Element {
         </fieldset>
 
         <section className="flex min-h-[220px] min-w-0 flex-col">
-          <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-mac-separator px-2">
-            <TabBtn active={responseTab === 'body'} onClick={() => setResponseTab('body')}>
+          <div role="tablist" aria-label="HTTP response sections" onKeyDown={navigateTabs} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-mac-separator px-2">
+            <TabBtn id="http-response-tab-body" panel="http-response-panel" active={responseTab === 'body'} onClick={() => setResponseTab('body')}>
               Response
             </TabBtn>
-            <TabBtn active={responseTab === 'headers'} onClick={() => setResponseTab('headers')}>
+            <TabBtn id="http-response-tab-headers" panel="http-response-panel" active={responseTab === 'headers'} onClick={() => setResponseTab('headers')}>
               Headers
             </TabBtn>
-            <TabBtn active={responseTab === 'code'} onClick={() => setResponseTab('code')}>
+            <TabBtn id="http-response-tab-code" panel="http-response-panel" active={responseTab === 'code'} onClick={() => setResponseTab('code')}>
               <Code2 className="mr-1 inline h-3 w-3" />
               Code
             </TabBtn>
             {response && (
               <span
                 className={cn(
-                  'ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums',
+                  'ml-2 rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums',
                   response.ok
                     ? 'bg-mac-success/15 text-mac-success'
                     : 'bg-mac-warning/15 text-mac-warning'
@@ -351,7 +337,7 @@ export default function HttpClient(): JSX.Element {
                 <>
                   <select
                     aria-label="HTTP code language"
-                    className="mac-input !w-auto !py-1 text-[12px]"
+                    className="mac-input !w-auto !py-1 text-[13px]"
                     value={snippetId}
                     onChange={(e) => setSnippetId(e.target.value as SnippetId)}
                   >
@@ -385,20 +371,21 @@ export default function HttpClient(): JSX.Element {
               )}
             </div>
           </div>
-          {response && responseTab === 'body' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-1 text-[11px] text-mac-label-secondary">
+          {response && responseTab === 'body' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-1 text-[12px] text-mac-label-secondary">
             {response.bodyEncoding === 'base64' ? <span>Binary or non-UTF-8 bytes · lossless Base64 view</span> : <label><input type="checkbox" disabled={!responseIsJson} checked={pretty} onChange={(e) => setPretty(e.target.checked)} /> Format JSON layout</label>}
             {!response.bodyText && <span>Empty response body ({method === 'HEAD' ? 'HEAD' : response.status})</span>}
           </div>}
-          <div className="min-h-0 flex-1 overflow-hidden p-2">
+          <div id="http-response-panel" role="tabpanel" aria-labelledby={`http-response-tab-${responseTab}`} tabIndex={0} className="min-h-0 flex-1 overflow-hidden p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
             {responseTab === 'code' ? (
               <CodeEditor value={snippet} language="text" label="HTTP code snippet" readOnly />
             ) : !response && !error ? (
-              <div className="flex h-full flex-col items-center justify-center gap-1 rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
+              <div className="flex h-full flex-col items-center justify-center gap-2 rounded-mac-lg border border-dashed border-mac-separator px-5 text-center text-[14px] text-mac-label-secondary">
                 <Send className="mb-1 h-6 w-6 opacity-40" strokeWidth={1.5} />
                 {busy ? 'Waiting for response…' : canceled ? 'Request canceled. Send again to retry.' : !available ? 'Desktop app required to send requests' : 'Send a request to see the response'}
+                {!busy && !canceled && available && <p className="text-[13px]">Set the URL, add any headers or query parameters, then press Send or Ctrl/⌘ + Enter.</p>}
               </div>
             ) : error && !response ? (
-              <div className="flex h-full items-center justify-center rounded-mac-lg border border-mac-danger/30 bg-mac-danger/5 px-4 text-center text-[13px] text-mac-danger">
+              <div className="flex h-full items-center justify-center rounded-mac-lg border border-mac-danger/30 bg-mac-danger/5 px-4 text-center text-[14px] text-mac-danger">
                 {error}
               </div>
             ) : responseTab === 'headers' ? (
@@ -418,7 +405,7 @@ export default function HttpClient(): JSX.Element {
       <footer className="flex shrink-0 flex-wrap items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={statusTone}>{statusText}</ToolStatus>
         {response?.finalUrl && response.finalUrl !== payload.url && (
-          <span className="ml-3 truncate font-mono text-[11px] text-mac-label-tertiary">
+          <span className="ml-3 truncate font-mono text-[12px] text-mac-label-tertiary">
             → {response.finalUrl}
           </span>
         )}
@@ -428,11 +415,15 @@ export default function HttpClient(): JSX.Element {
 }
 
 function TabBtn({
+  id,
+  panel,
   active,
   onClick,
   disabled,
   children
 }: {
+  id: string
+  panel: string
   active: boolean
   onClick: () => void
   disabled?: boolean
@@ -440,11 +431,16 @@ function TabBtn({
 }): JSX.Element {
   return (
     <button
+      id={id}
       type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={panel}
+      tabIndex={active ? 0 : -1}
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'border-b-2 px-3 py-2 text-[12px] font-medium transition-colors',
+        'border-b-2 px-3 py-2.5 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent',
         active
           ? 'border-mac-accent text-mac-accent'
           : 'border-transparent text-mac-label-secondary hover:text-mac-label',
@@ -454,6 +450,18 @@ function TabBtn({
       {children}
     </button>
   )
+}
+
+function navigateTabs(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (!(event.target instanceof HTMLButtonElement) || event.target.getAttribute('role') !== 'tab') return
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'))
+  const index = tabs.indexOf(event.target)
+  if (index < 0 || !tabs.length) return
+  event.preventDefault()
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  tabs[next]?.focus()
+  tabs[next]?.click()
 }
 
 function methodColor(method: HttpMethod): string {

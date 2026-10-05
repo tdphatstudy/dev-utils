@@ -3,25 +3,30 @@
 @tailwind utilities;
 
 :root {
-  --mac-bg: #f5f5f7;
+  color-scheme: light;
+  --mac-bg: #f5f6f9;
   --mac-surface: #ffffff;
   --mac-raised: #ffffff;
   --mac-overlay: rgba(255, 255, 255, 0.72);
-  --mac-sidebar: #f0f0f2;
+  --mac-sidebar: #eef1f5;
   --mac-separator: rgba(0, 0, 0, 0.09);
   --mac-hairline: rgba(0, 0, 0, 0.06);
-  --mac-label: #1d1d1f;
-  --mac-label-secondary: #6e6e73;
-  --mac-label-tertiary: #86868b;
-  --mac-accent: #007aff;
-  --mac-accent-hover: #0066d6;
-  --mac-accent-soft: rgba(0, 122, 255, 0.12);
-  --mac-control: rgba(0, 0, 0, 0.05);
-  --mac-control-hover: rgba(0, 0, 0, 0.08);
-  --mac-danger: #ff3b30;
-  --mac-success: #34c759;
-  --mac-warning: #ff9f0a;
-  --mac-focus-ring: rgba(0, 122, 255, 0.35);
+  --mac-label: #1d2633;
+  --mac-label-secondary: #546173;
+  --mac-label-tertiary: #566376;
+  --mac-accent: #075eae;
+  --mac-accent-hover: #064f94;
+  --mac-accent-fill: #0964c7;
+  --mac-accent-fill-hover: #0757ad;
+  --mac-accent-soft: rgba(9, 100, 199, 0.1);
+  --mac-control: rgba(26, 43, 66, 0.045);
+  --mac-control-hover: rgba(26, 43, 66, 0.075);
+  --mac-input-border: #758294;
+  --mac-danger: #b42336;
+  --mac-danger-fill: #b42336;
+  --mac-success: #12643d;
+  --mac-warning: #865500;
+  --mac-focus-ring: rgba(9, 100, 199, 0.22);
   --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mac-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   --mac-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
@@ -32,25 +37,29 @@
 }
 
 .dark {
-  --mac-bg: #1c1c1e;
-  --mac-surface: #2c2c2e;
-  --mac-raised: #3a3a3c;
-  --mac-overlay: rgba(44, 44, 46, 0.78);
-  --mac-sidebar: #1c1c1e;
+  --mac-bg: #181a1f;
+  --mac-surface: #24282f;
+  --mac-raised: #303640;
+  --mac-overlay: rgba(36, 40, 47, 0.94);
+  --mac-sidebar: #1d2026;
   --mac-separator: rgba(255, 255, 255, 0.1);
   --mac-hairline: rgba(255, 255, 255, 0.06);
   --mac-label: #f5f5f7;
-  --mac-label-secondary: #a1a1a6;
-  --mac-label-tertiary: #6e6e73;
-  --mac-accent: #0a84ff;
-  --mac-accent-hover: #409cff;
-  --mac-accent-soft: rgba(10, 132, 255, 0.2);
+  --mac-label-secondary: #c2cad6;
+  --mac-label-tertiary: #b7c1cf;
+  --mac-accent: #8bc4ff;
+  --mac-accent-hover: #b6daff;
+  --mac-accent-fill: #196dcd;
+  --mac-accent-fill-hover: #1a65bc;
+  --mac-accent-soft: rgba(25, 109, 205, 0.2);
   --mac-control: rgba(255, 255, 255, 0.08);
   --mac-control-hover: rgba(255, 255, 255, 0.12);
-  --mac-danger: #ff453a;
-  --mac-success: #30d158;
-  --mac-warning: #ffd60a;
-  --mac-focus-ring: rgba(10, 132, 255, 0.45);
+  --mac-input-border: #929fb1;
+  --mac-danger: #ffb1b7;
+  --mac-danger-fill: #b42336;
+  --mac-success: #76dd9c;
+  --mac-warning: #ffd27a;
+  --mac-focus-ring: rgba(139, 196, 255, 0.25);
   --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
   --mac-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
   --mac-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
@@ -77,7 +86,46 @@ body {
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   letter-spacing: -0.01em;
+  font-size: 14px;
+  line-height: 1.5;
+
 }
+
+.dark { color-scheme: dark; }
+
+/* A solid outer edge remains visible on both light and dark surfaces. */
+:where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--mac-accent);
+  outline-offset: 2px;
+}
+
+.mac-workspace {
+  container-type: inline-size;
+  container-name: workspace;
+}
+
+@container workspace (min-width: 680px) {
+  .mac-split-pane {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+  }
+  .mac-split-pane > * { min-height: 0; }
+}
+
+.mac-tool-toolbar > .flex {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.mac-skip-link {
+  position: fixed;
+  z-index: 100;
+  transition: none;
+  top: 8px;
+  left: 88px;
+  transform: translateY(-200%);
+}
+.mac-skip-link:focus { transform: translateY(0); }
 
 .selectable,
 .cm-editor,
@@ -127,7 +175,8 @@ pre,
 
 @layer components {
   .mac-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-mac px-3 py-1.5 text-[13px] font-medium;
+    @apply inline-flex min-h-[34px] items-center justify-center gap-2 rounded-mac px-3 py-1.5 text-[14px] font-medium;
+    line-height: 1.4;
     transition:
       background-color var(--duration-fast) var(--ease-mac),
       color var(--duration-fast) var(--ease-mac),
@@ -142,14 +191,18 @@ pre,
     @apply cursor-not-allowed opacity-40;
   }
   .mac-btn:focus-visible {
-    outline: none;
+    outline: 2px solid var(--mac-accent);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px var(--mac-focus-ring);
   }
 
   .mac-btn-primary {
-    @apply mac-btn bg-mac-accent text-white hover:bg-mac-accent-hover;
+    @apply mac-btn text-white;
+    background: var(--mac-accent-fill);
     box-shadow: 0 1px 2px rgba(0, 122, 255, 0.25);
   }
+  .mac-btn-primary:hover:not(:disabled) { background: var(--mac-accent-fill-hover); }
+  .mac-window-close:hover { background: var(--mac-danger-fill); color: white; }
   .dark .mac-btn-primary {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   }
@@ -163,23 +216,29 @@ pre,
   }
 
   .mac-input {
-    @apply w-full rounded-mac border border-mac-separator bg-mac-control px-3 py-1.5 text-[13px] text-mac-label outline-none placeholder:text-mac-label-tertiary;
+    @apply min-h-[36px] w-full rounded-mac border bg-mac-control px-3 py-1.5 text-[14px] text-mac-label outline-none placeholder:text-mac-label-tertiary;
+    border-color: var(--mac-input-border);
     transition:
       border-color var(--duration-fast) var(--ease-mac),
       box-shadow var(--duration-fast) var(--ease-mac),
       background-color var(--duration-fast) var(--ease-mac);
   }
-  .mac-input:focus {
+  .mac-input:focus-visible {
     border-color: var(--mac-accent);
     box-shadow: 0 0 0 3px var(--mac-accent-soft);
     background: var(--mac-surface);
+    outline: 2px solid var(--mac-accent);
+    outline-offset: 1px;
   }
+  .mac-vault-input:focus-visible { background: #24282f; color: white; }
+  .mac-input:disabled { cursor: not-allowed; opacity: 0.55; }
+  .mac-input[aria-invalid='true'] { border-color: var(--mac-danger); }
 
   .mac-segment {
     @apply inline-flex rounded-mac bg-mac-control p-0.5;
   }
   .mac-segment-item {
-    @apply rounded-[6px] px-3 py-1 text-[12px] font-medium text-mac-label-secondary;
+    @apply min-h-[32px] rounded-[6px] px-3 py-1 text-[13px] font-medium text-mac-label-secondary;
     transition:
       background-color var(--duration-fast) var(--ease-mac),
       color var(--duration-fast) var(--ease-mac),
@@ -190,7 +249,8 @@ pre,
     box-shadow: var(--mac-shadow-sm);
   }
   .mac-segment-item:focus-visible {
-    outline: none;
+    outline: 2px solid var(--mac-accent);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px var(--mac-focus-ring);
   }
 
@@ -212,13 +272,14 @@ pre,
     transform: scale(0.99);
   }
   .mac-card:focus-visible {
-    outline: none;
+    outline: 2px solid var(--mac-accent);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px var(--mac-focus-ring);
   }
 
   /* Sidebar / nav rows */
   .mac-nav-item {
-    @apply flex items-center gap-2.5 rounded-mac px-2.5 py-[7px] text-[13px];
+    @apply flex min-h-[36px] items-center gap-2.5 rounded-mac px-2.5 py-[7px] text-[13px];
     transition:
       background-color var(--duration-fast) var(--ease-mac),
       color var(--duration-fast) var(--ease-mac);
@@ -231,7 +292,8 @@ pre,
     @apply bg-mac-accent-soft font-medium text-mac-accent;
   }
   .mac-nav-item:focus-visible {
-    outline: none;
+    outline: 2px solid var(--mac-accent);
+    outline-offset: 2px;
     box-shadow: 0 0 0 3px var(--mac-focus-ring);
   }
 
@@ -243,12 +305,12 @@ pre,
   }
 
   .mac-kbd {
-    @apply rounded border border-mac-separator bg-mac-surface px-1.5 py-0.5 font-mono text-[10px] text-mac-label-secondary;
+    @apply rounded border border-mac-separator bg-mac-surface px-1.5 py-0.5 font-mono text-[11px] text-mac-label-secondary;
     box-shadow: 0 1px 0 var(--mac-hairline);
   }
 
   .mac-chip {
-    @apply inline-flex items-center rounded-full bg-mac-control px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mac-label-secondary;
+    @apply inline-flex items-center rounded-full bg-mac-control px-2 py-0.5 text-[11px] font-medium text-mac-label-secondary;
   }
 
   .mac-status-dot {

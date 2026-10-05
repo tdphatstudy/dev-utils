@@ -97,7 +97,7 @@ export function DesktopLogin({
             <Shield className="h-7 w-7 text-white" strokeWidth={1.5} />
           </div>
           <h1 className="text-[22px] font-semibold tracking-tight text-white">Private Box</h1>
-          <p className="mt-1 max-w-sm text-[13px] text-white/55">
+          <p className="mt-1 max-w-sm text-[13px] text-white/80">
             Choose a box to sign in — like a desktop user. Keys stay only in memory.
           </p>
         </div>
@@ -120,7 +120,7 @@ export function DesktopLogin({
                 <div
                   className={cn(
                     'flex h-16 w-16 items-center justify-center rounded-full text-[22px] font-semibold text-white shadow-mac',
-                    active ? 'bg-mac-accent' : 'bg-white/15 group-hover:bg-white/20'
+                    active ? 'bg-mac-accent-fill' : 'bg-white/15 group-hover:bg-white/20'
                   )}
                 >
                   {initial}
@@ -128,7 +128,7 @@ export function DesktopLogin({
                 <span className="w-full truncate text-center text-[12px] font-medium text-white/90">
                   {v.name}
                 </span>
-                <span className="text-[10px] uppercase tracking-wide text-white/40">
+                <span className="text-[10px] uppercase tracking-wide text-white/70">
                   {v.mode === 'device' ? 'This PC' : v.mode === 'portable' ? 'Portable' : 'Box'}
                 </span>
               </button>
@@ -164,7 +164,7 @@ export function DesktopLogin({
           <div className="mt-10 w-full max-w-sm rounded-mac-xl border border-white/10 bg-black/35 p-5 shadow-mac-lg backdrop-blur-xl">
             <div className="mb-3 text-center">
               <div className="text-[14px] font-semibold text-white">{selected.name}</div>
-              <div className="mt-0.5 truncate font-mono text-[10px] text-white/40" title={selected.rootPath}>
+              <div className="mt-0.5 truncate font-mono text-[10px] text-white/70" title={selected.rootPath}>
                 {selected.rootPath}
               </div>
             </div>
@@ -186,9 +186,9 @@ export function DesktopLogin({
               </div>}
               {mode === 'portable' && (
                 <label className="block text-[12px]">
-                  <span className="mb-1 block text-white/55">Key A</span>
+                  <span className="mb-1 block text-white/80">Key A</span>
                   <input
-                    className="mac-input border-white/10 bg-white/10 font-mono text-white placeholder:text-white/30"
+                    className="mac-input mac-vault-input border-white/30 bg-white/10 font-mono text-white placeholder:text-white/70"
                     type="password"
                     disabled={busy || !!selected.metadataError && !recoveryMode}
                     value={keyA}
@@ -199,11 +199,11 @@ export function DesktopLogin({
                 </label>
               )}
               <label className="block text-[12px]">
-                <span className="mb-1 block text-white/55">
+                <span className="mb-1 block text-white/80">
                   {mode === 'device' ? 'Password' : 'Key B'}
                 </span>
                 <input
-                  className="mac-input border-white/10 bg-white/10 font-mono text-white placeholder:text-white/30"
+                  className="mac-input mac-vault-input border-white/30 bg-white/10 font-mono text-white placeholder:text-white/70"
                   type="password"
                   disabled={busy || !!selected.metadataError && !recoveryMode}
                   value={keyB}
@@ -242,7 +242,7 @@ export function DesktopLogin({
         )}
 
         {!selected && vaults.length > 0 && (
-          <p className="mt-8 text-[12px] text-white/40">Select a box to continue</p>
+          <p className="mt-8 text-[12px] text-white/70">Select a box to continue</p>
         )}
       </div>
     </div>

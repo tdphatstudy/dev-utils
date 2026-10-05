@@ -198,7 +198,7 @@ try {
   if (process.env.BRAND_SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-color-picker.png') })
   console.log('PASS Color Picker conversion, validation, pick/cancel/error, tray event and clipboard retry')
 
-  await page.getByRole('button', { name: 'Switch to light', exact: true }).click()
+  await page.getByRole('button', { name: 'Switch to light theme', exact: true }).click()
   await page.setViewportSize({ width: 720, height: 600 })
   await page.getByRole('button', { name: 'Pick screen color', exact: true }).waitFor()
   await page.getByLabel('HEX color', { exact: true }).scrollIntoViewIfNeeded()
@@ -208,7 +208,7 @@ try {
   }
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Color Picker creates horizontal page overflow')
   if (process.env.BRAND_SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-color-picker-light-720.png') })
-  await page.getByRole('button', { name: 'Switch to dark', exact: true }).click()
+  await page.getByRole('button', { name: 'Switch to dark theme', exact: true }).click()
   await page.setViewportSize({ width: 1100, height: 760 })
   console.log('PASS Color Picker light theme and narrow desktop input bounds')
 

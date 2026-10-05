@@ -1,3 +1,8 @@
+// Preserve each CSS token's own alpha while supporting Tailwind /opacity variants.
+// color-mix is available in the Chromium version bundled with Electron.
+const macColor = (token) => ({ opacityValue }) => opacityValue === undefined
+  ? `var(--mac-${token})`
+  : `color-mix(in srgb, var(--mac-${token}) calc(${opacityValue} * 100%), transparent)`
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/renderer/index.html', './src/renderer/src/**/*.{js,ts,jsx,tsx}'],
@@ -7,23 +12,25 @@ export default {
       colors: {
         mac: {
           // Light
-          bg: 'var(--mac-bg)',
-          surface: 'var(--mac-surface)',
-          raised: 'var(--mac-raised)',
-          overlay: 'var(--mac-overlay)',
-          sidebar: 'var(--mac-sidebar)',
-          separator: 'var(--mac-separator)',
-          label: 'var(--mac-label)',
-          'label-secondary': 'var(--mac-label-secondary)',
-          'label-tertiary': 'var(--mac-label-tertiary)',
-          accent: 'var(--mac-accent)',
-          'accent-hover': 'var(--mac-accent-hover)',
-          'accent-soft': 'var(--mac-accent-soft)',
-          control: 'var(--mac-control)',
-          'control-hover': 'var(--mac-control-hover)',
-          danger: 'var(--mac-danger)',
-          success: 'var(--mac-success)',
-          warning: 'var(--mac-warning)'
+          bg: macColor('bg'),
+          surface: macColor('surface'),
+          raised: macColor('raised'),
+          overlay: macColor('overlay'),
+          sidebar: macColor('sidebar'),
+          separator: macColor('separator'),
+          label: macColor('label'),
+          'label-secondary': macColor('label-secondary'),
+          'label-tertiary': macColor('label-tertiary'),
+          accent: macColor('accent'),
+          'accent-hover': macColor('accent-hover'),
+          'accent-fill': macColor('accent-fill'),
+          'accent-fill-hover': macColor('accent-fill-hover'),
+          'accent-soft': macColor('accent-soft'),
+          control: macColor('control'),
+          'control-hover': macColor('control-hover'),
+          danger: macColor('danger'),
+          success: macColor('success'),
+          warning: macColor('warning')
         }
       },
       fontFamily: {

@@ -227,7 +227,7 @@ export default function QrTool(): JSX.Element {
                 className={cn(
                   'rounded-mac px-2.5 py-1 font-mono text-[11px] font-medium',
                   ecc === e.id
-                    ? 'bg-mac-accent text-white'
+                    ? 'bg-mac-accent-fill text-white'
                     : 'bg-mac-control text-mac-label-secondary hover:bg-mac-control-hover'
                 )}
               >

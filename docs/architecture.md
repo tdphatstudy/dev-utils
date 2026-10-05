@@ -397,6 +397,27 @@ Signing/notarization and Electron fuse hardening are not a completed release
 pipeline. Windows production UI/worker/IPC lifecycle smoke is automated; macOS
 and Linux native behavior and installers remain unverified on this host.
 
+### UI/UX navigation and preferences (2026-10-05)
+
+Home is search-first with category filtering, task-oriented quick access and up to
+12 favorite tool IDs. Favorites, recent IDs, theme, sidebar state, launch mode and
+SSH paths keep the existing `devutils-app` preference key. Hydration whitelists
+well-formed metadata and cannot replace store actions or introduce payload drafts.
+Sidebar filtering/group collapse is component state; narrow navigation uses a
+Radix modal drawer. Command palette remains lazy and deduplicates favorite/recent
+entries from the full catalogue. Tool payload privacy policy is unchanged.
+
+Main workspace owns an inline-size container; shared SplitPane switches to two
+columns at 680px of workspace width rather than the browser viewport. CSS tokens
+separate readable accent text from the solid accent button fill and support
+Tailwind opacity variants through color-mix. Window maximize state is read on
+mount/action and debounced resize, without idle polling or a new IPC method.
+
+Mock API view tabs and HTTP request/response tabs provide linked panels and
+keyboard navigation. Mock delete Undo stores one component-only YAML/selection
+snapshot until the next draft edit/import; it does not modify a running server.
+The detailed findings and bounded QA evidence are in
+[the UI/UX review](ux-review-2026-10-05.md).
 ### DevFusion branding, tray và Color Picker
 
 Visible name/title/installer/package metadata now use DevFusion. The app pins
