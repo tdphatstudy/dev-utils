@@ -1,11 +1,9 @@
-import { useEffect } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { AppShell } from './layouts/AppShell'
-import { ToolPage } from './pages/ToolPage'
-import { HomePage } from './pages/HomePage'
+import { useEffect, useState } from 'react'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { useAppStore } from './store/app-store'
 import { installGlobalErrorGuards } from './lib/error-guard'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { quickTargetPath } from '@shared/quick-actions'
 
 function useThemeEffect(): void {
   const theme = useAppStore((s) => s.theme)
@@ -43,25 +41,29 @@ function useGlobalHotkeys(): void {
   }, [setCommandOpen])
 }
 
-/** Catch window.error + unhandledrejection → bounce to Home. */
-function useGlobalErrorGuard(): void {
-  useEffect(() => installGlobalErrorGuards(), [])
+/** Show async failure feedback without discarding the current tool. */
+function useGlobalErrorGuard(): [boolean, () => void] {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => installGlobalErrorGuards(() => setFailed(true)), [])
+  return [failed, () => setFailed(false)]
 }
 
 export default function App(): JSX.Element {
   useThemeEffect()
   useGlobalHotkeys()
-  useGlobalErrorGuard()
+  const [failed, dismissError] = useGlobalErrorGuard()
+  const navigate = useNavigate()
+  useEffect(() => window.devutils?.app?.onOpenTool((target) => navigate(quickTargetPath(target))), [navigate])
 
   return (
-    <ErrorBoundary scope="app" autoHomeMs={5000}>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<HomePage />} />
-          <Route path="tool/:toolId" element={<ToolPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+    <ErrorBoundary scope="app" onHome={() => navigate('/')}>
+      <div className="flex h-full flex-col">
+        <div className="min-h-0 flex-1"><Outlet /></div>
+        {failed && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-t border-mac-danger/30 bg-mac-surface px-4 py-3 text-[13px]">
+          <p className="min-w-0 flex-1 text-mac-label">An action failed. Your tool is still open; try the action again.</p>
+          <button type="button" className="mac-btn-secondary" onClick={dismissError}>Dismiss</button>
+        </div>}
+      </div>
     </ErrorBoundary>
   )
 }

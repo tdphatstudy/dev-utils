@@ -25,21 +25,21 @@ import {
 } from './auth-rate'
 import {
   authError,
-  createKeyVerifiers,
-  deriveLayerKeys,
   generateSalt,
   openDoc,
-  parseEnvelope,
-  verifyKeyVerifiers
+  parseEnvelope
 } from './crypto'
 import {
   listDeviceKeyCandidates,
   loadOrCreateDeviceSecret
 } from './device-secret'
 import { atomicWriteFile, backupFile } from './atomic-write'
-import { clearAccess, getAccess, setAccess, getAccessRevision, assertAccessRevision } from './session'
+import { clearAccess, getAccess, setAccess, getAccessRevision, assertAccessRevision, getSessionId } from './session'
 import { readMetadata, VaultMetadataError } from './metadata'
 import { recoverMetadataAtRoot } from './recovery'
+import { createKeyVerifiersAsync, deriveLayerKeysAsync, verifyKeyVerifiersAsync } from './async-kdf'
+import { readBoundedFile } from '../bounded-read'
+import { MAX_ENVELOPE_BYTES } from '@shared/secret-box/limits'
 
 interface VaultRegistryEntry {
   id: string
@@ -204,7 +204,8 @@ export async function getStatus(): Promise<VaultStatus> {
     mode: item?.mode ?? null,
     rootPath: active.rootPath,
     activeId: active.id,
-    vaults
+    vaults,
+    sessionId: access && access.rootPath === root && !item?.metadataError ? getSessionId() : undefined
   }
 }
 
@@ -236,53 +237,59 @@ async function setupVaultInternal(input: SetupInput): Promise<void> {
   }
   assertAccessRevision(revision)
 
-  const keys = deriveLayerKeys(keyA, input.keyB, salt)
-  const auth = createKeyVerifiers(keys.keyA, keys.keyB)
-  const config: VaultConfig = {
-    version: VAULT_CONFIG_VERSION,
-    mode: input.mode,
-    kdf: 'scrypt',
-    kdfParams: {
-      N: SCRYPT_PARAMS.N,
-      r: SCRYPT_PARAMS.r,
-      p: SCRYPT_PARAMS.p,
-      keyLen: SCRYPT_PARAMS.keyLen
-    },
-    salt: salt.toString('base64'),
-    createdAt: new Date().toISOString(),
-    auth
-  }
-
-  await mkdir(join(root, VAULT_DIR), { recursive: true })
-  assertAccessRevision(revision)
-  await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8', undefined, () => assertAccessRevision(revision))
-  assertAccessRevision(revision)
-
-  const existing = reg.vaults.find((v) => resolve(v.rootPath) === root)
-  if (existing) {
-    existing.name = input.name?.trim() || existing.name
-    reg.activeId = existing.id
-  } else {
-    const entry: VaultRegistryEntry = {
-      id: randomUUID(),
-      name: input.name?.trim() || basename(root) || 'Private Box',
-      rootPath: root,
-      createdAt: new Date().toISOString()
+  const keys = await deriveLayerKeysAsync(keyA, input.keyB, salt)
+  let transferred = false
+  try {
+    assertAccessRevision(revision)
+    const auth = await createKeyVerifiersAsync(keys.keyA, keys.keyB)
+    assertAccessRevision(revision)
+    const config: VaultConfig = {
+      version: VAULT_CONFIG_VERSION,
+      mode: input.mode,
+      kdf: 'scrypt',
+      kdfParams: {
+        N: SCRYPT_PARAMS.N,
+        r: SCRYPT_PARAMS.r,
+        p: SCRYPT_PARAMS.p,
+        keyLen: SCRYPT_PARAMS.keyLen
+      },
+      salt: salt.toString('base64'),
+      createdAt: new Date().toISOString(),
+      auth
     }
-    reg.vaults.push(entry)
-    reg.activeId = entry.id
-  }
-  await writeRegistry(reg, () => assertAccessRevision(revision))
-  await clearAuthFailures(root)
-  assertAccessRevision(revision)
 
-  setAccess({
-    rootPath: root,
-    mode: input.mode,
-    config,
-    keyA: keys.keyA,
-    keyB: keys.keyB
-  })
+    await mkdir(join(root, VAULT_DIR), { recursive: true })
+    assertAccessRevision(revision)
+    await atomicWriteFile(vaultConfigPath(root), JSON.stringify(config, null, 2), 'utf8', undefined, () => assertAccessRevision(revision))
+    assertAccessRevision(revision)
+
+    const existing = reg.vaults.find((v) => resolve(v.rootPath) === root)
+    if (existing) {
+      existing.name = input.name?.trim() || existing.name
+      reg.activeId = existing.id
+    } else {
+      const entry: VaultRegistryEntry = {
+        id: randomUUID(),
+        name: input.name?.trim() || basename(root) || 'Private Box',
+        rootPath: root,
+        createdAt: new Date().toISOString()
+      }
+      reg.vaults.push(entry)
+      reg.activeId = entry.id
+    }
+    await writeRegistry(reg, () => assertAccessRevision(revision))
+    await clearAuthFailures(root)
+    assertAccessRevision(revision)
+
+    setAccess({
+      rootPath: root,
+      mode: input.mode,
+      config,
+      keyA: keys.keyA,
+      keyB: keys.keyB
+    })
+    transferred = true
+  } finally { if (!transferred) { keys.keyA.fill(0); keys.keyB.fill(0) } }
 }
 
 async function vaultHasPutlFiles(root: string): Promise<boolean> {
@@ -343,7 +350,7 @@ async function canDecryptSamplePutls(
   if (paths.length === 0) return false
   for (const full of paths) {
     try {
-      const text = await readFile(full, 'utf8')
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(await readBoundedFile(full, MAX_ENVELOPE_BYTES))
       openDoc(keyA, keyB, parseEnvelope(text))
     } catch {
       return false
@@ -393,67 +400,78 @@ export async function accessVault(input: AccessInput): Promise<void> {
   }
 
   const hasAuth = !!(config.auth?.hashA && config.auth?.hashB)
-  const hasFiles = await vaultHasPutlFiles(root)
+  const hasFiles = !hasAuth && await vaultHasPutlFiles(root)
   assertAccessRevision(revision)
 
   let accepted: { keyA: Buffer; keyB: Buffer } | null = null
+  let transferred = false
+  try {
+    for (const keyAStr of keyAList) {
+      const keys = await deriveLayerKeysAsync(keyAStr, input.keyB, salt)
+      let keep = false
+      try {
+        assertAccessRevision(revision)
+        if (hasAuth) {
+          const verified = await verifyKeyVerifiersAsync(keys.keyA, keys.keyB, config.auth!)
+          assertAccessRevision(revision)
+          if (verified) {
+            accepted = keys
+            keep = true
+            break
+          }
+          continue
+        }
 
-  for (const keyAStr of keyAList) {
-    const keys = deriveLayerKeys(keyAStr, input.keyB, salt)
+        // Legacy vault without verifiers — prove by decrypting existing .putl files
+        if (hasFiles) {
+          if (await canDecryptSamplePutls(root, keys.keyA, keys.keyB)) {
+            accepted = keys
+            keep = true
+            break
+          }
+          continue
+        }
 
-    if (hasAuth) {
-      if (verifyKeyVerifiers(keys.keyA, keys.keyB, config.auth!)) {
+        // Empty legacy vault: bind first successful password (one-time migration)
         accepted = keys
+        keep = true
         break
+      } finally { if (!keep) { keys.keyA.fill(0); keys.keyB.fill(0) } }
+    }
+
+    assertAccessRevision(revision)
+    if (!accepted) {
+      await recordAuthFailure(root)
+      throw authError(
+        'INVALID_KEYS',
+        'Wrong password / keys. Access denied — no session started. Data on disk was not modified.'
+      )
+    }
+
+    const stillActive = await getActiveEntry()
+    assertAccessRevision(revision)
+    if (stillActive?.id !== active.id || resolve(stillActive.rootPath) !== root) throw authError('SESSION_CHANGED', 'SESSION_CHANGED: Selected box changed while signing in. Retry in the selected box.')
+
+    // Migrate legacy → verifiers only after proof (or empty bind)
+    if (!hasAuth) {
+      config = {
+        ...config,
+        auth: await createKeyVerifiersAsync(accepted.keyA, accepted.keyB)
       }
-      continue
+      await writeConfig(root, config, () => assertAccessRevision(revision))
     }
 
-    // Legacy vault without verifiers — prove by decrypting existing .putl files
-    if (hasFiles) {
-      if (await canDecryptSamplePutls(root, keys.keyA, keys.keyB)) {
-        accepted = keys
-        break
-      }
-      continue
-    }
-
-    // Empty legacy vault: bind first successful password (one-time migration)
-    accepted = keys
-    break
-  }
-
-  assertAccessRevision(revision)
-  if (!accepted) {
-    await recordAuthFailure(root)
-    throw authError(
-      'INVALID_KEYS',
-      'Wrong password / keys. Access denied — no session started. Data on disk was not modified.'
-    )
-  }
-
-  const stillActive = await getActiveEntry()
-  assertAccessRevision(revision)
-  if (stillActive?.id !== active.id || resolve(stillActive.rootPath) !== root) throw authError('SESSION_CHANGED', 'SESSION_CHANGED: Selected box changed while signing in. Retry in the selected box.')
-
-  // Migrate legacy → verifiers only after proof (or empty bind)
-  if (!hasAuth) {
-    config = {
-      ...config,
-      auth: createKeyVerifiers(accepted.keyA, accepted.keyB)
-    }
-    await writeConfig(root, config, () => assertAccessRevision(revision))
-  }
-
-  await clearAuthFailures(root)
-  assertAccessRevision(revision)
-  setAccess({
-    rootPath: root,
-    mode: config.mode,
-    config,
-    keyA: accepted.keyA,
-    keyB: accepted.keyB
-  })
+    await clearAuthFailures(root)
+    assertAccessRevision(revision)
+    setAccess({
+      rootPath: root,
+      mode: config.mode,
+      config,
+      keyA: accepted.keyA,
+      keyB: accepted.keyB
+    })
+    transferred = true
+  } finally { if (accepted && !transferred) { accepted.keyA.fill(0); accepted.keyB.fill(0) } }
 }
 
 export function clearVaultAccess(): void {

@@ -55,7 +55,7 @@ export default function PrivateBoxApp(): JSX.Element {
       <div className="max-w-lg space-y-4">
         <h2 className="text-lg font-semibold">Private Box could not open</h2>
         <p role="alert" className="break-words text-sm text-mac-danger">{error ?? status?.initializationError}</p>
-        <p className="text-sm text-mac-label-secondary">{window.devutils?.privateBox ? 'Keep the existing folder and metadata. Restore from your original backup before trying again.' : 'Open the DevUtils desktop app to manage encrypted boxes and local files.'}</p>
+        <p className="text-sm text-mac-label-secondary">{window.devutils?.privateBox ? 'Keep the existing folder and metadata. Restore from your original backup before trying again.' : 'Open the DevFusion desktop app to manage encrypted boxes and local files.'}</p>
         <button type="button" className="mac-btn-secondary" onClick={() => void refresh()}>Retry</button>
         <button type="button" className="mac-btn-secondary ml-2" disabled={!window.devutils?.privateBox} onClick={() => void (async () => {
           try { if (await window.devutils.privateBox.pickVaultFolder()) await refresh() }

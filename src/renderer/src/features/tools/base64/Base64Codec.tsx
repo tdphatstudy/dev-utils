@@ -16,7 +16,7 @@ export default function Base64Codec(): JSX.Element {
   const [mode, setMode] = useState<Mode>('encode')
   const [variant, setVariant] = useState<Base64Variant>('standard')
   const [decodedFormat, setDecodedFormat] = useState<'text' | 'hex'>('text')
-  const [input, setInput] = useState('Hello, DevUtils!')
+  const [input, setInput] = useState('Hello, DevFusion!')
   useToolDraft('base64.codec', input, setInput, { label: 'Base64', historyOnUnmount: true })
 
   const result = useMemo(() => {

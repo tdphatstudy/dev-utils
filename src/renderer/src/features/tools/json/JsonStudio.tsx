@@ -11,7 +11,7 @@ import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 const SAMPLE = `{
-  "name": "DevUtils",
+  "name": "DevFusion",
   "version": 1,
   "features": ["json", "yaml", "security"],
   "meta": { "local": true, "privacy": "first" }

@@ -15,7 +15,7 @@ import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 
 const SAMPLE_JSON = `{
-  "name": "DevUtils",
+  "name": "DevFusion",
   "version": 1,
   "features": ["json", "yaml"]
 }`

@@ -1,4 +1,5 @@
 import type { VaultConfig, VaultMode } from '@shared/secret-box/types'
+import { randomUUID } from 'crypto'
 
 export interface EphemeralAccess {
   rootPath: string
@@ -10,6 +11,18 @@ export interface EphemeralAccess {
 
 let access: EphemeralAccess | null = null
 let revision = 0
+let sessionId: string | undefined
+let ownerId: number | undefined
+
+export function getSessionId(): string | undefined { return sessionId }
+export function bindSessionOwner(id: number): void { requireAccess(); ownerId = id }
+export function assertSessionId(expected: unknown, senderId?: number): void {
+  requireAccess()
+  if (expected !== sessionId || (ownerId !== undefined && senderId !== undefined && ownerId !== senderId)) throw sessionChanged()
+}
+export function clearAccessForOwner(id: number): void {
+  if (ownerId === undefined || ownerId === id) clearAccess()
+}
 
 export function getAccessRevision(): number { return revision }
 export function assertAccessRevision(expected: number): void {
@@ -36,6 +49,8 @@ export function setAccess(next: EphemeralAccess | null): void {
     access.keyB.fill(0)
   }
   access = next
+  sessionId = next ? randomUUID() : undefined
+  ownerId = undefined
 }
 
 export function requireAccess(): EphemeralAccess {

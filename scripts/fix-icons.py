@@ -20,7 +20,6 @@ src = src.crop((left, top, left + side, top + side))
 sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 src.resize((256, 256), Image.Resampling.LANCZOS).save(RES / "icon-256.png", "PNG", optimize=True)
 src.resize((512, 512), Image.Resampling.LANCZOS).save(RES / "icon-512.png", "PNG", optimize=True)
-src.resize((512, 512), Image.Resampling.LANCZOS).save(RES / "icon.png", "PNG", optimize=True)
 
 # Build ICO with multiple embedded sizes (Windows + electron-builder need 256)
 # Pillow writes all sizes listed in `sizes=` from the source image.
@@ -31,3 +30,9 @@ ico = Image.open(RES / "icon.ico")
 print("icon.ico ok, entry size:", ico.size)
 # Some Pillow builds only expose one frame via seek; file still contains multi-res
 print("  file bytes:", (RES / "icon.ico").stat().st_size)
+
+tray = Image.open(RES / "tray.png").convert("RGBA")
+tray.save(RES / "tray.ico", format="ICO", sizes=[(16, 16), (24, 24), (32, 32)])
+for filename, dpi in [("trayTemplate.png", 72), ("trayTemplate@2x.png", 144)]:
+    image = Image.open(RES / filename).convert("RGBA")
+    image.save(RES / filename, "PNG", optimize=True, dpi=(dpi, dpi))

@@ -8,7 +8,7 @@ import type {
   SetupInput,
   VaultListItem,
   VaultStatus,
-  RecoverMetadataInput, RecoverMetadataResult
+  RecoverMetadataInput, RecoverMetadataResult, KeepNotesPage
 } from '@shared/secret-box/types'
 import type {
   ExportPlainResult,
@@ -34,6 +34,10 @@ import type {
 } from '@shared/ssh/types'
 
 import type { HashAlgorithm, FileHashProgress } from '@shared/file/hash'
+import type { ScreenColorResult } from '@shared/color'
+import type { OcrRequest, OcrCaptureRequest, OcrProgress, OcrResult } from '@shared/ocr/types'
+import type { MockStatus } from '@shared/mock-api/types'
+import { isQuickTarget, type QuickTarget } from '@shared/quick-actions'
 export type { HashAlgorithm } from '@shared/file/hash'
 
 export interface FileInfo {
@@ -47,12 +51,48 @@ export interface FileInfo {
 const api = {
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke('app:platform'),
   version: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  app: {
+    trayAvailable: (): Promise<boolean> => ipcRenderer.invoke('app:trayAvailable'),
+    quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
+    onOpenTool: (callback: (target: QuickTarget) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, target: unknown): void => { if (isQuickTarget(target)) callback(target) }
+      ipcRenderer.on('app:openTool', listener)
+      return () => ipcRenderer.removeListener('app:openTool', listener)
+    }
+  },
+  color: {
+    pickScreen: (): Promise<ScreenColorResult> => ipcRenderer.invoke('color:pickScreen'),
+    lastScreen: (): Promise<string | null> => ipcRenderer.invoke('color:lastScreen'),
+    onPicked: (callback: (hex: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, hex: unknown): void => { if (typeof hex === 'string' && /^#[0-9A-F]{6}$/.test(hex)) callback(hex) }
+      ipcRenderer.on('color:picked', listener)
+      return () => ipcRenderer.removeListener('color:picked', listener)
+    }
+  },
+  ocr: {
+    recognize: (request: OcrRequest): Promise<OcrResult | null> => ipcRenderer.invoke('ocr:recognize', request),
+    capture: (request: OcrCaptureRequest): Promise<OcrResult | null> => ipcRenderer.invoke('ocr:capture', request),
+    cancel: (id: string): Promise<boolean> => ipcRenderer.invoke('ocr:cancel', id),
+    onProgress: (callback: (progress: OcrProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: OcrProgress): void => callback(progress)
+      ipcRenderer.on('ocr:progress', listener)
+      return () => ipcRenderer.removeListener('ocr:progress', listener)
+    }
+  },
 
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     maximize: (): Promise<void> => ipcRenderer.invoke('window:maximize'),
     close: (): Promise<void> => ipcRenderer.invoke('window:close'),
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized')
+  },
+
+  mockApi: {
+    start: (yaml: string): Promise<MockStatus> => ipcRenderer.invoke('mock-api:start', yaml),
+    stop: (): Promise<MockStatus> => ipcRenderer.invoke('mock-api:stop'),
+    status: (): Promise<MockStatus> => ipcRenderer.invoke('mock-api:status'),
+    getConfig: (): Promise<string | null> => ipcRenderer.invoke('mock-api:config'),
+    clearLogs: (): Promise<MockStatus> => ipcRenderer.invoke('mock-api:clear-logs')
   },
 
   file: {
@@ -138,7 +178,7 @@ const api = {
     pickVaultFolder: (): Promise<string | null> =>
       ipcRenderer.invoke('privateBox:pickVaultFolder'),
     setup: (input: SetupInput): Promise<void> => ipcRenderer.invoke('privateBox:setup', input),
-    access: (input: AccessInput): Promise<void> => ipcRenderer.invoke('privateBox:access', input),
+    access: (input: AccessInput): Promise<string> => ipcRenderer.invoke('privateBox:access', input),
     recoverMetadata: (input: RecoverMetadataInput): Promise<RecoverMetadataResult> => ipcRenderer.invoke('privateBox:recoverMetadata', input),
     clearAccess: (): Promise<void> => ipcRenderer.invoke('privateBox:clearAccess'),
     setActive: (id: string): Promise<void> => ipcRenderer.invoke('privateBox:setActive', id),
@@ -146,43 +186,46 @@ const api = {
       ipcRenderer.invoke('privateBox:removeFromList', id),
     renameVault: (id: string, name: string): Promise<void> =>
       ipcRenderer.invoke('privateBox:renameVault', { id, name }),
-    list: (relativePath: string): Promise<DirEntry[]> =>
-      ipcRenderer.invoke('privateBox:list', relativePath),
-    listFolders: (): Promise<DirEntry[]> => ipcRenderer.invoke('privateBox:listFolders'),
-    mkdir: (relativePath: string): Promise<void> =>
-      ipcRenderer.invoke('privateBox:mkdir', relativePath),
-    createFile: (relativeDir: string, name: string, type: DocType): Promise<DocContent> =>
-      ipcRenderer.invoke('privateBox:createFile', { relativeDir, name, type }),
-    readFile: (relativePath: string): Promise<DocContent> =>
-      ipcRenderer.invoke('privateBox:readFile', relativePath),
-    writeFile: (relativePath: string, content: string): Promise<DocContent> =>
-      ipcRenderer.invoke('privateBox:writeFile', { relativePath, content }),
-    rename: (relativePath: string, newName: string): Promise<DirEntry> =>
-      ipcRenderer.invoke('privateBox:rename', { relativePath, newName }),
-    remove: (relativePath: string): Promise<void> =>
-      ipcRenderer.invoke('privateBox:remove', relativePath),
+    list: (relativePath: string, sessionId: string): Promise<DirEntry[]> =>
+      ipcRenderer.invoke('privateBox:list', { relativePath, sessionId }),
+    listFolders: (sessionId: string): Promise<DirEntry[]> => ipcRenderer.invoke('privateBox:listFolders', { sessionId }),
+    mkdir: (relativePath: string, sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('privateBox:mkdir', { relativePath, sessionId }),
+    createFile: (relativeDir: string, name: string, type: DocType, sessionId: string): Promise<DocContent> =>
+      ipcRenderer.invoke('privateBox:createFile', { relativeDir, name, type, sessionId }),
+    readFile: (relativePath: string, sessionId: string): Promise<DocContent> =>
+      ipcRenderer.invoke('privateBox:readFile', { relativePath, sessionId }),
+    writeFile: (relativePath: string, content: string, sessionId: string): Promise<DocContent> =>
+      ipcRenderer.invoke('privateBox:writeFile', { relativePath, content, sessionId }),
+    rename: (relativePath: string, newName: string, sessionId: string): Promise<DirEntry> =>
+      ipcRenderer.invoke('privateBox:rename', { relativePath, newName, sessionId }),
+    remove: (relativePath: string, sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('privateBox:remove', { relativePath, sessionId }),
     ensureDefault: (): Promise<VaultListItem> =>
       ipcRenderer.invoke('privateBox:ensureDefault'),
-    exportPlain: (relativePath: string): Promise<ExportPlainResult> =>
-      ipcRenderer.invoke('privateBox:exportPlain', relativePath),
-    exportToDisk: (relativePath: string): Promise<string | null> =>
-      ipcRenderer.invoke('privateBox:exportToDisk', relativePath),
-    importPlain: (input: ImportPlainInput): Promise<ExportPlainResult & { relativePath: string }> =>
-      ipcRenderer.invoke('privateBox:importPlain', input),
+    exportPlain: (relativePath: string, sessionId: string): Promise<ExportPlainResult> =>
+      ipcRenderer.invoke('privateBox:exportPlain', { relativePath, sessionId }),
+    exportToDisk: (relativePath: string, sessionId: string): Promise<string | null> =>
+      ipcRenderer.invoke('privateBox:exportToDisk', { relativePath, sessionId }),
+    importPlain: (input: ImportPlainInput, sessionId: string): Promise<ExportPlainResult & { relativePath: string }> =>
+      ipcRenderer.invoke('privateBox:importPlain', { ...input, sessionId }),
     importFromDisk: (
-      relativeDir?: string
+      relativeDir: string, sessionId: string
     ): Promise<(ExportPlainResult & { relativePath: string }) | null> =>
-      ipcRenderer.invoke('privateBox:importFromDisk', relativeDir),
-    saveDocument: (input: SaveDocumentInput): Promise<SaveDocumentResult> =>
-      ipcRenderer.invoke('privateBox:saveDocument', input),
+      ipcRenderer.invoke('privateBox:importFromDisk', { relativeDir, sessionId }),
+    saveDocument: (input: SaveDocumentInput, sessionId: string): Promise<SaveDocumentResult> =>
+      ipcRenderer.invoke('privateBox:saveDocument', { ...input, sessionId }),
     prepareDefaultForSave: (): Promise<{
       boxId: string
       boxName: string
       mode: 'device' | 'portable' | null
       hasAccess: boolean
+      sessionId?: string
     }> => ipcRenderer.invoke('privateBox:prepareDefaultForSave'),
-    accessDefault: (keyB: string): Promise<void> =>
-      ipcRenderer.invoke('privateBox:accessDefault', keyB)
+    accessDefault: (keyB: string): Promise<string> =>
+      ipcRenderer.invoke('privateBox:accessDefault', keyB),
+    listKeepNotes: (sessionId: string, cursor?: string): Promise<KeepNotesPage> =>
+      ipcRenderer.invoke('privateBox:listKeepNotes', { sessionId, cursor })
   }
 }
 

@@ -10,7 +10,7 @@ type Mode = 'encrypt' | 'decrypt'
 export default function AesTool(): JSX.Element {
   const [mode, setMode] = useState<Mode>('encrypt')
   const [password, setPassword] = useState('')
-  const [input, setInput] = useState('Secret message for DevUtils')
+  const [input, setInput] = useState('Secret message for DevFusion')
   const [output, setOutput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -104,7 +104,7 @@ export default function AesTool(): JSX.Element {
           <CodeEditor
             value={input}
             onChange={changeInput}
-            label={mode === 'encrypt' ? 'Plaintext (UTF-8)' : 'DevUtils AES ciphertext (Base64)'}
+            label={mode === 'encrypt' ? 'Plaintext (UTF-8)' : 'DevFusion AES ciphertext (Base64)'}
             onRun={() => void run()}
             language="text"
             placeholder={mode === 'encrypt' ? 'Plaintext…' : 'Base64 ciphertext…'}

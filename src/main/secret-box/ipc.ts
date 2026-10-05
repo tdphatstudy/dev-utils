@@ -8,6 +8,9 @@ import * as exportImport from './export-import'
 import * as fsOps from './fs-ops'
 import { assertTrustedIpc } from '../ipc-trust'
 import { CONTENT_KIND_IDS } from '@shared/secret-box/content-kinds'
+import { assertSessionId, bindSessionOwner, getSessionId } from './session'
+import { KEEP_FOLDER } from '@shared/secret-box/keep-note'
+
 import {
   accessVault,
   clearVaultAccess,
@@ -22,16 +25,25 @@ import {
   recoverVaultMetadata
 } from './vault'
 
+const dataChannels = new Set(['privateBox:list', 'privateBox:listFolders', 'privateBox:mkdir', 'privateBox:createFile', 'privateBox:readFile', 'privateBox:writeFile', 'privateBox:rename', 'privateBox:remove', 'privateBox:exportPlain', 'privateBox:exportToDisk', 'privateBox:importPlain', 'privateBox:importFromDisk', 'privateBox:saveDocument', 'privateBox:listKeepNotes'])
+const authChannels = new Set(['privateBox:access', 'privateBox:accessDefault', 'privateBox:setup', 'privateBox:recoverMetadata'])
+let authenticating = false
+
 function validateBoxPayload(channel: string, value: unknown): void {
   const text = (input: unknown, label: string, max = 4096): void => {
     if (typeof input !== 'string' || input.length > max || (!['content', 'keyA', 'keyB', 'password'].includes(label) && /[\x00-\x1f\x7f]/.test(input))) throw new Error(`Invalid ${label}.`)
   }
-  if (['privateBox:getStatus', 'privateBox:ensureDefault', 'privateBox:pickEmptyFolder', 'privateBox:pickVaultFolder', 'privateBox:clearAccess', 'privateBox:listFolders', 'privateBox:prepareDefaultForSave'].includes(channel)) return
-  if (['privateBox:list', 'privateBox:importFromDisk'].includes(channel)) { if (value !== undefined) text(value, 'path'); return }
-  if (['privateBox:mkdir', 'privateBox:readFile', 'privateBox:remove', 'privateBox:exportPlain', 'privateBox:exportToDisk', 'privateBox:setActive', 'privateBox:removeFromList'].includes(channel)) { text(value, 'path or box id'); return }
+  if (['privateBox:getStatus', 'privateBox:ensureDefault', 'privateBox:pickEmptyFolder', 'privateBox:pickVaultFolder', 'privateBox:clearAccess', 'privateBox:prepareDefaultForSave'].includes(channel)) return
+  if (['privateBox:setActive', 'privateBox:removeFromList'].includes(channel)) { text(value, 'box id'); return }
   if (channel === 'privateBox:accessDefault') { text(value, 'password', 8192); return }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid box request.')
   const request = value as Record<string, unknown>
+  if (dataChannels.has(channel)) {
+    text(request.sessionId, 'session id', 64)
+    if (!request.sessionId) throw new Error('Invalid session id.')
+  }
+  if (['privateBox:list', 'privateBox:mkdir', 'privateBox:readFile', 'privateBox:remove', 'privateBox:exportPlain', 'privateBox:exportToDisk'].includes(channel)) { text(request.relativePath, 'path'); return }
+  if (channel === 'privateBox:listKeepNotes' && request.cursor !== undefined) text(request.cursor, 'cursor')
   const required: Record<string, string[]> = {
     'privateBox:setup': ['rootPath', 'keyA', 'keyB'], 'privateBox:access': ['keyB'], 'privateBox:recoverMetadata': ['boxId', 'keyB'],
     'privateBox:renameVault': ['id', 'name'], 'privateBox:createFile': ['relativeDir', 'name'],
@@ -51,7 +63,17 @@ function handleBox(channel: string, listener: Parameters<typeof ipcMain.handle>[
   ipcMain.handle(channel, async (event, payload: unknown) => {
     assertTrustedIpc(event)
     validateBoxPayload(channel, payload)
-    return listener(event, payload)
+    const token = (payload as { sessionId?: string } | undefined)?.sessionId
+    if (dataChannels.has(channel)) assertSessionId(token, event.sender.id)
+    const auth = authChannels.has(channel)
+    if (auth && authenticating) throw new Error('Authentication is already running. Wait for completion or cancel it.')
+    if (auth) authenticating = true
+    try {
+      const result = await listener(event, payload)
+      if (dataChannels.has(channel)) assertSessionId(token, event.sender.id)
+      if (auth) bindSessionOwner(event.sender.id)
+      return ['privateBox:access', 'privateBox:accessDefault'].includes(channel) ? getSessionId() : result
+    } finally { if (auth) authenticating = false }
   })
 }
 
@@ -118,16 +140,16 @@ export function registerSecretBoxIpc(): void {
     }
   )
 
-  handleBox('privateBox:list', async (_e, relativePath: string) => {
-    return fsOps.listDir(relativePath || '')
+  handleBox('privateBox:list', async (_e, payload: { relativePath: string }) => {
+    return fsOps.listDir(payload.relativePath)
   })
 
   handleBox('privateBox:listFolders', async () => {
     return fsOps.listFoldersRecursive('')
   })
 
-  handleBox('privateBox:mkdir', async (_e, relativePath: string) => {
-    await fsOps.mkdirPath(relativePath)
+  handleBox('privateBox:mkdir', async (_e, payload: { relativePath: string }) => {
+    await fsOps.mkdirPath(payload.relativePath)
   })
 
   handleBox(
@@ -140,8 +162,8 @@ export function registerSecretBoxIpc(): void {
     }
   )
 
-  handleBox('privateBox:readFile', async (_e, relativePath: string) => {
-    return fsOps.readDoc(relativePath)
+  handleBox('privateBox:readFile', async (_e, payload: { relativePath: string }) => {
+    return fsOps.readDoc(payload.relativePath)
   })
 
   handleBox(
@@ -158,16 +180,16 @@ export function registerSecretBoxIpc(): void {
     }
   )
 
-  handleBox('privateBox:remove', async (_e, relativePath: string) => {
-    await fsOps.removeEntry(relativePath)
+  handleBox('privateBox:remove', async (_e, payload: { relativePath: string }) => {
+    await fsOps.removeEntry(payload.relativePath)
   })
 
-  handleBox('privateBox:exportPlain', async (_e, relativePath: string) => {
-    return exportImport.exportDocPlain(relativePath)
+  handleBox('privateBox:exportPlain', async (_e, payload: { relativePath: string }) => {
+    return exportImport.exportDocPlain(payload.relativePath)
   })
 
-  handleBox('privateBox:exportToDisk', async (event, relativePath: string) => {
-    return exportImport.exportDocToDisk(relativePath, event.sender)
+  handleBox('privateBox:exportToDisk', async (event, payload: { relativePath: string }) => {
+    return exportImport.exportDocToDisk(payload.relativePath, event.sender)
   })
 
   handleBox('privateBox:importPlain', async (_e, input: ImportPlainInput) => {
@@ -176,8 +198,8 @@ export function registerSecretBoxIpc(): void {
 
   handleBox(
     'privateBox:importFromDisk',
-    async (event, relativeDir?: string) => {
-      return exportImport.importPlainFromDisk(event.sender, relativeDir || '')
+    async (event, payload: { relativeDir?: string }) => {
+      return exportImport.importPlainFromDisk(event.sender, payload.relativeDir || '')
     }
   )
 
@@ -192,6 +214,7 @@ export function registerSecretBoxIpc(): void {
   handleBox('privateBox:accessDefault', async (_e, keyB: string) => {
     await exportImport.accessDefaultBox(keyB)
   })
+  handleBox('privateBox:listKeepNotes', async (_e, payload: { cursor?: string }) => fsOps.listKeepNotes(KEEP_FOLDER, payload.cursor))
 }
 
 /** @deprecated use registerSecretBoxIpc */

@@ -15,6 +15,14 @@ describe('parseJson', () => {
 })
 
 describe('formatJson', () => {
+  it('returns a validation error for a deeply nested valid document without crashing', () => {
+    const input = '['.repeat(10000) + '0' + ']'.repeat(10000)
+    expect(() => formatJson(input)).not.toThrow()
+    expect(formatJson(input)).toMatchObject({ ok: false, error: expect.stringContaining('128') })
+  })
+  it('ignores bracket characters inside strings when checking depth', () => {
+    expect(formatJson(JSON.stringify({ text: '['.repeat(1000) + '\\"' })).ok).toBe(true)
+  })
   it('keeps __proto__ as data while sorting keys', () => {
     const result = formatJson('{"z":1,"__proto__":{"safe":true},"a":2}', { sortKeys: true })
     expect(result.ok).toBe(true)

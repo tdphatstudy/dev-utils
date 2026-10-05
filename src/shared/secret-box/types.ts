@@ -90,6 +90,8 @@ export interface VaultStatus {
   activeId: string | null
   vaults: VaultListItem[]
   initializationError?: string
+  /** Ephemeral generation; never persisted or used as an encryption key. */
+  sessionId?: string
 }
 
 export interface SetupInput {
@@ -121,6 +123,13 @@ export interface DocContent {
   updatedAt: string
   encoding?: DocEncoding
   mimeType?: string
+  sessionId: string
+}
+
+export interface KeepNotesPage {
+  notes: DocContent[]
+  unreadable: string[]
+  nextCursor: string | null
 }
 
 export const DOC_EXT: Record<DocType, string> = Object.fromEntries(

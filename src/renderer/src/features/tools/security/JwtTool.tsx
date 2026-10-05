@@ -20,7 +20,7 @@ type Mode = 'decode' | 'verify' | 'sign'
 
 const DEFAULT_PAYLOAD = `{
   "sub": "1234567890",
-  "name": "DevUtils",
+  "name": "DevFusion",
   "iat": ${Math.floor(Date.now() / 1000)},
   "exp": ${Math.floor(Date.now() / 1000) + 3600}
 }`

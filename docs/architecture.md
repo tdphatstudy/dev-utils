@@ -1,8 +1,9 @@
-# DevUtils — bản đồ sản phẩm và code
+# DevFusion — bản đồ sản phẩm và code
 
-Đối chiếu working tree ngày 2026-10-04, gồm cả code chưa commit. Đây là bản đồ
+Đối chiếu working tree ngày 2026-10-05, gồm cả code chưa commit. Đây là bản đồ
 hiện trạng; các yêu cầu an toàn ở `../AGENTS.md` là chuẩn cần đạt. Lỗi đã biết nằm
-trong [bản review](review-2026-10-04.md).
+trong [bản review](review-2026-10-04.md); thay đổi performance/security và giới hạn
+kiểm chứng nằm trong [báo cáo 2026-10-05](review-performance-security-2026-10-05.md).
 
 ## Ý tưởng sản phẩm
 
@@ -13,7 +14,8 @@ Phần lớn xử lý tại máy. HTTP, DNS và kiểm tra TCP có truy cập m�
 chủ động chạy. SSH hiện quản lý key/config và kiểm tra TCP, chưa có terminal SSH
 hay xác thực SSH thực sự.
 
-Đích hiện tại là **desktop Windows/macOS/Linux**. Electron không tự làm cho app
+Đích hiện tại là **desktop Windows/macOS/Linux**, với Electron **44.5.1** và
+macOS tối thiểu **13**. Electron không tự làm cho app
 này chạy trên iOS/Android; muốn thêm mobile cần một host và adapter khác.
 
 ## Map tổng thể
@@ -36,6 +38,9 @@ flowchart TB
   IPC --> Net[HTTP / DNS / TCP probe]
   IPC --> SSH[SSH keys + config CRUD]
   IPC --> OS[File hash / dialogs / port adapters]
+  IPC --> OCR[Transient OCR renderer + workers]
+  OCR --> Models[Bundled local models / PDF assets]
+  OCR --> OcrPopup[Lightweight tray text popup]
   Vault --> Disk[Registry + vault metadata + encrypted .putl]
   SSH --> SshDisk[Configured SSH directory / config]
   OS --> Platforms[Windows / macOS / Linux]
@@ -53,6 +58,11 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 | Nhiệm vụ | Đọc/sửa tại | Liên quan |
 |---|---|---|
 | Startup, cửa sổ, lifecycle | `src/main/index.ts` | preload, IPC registrars |
+| Brand / native tray / quick actions | `src/shared/brand.ts`, `src/main/branding.ts`, `src/main/tray.ts` | shared quick-actions, App router subscription, resource exports |
+| Color Picker | `src/shared/color`, `src/main/color-picker.ts`, `src/main/screen-snapshot.ts` | app color bridge, isolated `src/preload/color-picker.ts`, tool UI, resource HTML/JS |
+| OCR ảnh/PDF và chụp màn hình | `src/shared/ocr/types.ts`, `src/main/ocr.ts`, `src/renderer/src/ocr-helper` | `text.ocr`, app OCR bridge, isolated preload, local assets plugin, lightweight resource popup |
+| Lorem và time/date | `src/shared/lorem`, `src/shared/time` | lazy `text.lorem`, `time.timestamp`, `time.date`, tool components |
+| Mock API local server | `src/shared/mock-api`, `src/main/mock-api-server.ts` | `mock-api-ipc.ts`, typed `mockApi` preload, `network.mock-api`, tray status/Stop |
 | API giữa UI và OS | `src/preload/index.ts` | `index.d.ts`, shared types, main handlers |
 | Route, shell, phím tắt, theme | `src/renderer/src/App.tsx`, `layouts/AppShell.tsx` | `main.tsx`, `components/chrome` |
 | Thêm/sửa tool và tìm kiếm | `src/renderer/src/registry/tools.ts` | `pages/ToolPage.tsx`, `features/tools/<group>` |
@@ -260,7 +270,12 @@ Recovery derives/verifies keys with asynchronous scrypt, checks the session
 revision across IO and before commit, and transfers accepted keys to the session.
 The login UI requires an explicit recovery choice and exposes Cancel through
 clearAccess; it checks cancellation after the current async operation completes.
-Normal setup/unlock still use synchronous KDF. Native recovery interaction,
+Setup/unlock also use asynchronous scrypt with the same salts, domains and KDF
+parameters. Rejected or cancelled key buffers are zeroed in finally; accepted
+buffers transfer to the main session. Authentication IPC refuses overlapping
+setup/unlock/recovery jobs. Auth-rate operations are queued per vault and publish
+state atomically; corrupt or unreadable state fails closed instead of resetting
+the counter. Native recovery interaction,
 progress feedback and external filesystem/process races remain unverified.
 
 Legacy device material remains separate from the hardware cache. Candidate
@@ -294,15 +309,42 @@ one failed transaction releases it. Queued setup/add requests retain their sessi
 revision, and a newer selection invalidates an older queued selection. Existing
 Default Box discovery only writes the registry when its entry/active ID needs an
 update, avoiding writes on each status refresh. This is an in-process queue;
-external edits or two app processes still need coordination. Context tokens for
-every separate CRUD IPC call, native multi-window behavior and authentication key
-disposal still need review.
+external edits or two app processes still need coordination.
+
+Every document/list/import/export IPC request now requires a sessionId returned
+by unlock, status or document reads. Main checks that opaque generation token
+and its webContents owner before dispatch and after completion. Switching or
+locking a box invalidates it, including a new request for a path also present in
+another vault. Keys are cleared and zeroed from main when the owning window
+closes, webContents is destroyed or the renderer process exits. Window ownership
+is captured before destruction. This is one active session, not independent
+multi-window vault access; sleep/idle locking remains a separate product policy.
+
+Native text import is limited to 8 MiB and media remains limited to 40 MiB.
+Encrypted file reads cap envelopes at 96 MiB, using an opened regular file with
+identity/size checks before allocation and after bounded reads; changes during
+the read are refused. Payload validation bounds ciphertext/Base64, type, encoding,
+name and MIME before accepting plaintext. Text content is capped at 64 MiB and
+serialized payload at just under 72 MiB, so heavily escaped text can hit the
+payload limit earlier. Existing legacy text without encoding and binary/MIME
+round trips remain supported within these limits. No on-disk version or salts
+are migrated. Bounds and point-in-time checks do not lock out external writers.
+
+Keep loads through the named privateBox:listKeepNotes IPC, with one decrypt per
+note, at most 200 examined files and 8 MiB of plaintext per page. A cursor resumes
+the next page, and corrupt or oversized notes are reported without deleting them.
+The UI offers Load more and searches only loaded notes. Save/create/delete update
+the affected cards instead of reloading the whole inventory. No plaintext index
+or persistent content cache is created; locked/unmounted views clear their card
+state. Directory enumeration still scales with file count, and manually loading
+all pages can accumulate cards in memory.
 
 Keep passes passwords unchanged, retains failed-save drafts in memory, prevents
 duplicate writes and reports unreadable note files. Unrecognized JSON note bodies
-are shown as their original text rather than an empty note. Renderer save/error
-flows still require native integration verification; no decrypted draft is added
-to persistent settings or generic tool history.
+are shown as their original text rather than an empty note. Browser smoke covers
+save/retry with a fixture bridge; native dialog/recovery interaction still requires
+integration QA. No decrypted draft is added to persistent settings or generic
+tool history.
 Keep edits pass the original document body to serializeKeepNote. The serializer
 patches only its six owned root fields and adds missing owned fields; unknown
 members retain exact JSON bytes, including number lexemes, duplicate keys and
@@ -310,6 +352,135 @@ nested content. Unsupported color or timestamp field types are treated as raw
 text rather than silently normalized. New notes use the existing JSON format.
 
 ## Đường mở rộng hợp lý
+
+Renderer navigation uses React Router's `createHashRouter`/`RouterProvider` with
+the same Home and `/tool/:toolId` hash URLs and lazy tool components. Keep uses
+`useBlocker` for sidebar, palette and Back navigation, plus `beforeunload` for
+reload/window-close attempts. Its guard offers explicit Save and continue,
+Discard changes and Keep editing; failed saves retain the component draft and
+block leaving. Sign out, editor close and replacing a new-note composer use the
+same guard. The guard stores callbacks/flags only, never note content. No vault
+format or generic draft/history policy changes. Recent tool IDs update after
+successful route transitions, so cancelling a leave does not record an unopened tool.
+
+Shared `Modal` uses the existing Radix Dialog dependency for focus containment,
+opener restoration, accessible titles and Escape handling. Keep and vault naming
+use it; active writes disable dismissal. Segmented controls are groups of pressed
+buttons with one tab stop and Left/Right/Home/End selection, rather than incomplete
+tab/tabpanel semantics. JSON tree expand controls have explicit names and path
+copy failures are handled locally with visible status.
+
+Async errors show dismissible feedback without navigation. Render boundaries
+keep their error view until explicit Retry or Home; retry can remount a crashed
+view and cannot guarantee recovering its component state. Crash notices stored
+in sessionStorage contain generic text/source/time only, not exception messages
+or stacks. Native close prompts and real Keep save/retry still need Electron QA.
+
+YAML Studio uses a renderer module worker after a 200 ms debounce. One document
+parse produces validation, formatted YAML and JSON/tree results. Input changes,
+unmount or the five-second deadline terminate the worker and invalidate stale
+output. Worker loading is verified from the production file URL. Shared JSON/YAML
+processing limits input to 8,388,608 UTF-16 code units, depth to 128 and traversed
+values to 250,000; JSON depth is checked before parsing, and circular YAML aliases
+are refused for JSON/tree output. Formatter failures return structured errors.
+Tree rendering uses data identity instead of full stringify, keeps DOM
+virtualization and caps its row model and expansion paths at 10,000 with visible
+limit feedback. Large synchronous shared calls outside YAML Studio remain bounded
+but are not automatically moved to workers.
+
+Window security permits hash navigation within the expected app URL, refuses
+external navigation/redirects and denies popups. Explicit external links pass an
+HTTP/HTTPS allowlist without embedded credentials before shell.openExternal.
+Production CSP restricts connect-src and worker-src to self; only development
+allows WebSocket HMR. Native network tools continue through their main handlers.
+Signing/notarization and Electron fuse hardening are not a completed release
+pipeline. Windows production UI/worker/IPC lifecycle smoke is automated; macOS
+and Linux native behavior and installers remain unverified on this host.
+
+### DevFusion branding, tray và Color Picker
+
+Visible name/title/installer/package metadata now use DevFusion. The app pins
+userData and Chromium sessionData to the legacy DevUtils/devutils folder before
+ready, preferring the existing folder for its packaged/development context. The
+installation ID, bridge name, persisted settings keys, file names and crypto
+domains remain unchanged. No data migration or replacement salt/key is performed.
+The SVG master supplies consistent small raster/ICO exports, with a separate
+macOS template tray icon and retina asset. Brand generation reads only repository
+vectors; the former private absolute source-image path was removed.
+
+DesktopTray retains a native Tray/Menu and one optional main BrowserWindow.
+Closing the main window destroys its renderer and zeroes vault keys through the
+existing owner lifecycle. A native will-prevent-unload dialog honors Keep's dirty
+guard before allowing explicit discard. No hidden renderer is retained for the
+tray, and no background screen/clipboard monitor or auto-start setting is added.
+Tray failure falls back to normal last-window exit on Windows/Linux. Quit disposes
+tray/picker and clears keys; native menu/Settings provide an explicit Quit action.
+Minimize keeps the window and its in-memory state. Electron's base main/GPU/system
+process memory remains; tray mode is not zero-memory operation.
+
+Tray routing uses fixed shared QUICK_TOOLS IDs. Initial routes load directly;
+existing windows receive app:openTool via a named preload subscription and React
+Router navigation, preserving Keep's route blocker. UUID copy uses crypto.randomUUID
+directly in main, with no renderer or clipboard read. Color picking captures the
+OS desktop with desktopCapturer before opening overlays, matches display_id to
+screen bounds and uses full-resolution images with DIP-to-image coordinate mapping.
+One temporary fullscreen overlay per display samples a snapshot, then all overlays
+are destroyed and replaced by a compact HEX/RGB/HSL/HSV result popup with Copy and
+Repick. Repick closes the popup before taking a fresh desktop snapshot; Esc restores
+the previous result. Clipboard changes only on an explicit format Copy action.
+Snapshots are RAM-only, bounded to 64 million requested/decoded pixels and 128 MiB
+encoded data; one to eight displays, a two-minute selection deadline and 15-second
+helper load deadline. Missing permission/full-resolution images or ambiguous
+monitor mapping fail clearly instead of sampling the wrong monitor. Capture portals
+that omit display IDs on multi-monitor desktops (notably some Wayland setups) are
+unsupported. Display changes, owner destruction, Close and Quit clean up helpers.
+Helpers use a nonpersistent partition, sandbox/contextIsolation/webSecurity and a
+separate minimal preload, never the toolbox bridge. CSP permits only local helper
+JS and data images. screenPicker:* IPC verifies current helper WebContents/main
+frame/file URL/mode and validates colors/formats; color:pickScreen/lastScreen use
+the main app sender guard. Only the last color persists in main RAM until Quit;
+validated color:picked events update the main app tool. No arbitrary execution,
+clipboard text or IPC channel is exposed. See [picker fix and QA](color-picker-desktop-fix.md).
+
+design.color is a lazy Design tool reachable through Home/sidebar/palette/tray.
+Shared conversions validate 3/6-digit HEX and provide RGB/HSL/HSV and WCAG relative
+luminance contrast for black/white text. UI recents cap at 12 colors in component
+RAM; generic history/drafts exclude the tool. Desktop-only screen sampling reports
+failure/cancellation honestly; manual color entry also works in browser preview.
+Clipboard errors remain local and allow retry. Actual Windows desktop selection,
+result popup, Repick and cleanup have a native regression fixture. macOS/Linux
+permissions and physical multi-monitor capture still need platform QA; see
+[picker fix and QA](color-picker-desktop-fix.md).
+
+### OCR ảnh / PDF / desktop
+
+`text.ocr` là tool lazy trong Text / Dev, có ở Home/sidebar/palette/tray. UI nhập
+PNG/JPEG/WebP/GIF/BMP/PDF, chọn eng/vie/eng+vie, sửa chữ, Copy/Save .txt, xem tiến độ
+và Hủy. Main `DesktopOcr` điều phối một job: input được kiểm tra signature, language,
+request ID và byte/pixel bounds; snapshot desktop dùng lại `screen-snapshot.ts`.
+Chọn vùng có một overlay cho từng display, crop ở renderer tạm và trả tọa độ
+normalized cùng PNG bytes. Main đổi tọa độ sang pixel gốc, kiểm tra bounds, byte/
+pixel limits và kích thước crop; không giải mã thêm NativeImage lớn trong main.
+Không cho Color Picker và OCR chạy đồng thời.
+
+Main app chỉ có named `ocr:recognize/capture/cancel` và `ocr:progress` theo request ID.
+OCR engine ở một renderer sandbox tạm có `ocrHelper` preload riêng. `ocr.html` chỉ
+dynamic import PDF.js 6.4.299 khi đọc PDF, Tesseract.js 7.0.0 khi cần nhận ảnh. PDF
+có text layer lấy chữ trực tiếp; trang scan render vào một canvas giới hạn và OCR
+tuần tự với một worker. Force OCR nhận toàn bộ trang dù có text header/layer.
+Models `4.0.0_best_int` Anh/Việt, LSTM cores adaptive SIMD, PDF worker/fonts/cmaps/
+decoders đi kèm `out/renderer/ocr-assets`, tạo bởi `scripts/ocr-assets.ts`; dev server
+phục vụ cùng allowlist. Các dependency này là build dependencies, tránh đóng gói
+trùng bản Node/model. Không tải CDN hoặc cache model vào IndexedDB.
+
+Production assets đi qua scheme secure `devfusion-ocr://local`, chỉ map `ocr.html`,
+`assets/`, `ocr-assets/` trong renderer root. Session không persistent, từ chối quyền
+và HTTP/HTTPS ngoài dev origin. Runner CSP cho local worker + `wasm-unsafe-eval`;
+CSP app chính giữ nguyên. Helper IPC kiểm tra job/WebContents/mainFrame/URL/mode;
+không lộ toolbox bridge hay file/network API tổng quát. Hoàn tất/Hủy/owner đóng/
+timeout phá hủy runner và workers; tray tạo popup HTML/JS nhẹ chỉ có chữ/Copy/Close.
+Snapshots, inputs và text chỉ ở RAM, `text.ocr` nằm trong NO_HISTORY_TOOLS; không
+ghi generic drafts/history. Giới hạn và bằng chứng kiểm chứng ở [OCR](ocr.md).
 
 Shared text import uses fatal UTF-8 decoding. Line Endings opts into BOM
 preservation; other tools retain their existing BOM stripping behavior. Input
@@ -360,6 +531,21 @@ Giữ Electron cho desktop và cải thiện adapter, hợp đồng IPC, privacy
 test trước. Không cần chuyển framework để thêm một tool. Nếu thật sự thêm web
 hoặc mobile, tách host API/capability rõ ràng và chỉ tái dùng phần shared phù hợp
 runtime; đánh dấu tool không có quyền OS thay vì giả lập thành công.
+
+Lorem và Time/Date chỉ chạy trong renderer/shared, không có background clock hay
+OS API. Timestamp yêu cầu chọn seconds/ms rõ ràng; ISO input cần offset/Z. Calendar
+date tính theo ngày UTC không có timezone, clamp tháng/năm vào ngày cuối tháng;
+elapsed duration dùng millisecond thật, ngày = 24 giờ, nên không lẫn wall time DST.
+
+Mock API chỉ tạo Node HTTP listener sau explicit Start; binds `127.0.0.1`, Host
+loopback + Origin allowlist, bounded request/response/header/concurrency/timeouts.
+Shared schema v1 validate cả UI lẫn main, YAML aliases/custom tags/unknown fields
+bị từ chối; named IPC kiểm tra trusted sender. Rule header/query/path/JSON Pointer
+body không dùng regex/eval/proxy; first-match và fallback cuối deterministic.
+Server đã Start sống khi cửa sổ đóng xuống tray; Stop/Quit hủy sockets/timers và
+xóa config/logs RAM. Activity không chứa incoming URL/header/query/body;
+`network.mock-api` thuộc NO_HISTORY_TOOLS. Export YAML explicit là plaintext.
+Xem [Mock API schema, limits và verification](mock-api.md).
 
 Chuẩn AI gồm Markdown + Mermaid trong Git. Không cần package runtime. Hướng dẫn
 thao tác và các nguồn chính thức nằm trong [AI workflow](ai-workflow.md).

@@ -1,4 +1,4 @@
-# DevUtils: shared instructions for coding agents
+# DevFusion: shared instructions for coding agents
 
 This is the canonical repository guide for Codex, Claude, Copilot and other agents.
 Read `docs/architecture.md` for the product and dependency map, and
@@ -8,7 +8,7 @@ Explicit user instructions take precedence over this guide.
 
 ## Product intent
 
-DevUtils is a local-first Electron desktop developer toolbox for Windows, macOS
+DevFusion is a local-first Electron desktop developer toolbox for Windows, macOS
 and Linux. It combines data/text utilities, explicit network tools, an encrypted
 Private Box, and Keep notes stored in the default Secret Box. Preserve local
 processing, the existing macOS-inspired UI, and lazy loading of tools.

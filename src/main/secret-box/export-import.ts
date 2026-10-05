@@ -14,8 +14,10 @@ import {
 } from '@shared/secret-box/content-kinds'
 import type { DocType } from '@shared/secret-box/types'
 import { ensureExtension, MAX_MEDIA_BYTES, typeFromName } from '@shared/secret-box/types'
+import { MAX_TEXT_IMPORT_BYTES } from '@shared/secret-box/limits'
+import { readBoundedFile } from '../bounded-read'
 import * as fsOps from './fs-ops'
-import { getAccess, requireAccess, assertAccess, getAccessRevision, assertAccessRevision } from './session'
+import { getAccess, requireAccess, assertAccess, getAccessRevision, assertAccessRevision, getSessionId } from './session'
 import {
   accessVault,
   ensureDefaultSecretBox,
@@ -130,42 +132,19 @@ export async function importPlainFromDisk(
   if (result.canceled || !result.filePaths[0]) return null
   assertAccess(access)
   const filePath = result.filePaths[0]
-  const { readFile, stat } = await import('fs/promises')
   const base = basename(filePath)
   const type = typeFromName(base)
-  const st = await stat(filePath)
-  assertAccess(access)
-
-  if (isBinaryKind(type) || st.size > 0) {
-    // Prefer binary path for known media / any large-ish non-text
-    if (isBinaryKind(type)) {
-      if (st.size > MAX_MEDIA_BYTES) {
-        throw new Error(
-          `File too large (${Math.round(st.size / (1024 * 1024))} MB). Max ${Math.round(MAX_MEDIA_BYTES / (1024 * 1024))} MB for encrypted media in Secret Box.`
-        )
-      }
-      const buf = await readFile(filePath)
-      assertAccess(access)
-      const content = buf.toString('base64')
-      return importPlainToActiveBox({
-        name: base,
-        content,
-        relativeDir,
-        type,
-        encoding: 'base64',
-        mimeType: mimeFromFileName(base, type)
-      })
-    }
-  }
-
-  // Text-like
-  const content = await readFile(filePath, 'utf8')
+  const binary = isBinaryKind(type)
+  const bytes = await readBoundedFile(filePath, binary ? MAX_MEDIA_BYTES : MAX_TEXT_IMPORT_BYTES, () => assertAccess(access))
+  const content = binary ? bytes.toString('base64') : new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   assertAccess(access)
   return importPlainToActiveBox({
     name: base,
     content,
     relativeDir,
-    type
+    type,
+    encoding: binary ? 'base64' : 'utf-8',
+    mimeType: binary ? mimeFromFileName(base, type) : undefined
   })
 }
 
@@ -204,6 +183,7 @@ export async function prepareDefaultBoxForSave(): Promise<{
   boxName: string
   mode: 'device' | 'portable' | null
   hasAccess: boolean
+  sessionId?: string
 }> {
   const def = await getDefaultVaultEntry()
   if (!def) throw new Error('Default Secret Box missing')
@@ -218,7 +198,8 @@ export async function prepareDefaultBoxForSave(): Promise<{
     boxId: def.id,
     boxName: def.name,
     mode: cfg?.mode ?? 'device',
-    hasAccess: !!accessNow && accessNow.rootPath === def.rootPath
+    hasAccess: !!accessNow && accessNow.rootPath === def.rootPath,
+    sessionId: accessNow && accessNow.rootPath === def.rootPath ? getSessionId() : undefined
   }
 }
 

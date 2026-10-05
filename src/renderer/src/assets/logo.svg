@@ -1,64 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="DevUtils">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="DevFusion">
   <defs>
-    <linearGradient id="bg" x1="160" y1="40" x2="880" y2="980" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2F6BFF"/>
-      <stop offset="55%" stop-color="#3D4FE8"/>
-      <stop offset="100%" stop-color="#5B2DBA"/>
+    <linearGradient id="fusion-bg" x1="6" y1="4" x2="60" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3978F6"/><stop offset=".55" stop-color="#5554D9"/><stop offset="1" stop-color="#733DC3"/>
     </linearGradient>
-    <linearGradient id="glassA" x1="280" y1="260" x2="720" y2="760" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.42"/>
-      <stop offset="50%" stop-color="#DCEBFF" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#B8C8FF" stop-opacity="0.12"/>
+    <linearGradient id="fusion-front" x1="12" y1="26" x2="44" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E0EEFF"/>
     </linearGradient>
-    <linearGradient id="glassB" x1="340" y1="220" x2="780" y2="700" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#C8D6FF" stop-opacity="0.10"/>
+    <linearGradient id="fusion-f" x1="21" y1="31" x2="40" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3869E1"/><stop offset="1" stop-color="#6450CC"/>
     </linearGradient>
-    <linearGradient id="glassC" x1="400" y1="180" x2="820" y2="640" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#C0CCFF" stop-opacity="0.08"/>
-    </linearGradient>
-    <linearGradient id="rim" x1="300" y1="240" x2="700" y2="740" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
-      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#7AD7FF" stop-opacity="0.45"/>
-    </linearGradient>
-    <radialGradient id="orb" cx="35%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#E8FCFF"/>
-      <stop offset="40%" stop-color="#5AC8FA"/>
-      <stop offset="100%" stop-color="#0A84FF"/>
-    </radialGradient>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0A1238" flood-opacity="0.22"/>
-    </filter>
   </defs>
-
-  <!-- Squircle canvas -->
-  <rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
-
-  <!-- Stacked glass modules = multi-tool symbol (no letter) -->
-  <g filter="url(#soft)">
-    <!-- Back module -->
-    <rect x="380" y="210" width="360" height="360" rx="88" fill="url(#glassC)" stroke="url(#rim)" stroke-width="2.5" opacity="0.85"/>
-    <!-- Mid module -->
-    <rect x="300" y="280" width="400" height="400" rx="96" fill="url(#glassB)" stroke="url(#rim)" stroke-width="2.5" opacity="0.92"/>
-    <!-- Front module -->
-    <rect x="220" y="350" width="440" height="440" rx="108" fill="url(#glassA)" stroke="url(#rim)" stroke-width="3"/>
-    <!-- Soft sheen on front -->
-    <path
-      d="M260 430
-         C 320 380 420 360 520 380
-         C 600 396 660 440 680 480
-         L 680 420
-         C 680 380 650 360 610 360
-         L 330 360
-         C 280 360 260 390 260 430 Z"
-      fill="#FFFFFF"
-      fill-opacity="0.18"
-    />
-  </g>
-
-  <!-- Cyan utility orb accent -->
-  <circle cx="690" cy="760" r="42" fill="url(#orb)"/>
-  <circle cx="678" cy="748" r="12" fill="#FFFFFF" fill-opacity="0.45"/>
+  <rect width="64" height="64" rx="15" fill="url(#fusion-bg)"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="1"/>
+  <rect x="27" y="10" width="27" height="27" rx="7" fill="#8BE0FF" fill-opacity=".34" stroke="#C5F1FF" stroke-width="1.5"/>
+  <rect x="19" y="18" width="29" height="29" rx="8" fill="#BAD6FF" fill-opacity=".5" stroke="#E1ECFF" stroke-width="1.5"/>
+  <rect x="10" y="26" width="32" height="29" rx="8" fill="url(#fusion-front)"/>
+  <path d="M21 47V34H34M21 40H31" stroke="url(#fusion-f)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="47" cy="50" r="6" fill="#64E5ED"/>
+  <circle cx="47" cy="50" r="2.5" fill="#22629D"/>
 </svg>

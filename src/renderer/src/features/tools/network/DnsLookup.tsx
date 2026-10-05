@@ -112,7 +112,7 @@ export default function DnsLookup(): JSX.Element {
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error || (!normalized.ok && !!host.trim()) ? 'danger' : statusMsg ? statusTone : 'neutral'}>
-          {!normalized.ok ? normalized.error : !available ? 'DNS Lookup requires the DevUtils desktop app.' : busy ? `Resolving ${normalized.hostname} · timeout 5 seconds…` : error ??
+          {!normalized.ok ? normalized.error : !available ? 'DNS Lookup requires the DevFusion desktop app.' : busy ? `Resolving ${normalized.hostname} · timeout 5 seconds…` : error ??
             statusMsg ??
             `Ready to query ${normalized.hostname} · click Lookup or press Enter · no records is a valid response`}
         </ToolStatus>

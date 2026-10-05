@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { existsSync } from 'fs'
-import { mkdir, readdir, readFile, rename, rm } from 'fs/promises'
+import { mkdir, readdir, rename, rm } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import { getContentKind, isBinaryKind, mimeFromFileName } from '@shared/secret-box/content-kinds'
 import { PUTL_EXT, VAULT_DIR } from '@shared/secret-box/constants'
@@ -15,9 +15,12 @@ import type {
 import { ensureExtension, typeFromName } from '@shared/secret-box/types'
 import { openDoc, parseEnvelope, sealDoc, serializeEnvelope } from './crypto'
 import { resolveVaultPath, toRelativeFromRoot } from './vault-paths'
-import { requireAccess, assertAccess, type EphemeralAccess } from './session'
+import { requireAccess, assertAccess, getSessionId, type EphemeralAccess } from './session'
+import type { KeepNotesPage } from '@shared/secret-box/types'
 import { isPutlFile } from './vault'
 import { atomicWriteFile } from './atomic-write'
+import { readBoundedFile } from '../bounded-read'
+import { MAX_ENVELOPE_BYTES } from '@shared/secret-box/limits'
 
 function defaultContentFor(type: DocType): string {
   if (type === 'markdown') {
@@ -98,7 +101,8 @@ async function readFileInternal(
 ): Promise<DocPayload & { relativePath: string }> {
   assertAccess(access)
   const abs = resolveVaultPath(relativePath)
-  const text = await readFile(abs, 'utf8')
+  const bytes = await readBoundedFile(abs, MAX_ENVELOPE_BYTES, () => assertAccess(access))
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   assertAccess(access)
   const envelope = parseEnvelope(text)
   const doc = openDoc(access.keyA, access.keyB, envelope)
@@ -120,7 +124,8 @@ function toDocContent(
     relativePath,
     updatedAt: payload.updatedAt,
     encoding: payload.encoding ?? 'utf-8',
-    mimeType: payload.mimeType
+    mimeType: payload.mimeType,
+    sessionId: getSessionId()!
   }
 }
 
@@ -136,6 +141,37 @@ export async function readDoc(relativePath: string): Promise<DocContent> {
     encoding: doc.encoding ?? 'utf-8',
     mimeType: doc.mimeType
   })
+}
+
+/** One decrypt per note, bounded pages; plaintext only lives in the current call/UI. */
+export async function listKeepNotes(relativePath: string, cursor?: string): Promise<KeepNotesPage> {
+  const access = requireAccess()
+  const entries = (await readdir(resolveVaultPath(relativePath), { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && !entry.name.startsWith('.') && isPutlFile(entry.name))
+    .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  assertAccess(access)
+  const remaining = cursor ? entries.filter((entry) => entry.name > cursor) : entries
+  const notes: DocContent[] = [], unreadable: string[] = []
+  let bytes = 0, examined = 0
+  for (const entry of remaining.slice(0, 200)) {
+    const rel = joinRelative(relativePath, entry.name)
+    try {
+      const payload = await readFileInternal(rel, access)
+      if (payload.type === 'keep-note' || payload.name.endsWith('.keep.json')) {
+        const size = Buffer.byteLength(payload.content, 'utf8')
+        if (size > 8 * 1024 * 1024) throw new Error('Note exceeds 8 MiB. Open it in Private Box.')
+        if (notes.length && bytes + size > 8 * 1024 * 1024) break
+        bytes += size
+        notes.push(toDocContent(rel, payload))
+      }
+    } catch (error) {
+      assertAccess(access)
+      unreadable.push(`${entry.name}: ${error instanceof Error ? error.message : 'Could not read note'}`)
+    }
+    examined++
+  }
+  assertAccess(access)
+  return { notes, unreadable, nextCursor: examined < remaining.length && examined > 0 ? remaining[examined - 1].name : null }
 }
 
 export async function writeDoc(relativePath: string, content: string): Promise<DocContent> {

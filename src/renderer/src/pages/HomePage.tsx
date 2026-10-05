@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock3, Search, Sparkles } from 'lucide-react'
+import { Clock3, Search, Sparkles, Zap, Pipette } from 'lucide-react'
+import { APP_NAME, BRAND_TAGLINE } from '@shared/brand'
+import { QUICK_TOOLS } from '@shared/quick-actions'
 import { useAppStore } from '@renderer/store/app-store'
 import {
   getToolById,
@@ -21,7 +23,6 @@ export function HomePage(): JSX.Element {
   const launchMode = useAppStore((s) => s.launchMode)
   const lastToolId = useAppStore((s) => s.lastToolId)
   const recentToolIds = useAppStore((s) => s.recentToolIds)
-  const setLastToolId = useAppStore((s) => s.setLastToolId)
   const setCommandOpen = useAppStore((s) => s.setCommandOpen)
   const [query, setQuery] = useState('')
   const [ready, setReady] = useState(false)
@@ -68,7 +69,6 @@ export function HomePage(): JSX.Element {
   }, [recentToolIds, lastToolId])
 
   const openTool = (id: string): void => {
-    setLastToolId(id)
     navigate(`/tool/${id}`)
   }
 
@@ -95,13 +95,13 @@ export function HomePage(): JSX.Element {
           <AppLogo size={40} className="sm:hidden" />
           <div className="min-w-0 pt-0.5 sm:pt-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mac-label-tertiary">
-              Local toolbox
+              {BRAND_TAGLINE}
             </p>
             <h1 className="mt-0.5 text-[24px] font-semibold tracking-[-0.02em] text-mac-label sm:text-[26px]">
-              DevUtils
+              {APP_NAME}
             </h1>
             <p className="mt-1 text-[13px] leading-relaxed text-mac-label-secondary">
-              Everything runs on this device — pick a tool or press{' '}
+              Local developer tools, one workspace. Find a tool with{' '}
               <button
                 type="button"
                 className="mac-kbd align-middle transition-colors hover:border-mac-accent/40"
@@ -114,6 +114,16 @@ export function HomePage(): JSX.Element {
         </div>
 
         <CrashBanner />
+
+        {!query && <section className="mb-7 rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-mac-label"><Zap className="h-4 w-4 text-mac-accent" />Quick access</div>
+          <div className="flex flex-wrap gap-2">{QUICK_TOOLS.map((item) => {
+            const tool = getToolById(item.id)!
+            const Icon = tool.icon
+            return <button key={item.id} type="button" className="mac-btn-secondary gap-2 !text-[12px]" onClick={() => openTool(item.id)}><Icon className="h-3.5 w-3.5" />{tool.name}</button>
+          })}</div>
+          <p className="mt-3 flex items-start gap-1.5 text-[12px] leading-relaxed text-mac-label-secondary"><Pipette className="mt-0.5 h-3.5 w-3.5 shrink-0" />Desktop tray: pick a screen color, copy a UUID, or reopen a tool. Close the window to release its memory.</p>
+        </section>}
 
         <div className="relative mb-8">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mac-label-tertiary" />

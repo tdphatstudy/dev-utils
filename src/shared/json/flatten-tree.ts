@@ -17,10 +17,11 @@ export interface FlatTreeRow {
 export function flattenJsonTree(
   data: JsonValue,
   openPaths: Set<string>,
-  options: { defaultOpenDepth?: number } = {}
+  options: { defaultOpenDepth?: number; maxRows?: number } = {}
 ): FlatTreeRow[] {
   const defaultOpenDepth = options.defaultOpenDepth ?? 2
   const rows: FlatTreeRow[] = []
+  const maxRows = options.maxRows ?? Infinity
 
   function walk(
     name: string,
@@ -29,6 +30,7 @@ export function flattenJsonTree(
     depth: number,
     isRoot: boolean
   ): void {
+    if (rows.length >= maxRows) return
     const expandable = value !== null && typeof value === 'object'
     const typeLabel = typeOf(value)
     const isOpen = expandable
@@ -67,9 +69,10 @@ export function flattenJsonTree(
 
     if (expandable && isOpen) {
       if (Array.isArray(value)) {
-        value.forEach((v, i) => walk(String(i), v, `${path}[${i}]`, depth + 1, false))
+        for (let i = 0; i < value.length && rows.length < maxRows; i++) walk(String(i), value[i], `${path}[${i}]`, depth + 1, false)
       } else {
         for (const [k, v] of Object.entries(value as Record<string, JsonValue>)) {
+          if (rows.length >= maxRows) break
           walk(k, v, path === '$' ? `$.${k}` : `${path}.${k}`, depth + 1, false)
         }
       }
@@ -86,13 +89,15 @@ export function collectExpandablePaths(
 ): string[] {
   const paths: string[] = []
   function walk(value: JsonValue, path: string, depth: number): void {
+    if (paths.length >= 10000) return
     if (value === null || typeof value !== 'object') return
     if (depth <= maxDepth) paths.push(path)
     if (depth >= maxDepth) return
     if (Array.isArray(value)) {
-      value.forEach((v, i) => walk(v, `${path}[${i}]`, depth + 1))
+      for (let i = 0; i < value.length && paths.length < 10000; i++) walk(value[i], `${path}[${i}]`, depth + 1)
     } else {
       for (const [k, v] of Object.entries(value as Record<string, JsonValue>)) {
+        if (paths.length >= 10000) break
         walk(v, path === '$' ? `$.${k}` : `${path}.${k}`, depth + 1)
       }
     }

@@ -1,6 +1,5 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
 import { validateFilePath } from './file-hash'
 import { registerFileHashIpc } from './file-hash-ipc'
@@ -11,6 +10,18 @@ import { registerHttpIpc } from './http-ipc'
 import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
 import { registerCryptoAndSshIpc } from './ssh/ipc'
+import { pathToFileURL } from 'url'
+import { configureWindowSecurity } from './window-security'
+import { APP_NAME } from '@shared/brand'
+import { configureBrand, resourcePath } from './branding'
+import { DesktopTray } from './tray'
+import { ScreenColorPicker, registerColorPickerIpc } from './color-picker'
+import { clearAccess } from './secret-box/session'
+import { DesktopOcr, registerOcrIpc } from './ocr'
+import { MockApiServer } from './mock-api-server'
+import { registerMockApiIpc } from './mock-api-ipc'
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'devfusion-ocr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
 
 /**
  * Chromium/V8 switches must run before app.ready.
@@ -22,27 +33,23 @@ function applyMemorySwitches(): void {
   app.commandLine.appendSwitch('media-cache-size', '1')
   // Prefer slightly smaller codegen when idle; tools still work normally
   app.commandLine.appendSwitch('js-flags', '--optimize-for-size')
-  // Single-window app: no benefit from site isolation multi-process bloat
+  // Avoid a spare renderer; retain Chromium's normal site isolation policy.
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,SpareRendererForSitePerProcess')
 }
 
 applyMemorySwitches()
+configureBrand()
+let desktopTray: DesktopTray | undefined
+let quitting = false
+const colorPicker: ScreenColorPicker = new ScreenColorPicker((selected) => { desktopTray?.refresh(); if (selected) desktopTray?.notifyColor(selected) }, (): boolean => !desktopOcr.isBusy())
+const desktopOcr: DesktopOcr = new DesktopOcr(() => desktopTray?.refresh(), (): boolean => !colorPicker.isBusy())
+const mockApi = new MockApiServer(() => desktopTray?.refresh())
 
 function resolveAppIcon(): string | undefined {
-  // Packaged: extraResources → process.resourcesPath
-  // Dev: project resources/ next to out/
-  const candidates = [
-    join(process.resourcesPath, 'icon.ico'),
-    join(process.resourcesPath, 'icon.png'),
-    join(app.getAppPath(), 'resources', 'icon.ico'),
-    join(app.getAppPath(), 'resources', 'icon.png'),
-    join(__dirname, '../../resources/icon.ico'),
-    join(__dirname, '../../resources/icon.png')
-  ]
-  return candidates.find((p) => existsSync(p))
+  return resourcePath(process.platform === 'win32' ? 'icon.ico' : 'icon.png')
 }
 
-function createWindow(): void {
+function createWindow(route = '/'): BrowserWindow {
   const icon = resolveAppIcon()
   const mainWindow = new BrowserWindow({
     width: 1180,
@@ -50,7 +57,7 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 500,
     show: false,
-    title: 'DevUtils',
+    title: APP_NAME,
     icon,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 14 },
@@ -79,25 +86,36 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
+  // Honor renderer beforeunload guards while allowing a deliberate close/discard.
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning', title: APP_NAME, message: 'This view has unsaved changes or a save in progress.',
+      detail: `Keep editing to save your work, and wait for any active save to finish. Unsaved edits will be discarded if you close. ${quitting ? 'DevFusion will stop.' : desktopTray?.hasTray() ? 'The window releases its memory; DevFusion stays in the tray.' : 'The window will close.'}`,
+      buttons: ['Keep editing', 'Close without saving'], defaultId: 0, cancelId: 0, noLink: true
+    })
+    if (choice === 1) event.preventDefault()
+    else quitting = false
   })
 
+  const rendererUrl = is.dev && process.env['ELECTRON_RENDERER_URL'] ? process.env['ELECTRON_RENDERER_URL'] : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  configureWindowSecurity(mainWindow, rendererUrl, (url) => shell.openExternal(url))
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: route })
   }
+  return mainWindow
 }
 
 function registerIpc(): void {
   ipcMain.handle('window:minimize', (event) => {
+    assertTrustedIpc(event)
     BrowserWindow.fromWebContents(event.sender)?.minimize()
   })
 
   ipcMain.handle('window:maximize', (event) => {
+    assertTrustedIpc(event)
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return
     if (win.isMaximized()) win.unmaximize()
@@ -105,10 +123,12 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('window:close', (event) => {
+    assertTrustedIpc(event)
     BrowserWindow.fromWebContents(event.sender)?.close()
   })
 
   ipcMain.handle('window:isMaximized', (event) => {
+    assertTrustedIpc(event)
     return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
   })
 
@@ -159,37 +179,46 @@ function registerIpc(): void {
   registerSecretBoxIpc()
   registerPortsIpc()
   registerCryptoAndSshIpc()
+  registerColorPickerIpc(colorPicker)
+  registerOcrIpc(desktopOcr)
+  registerMockApiIpc(mockApi)
 
-  ipcMain.handle('app:platform', () => process.platform)
-  ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('app:platform', (event) => { assertTrustedIpc(event); return process.platform })
+  ipcMain.handle('app:version', (event) => { assertTrustedIpc(event); return app.getVersion() })
+  ipcMain.handle('app:trayAvailable', (event) => { assertTrustedIpc(event); return desktopTray?.hasTray() ?? false })
+  ipcMain.handle('app:quit', (event) => { assertTrustedIpc(event); app.quit() })
 }
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
+  app.on('before-quit', () => { quitting = true })
   app.on('second-instance', () => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.focus()
-    }
+    desktopTray?.open()
   })
 
   app.whenReady().then(() => {
     registerIpc()
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : [{ label: APP_NAME, submenu: [{ label: 'Quit DevFusion', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() }] }]),
+      { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }
+    ]))
+    desktopTray = new DesktopTray(createWindow, colorPicker, () => app.quit(), desktopOcr, mockApi)
+    desktopTray.start()
     // Window first — do not block cold start on vault disk I/O
-    createWindow()
+    desktopTray.open()
     void ensureDefaultSecretBox().catch((e) => {
-      console.error('[DevUtils] ensureDefaultSecretBox failed', e)
+      console.error('[DevFusion] ensureDefaultSecretBox failed', e)
     })
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      desktopTray?.open()
     })
   })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    if (!desktopTray?.hasTray() && process.platform !== 'darwin') app.quit()
   })
+  app.on('will-quit', () => { mockApi.dispose(); desktopTray?.dispose(); clearAccess() })
 }

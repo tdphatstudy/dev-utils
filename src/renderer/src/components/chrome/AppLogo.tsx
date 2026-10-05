@@ -1,5 +1,6 @@
 import { cn } from '@renderer/lib/utils'
 import logoSvg from '@renderer/assets/logo.svg'
+import { APP_NAME } from '@shared/brand'
 
 interface Props {
   size?: number
@@ -50,10 +51,10 @@ export function AppLogo({
       {showWordmark && (
         <div className="min-w-0 leading-tight">
           <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-mac-label">
-            DevUtils
+            {APP_NAME}
           </div>
           <div className="truncate text-[10px] font-medium tracking-wide text-mac-label-tertiary">
-            Local tools
+            Local developer tools
           </div>
         </div>
       )}

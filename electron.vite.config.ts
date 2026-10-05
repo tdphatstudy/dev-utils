@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import { ocrAssets } from './scripts/ocr-assets'
 
 const shared = resolve('src/shared')
 const mainRoot = resolve('src/main')
@@ -74,9 +75,10 @@ export default defineConfig({
       target: 'node20',
       reportCompressedSize: false,
       rollupOptions: {
+        input: { index: resolve('src/preload/index.ts'), colorPicker: resolve('src/preload/color-picker.ts'), ocrHelper: resolve('src/preload/ocr-helper.ts') },
         output: {
           format: 'cjs',
-          entryFileNames: 'index.js'
+          entryFileNames: '[name].js'
         }
       }
     },
@@ -94,16 +96,17 @@ export default defineConfig({
         '@shared': shared
       }
     },
-    plugins: [react()],
+    plugins: [react(), ocrAssets(), { name: 'production-csp', apply: 'build', transformIndexHtml: (html) => html.replace("connect-src 'self' ws: wss:;", "connect-src 'self';") }],
     build: {
       minify: 'esbuild',
       sourcemap: false,
       cssMinify: true,
-      // Electron 34 ≈ Chromium 132; chrome128 is a safe floor for modern syntax
+      // Conservative syntax floor; Electron 44 ships Chromium 152.
       target: 'chrome128',
       reportCompressedSize: false,
       chunkSizeWarningLimit: 900,
       rollupOptions: {
+        input: { index: resolve('src/renderer/index.html'), ocr: resolve('src/renderer/ocr.html') },
         output: {
           manualChunks(id) {
             return vendorChunk(id)

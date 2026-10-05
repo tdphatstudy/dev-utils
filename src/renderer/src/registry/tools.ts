@@ -28,6 +28,9 @@ import {
   FileType2,
   Database,
   Terminal,
+  Pipette,
+  Palette,
+  ScanText,
   type LucideIcon
 } from 'lucide-react'
 
@@ -37,11 +40,13 @@ export type ToolGroupId =
   | 'markup'
   | 'sql'
   | 'convert'
+  | 'design'
   | 'base64'
   | 'security'
   | 'network'
   | 'file'
   | 'text'
+  | 'time'
   | 'privatebox'
   | 'app'
 
@@ -68,16 +73,53 @@ export const toolGroups: ToolGroup[] = [
   { id: 'markup', name: 'HTML / XML', icon: Code2, order: 2 },
   { id: 'sql', name: 'SQL', icon: Database, order: 3 },
   { id: 'convert', name: 'Convert', icon: ArrowLeftRight, order: 4 },
+  { id: 'design', name: 'Design', icon: Palette, order: 4.5 },
   { id: 'base64', name: 'Base64', icon: Binary, order: 5 },
   { id: 'security', name: 'Security', icon: Shield, order: 6 },
   { id: 'network', name: 'Network', icon: Network, order: 7 },
   { id: 'file', name: 'File', icon: File, order: 8 },
   { id: 'text', name: 'Text / Dev', icon: Regex, order: 9 },
+  { id: 'time', name: 'Time / Date', icon: CalendarClock, order: 9.5 },
   { id: 'privatebox', name: 'Private Box', icon: Vault, order: 10 },
   { id: 'app', name: 'App', icon: Info, order: 11 }
 ]
 
 export const tools: ToolDefinition[] = [
+  {
+    id: 'text.lorem', group: 'text', name: 'Lorem Text',
+    description: 'Generate placeholder words, sentences and paragraphs for layouts',
+    keywords: ['lorem', 'ipsum', 'placeholder', 'dummy', 'text', 'paragraph', 'sentence'],
+    icon: WrapText,
+    component: lazy(() => import('@renderer/features/tools/text/LoremTool'))
+  },
+  {
+    id: 'time.timestamp', group: 'time', name: 'Timestamp Converter',
+    description: 'Convert Unix seconds or milliseconds and ISO dates with timezone output',
+    keywords: ['timestamp', 'unix', 'epoch', 'seconds', 'milliseconds', 'iso', 'timezone', 'utc', 'date'],
+    icon: CalendarClock,
+    component: lazy(() => import('@renderer/features/tools/time/TimestampTool'))
+  },
+  {
+    id: 'time.date', group: 'time', name: 'Date Calculator',
+    description: 'Add calendar dates or durations and calculate date/time differences',
+    keywords: ['date', 'time', 'duration', 'difference', 'days', 'months', 'years', 'calculate'],
+    icon: CalendarClock,
+    component: lazy(() => import('@renderer/features/tools/time/DateTool'))
+  },
+  {
+    id: 'network.mock-api', group: 'network', name: 'Mock API',
+    description: 'Serve local endpoints with conditional responses and portable YAML configs',
+    keywords: ['mock', 'api', 'server', 'endpoint', 'frontend', 'backend', 'response', 'header', 'filter', 'yaml', 'cors'],
+    icon: Server,
+    component: lazy(() => import('@renderer/features/tools/network/MockApiTool'))
+  },
+  {
+    id: 'design.color', group: 'design', name: 'Color Picker',
+    description: 'Pick desktop colors with a Copy / Repick popup: HEX, RGB, HSL and HSV',
+    keywords: ['color', 'colour', 'picker', 'eyedropper', 'hex', 'rgb', 'hsl', 'hsv', 'palette', 'screen', 'desktop', 'repick'],
+    icon: Pipette,
+    component: lazy(() => import('@renderer/features/tools/design/ColorPicker'))
+  },
   {
     id: 'json.studio',
     group: 'json',
@@ -442,6 +484,15 @@ export const tools: ToolDefinition[] = [
     ],
     icon: CalendarClock,
     component: lazy(() => import('@renderer/features/tools/text/CronTool'))
+  },
+  {
+    id: 'text.ocr',
+    group: 'text',
+    name: 'OCR · Image / PDF',
+    description: 'Extract English and Vietnamese text from images, PDFs or a screen region — offline',
+    keywords: ['ocr', 'scan', 'text', 'image', 'pdf', 'screenshot', 'capture', 'vietnamese', 'extract'],
+    icon: ScanText,
+    component: lazy(() => import('@renderer/features/tools/text/OcrTool'))
   },
   {
     id: 'text.qr',

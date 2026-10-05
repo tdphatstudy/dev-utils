@@ -9,8 +9,8 @@ import { formatYaml, yamlToJson } from '@shared/yaml'
 import { diffJson, summarizeDiff } from '@shared/json/diff'
 import { diffLines, lineDiffReport } from '@shared/text/line-diff'
 
-const LEFT = `name: DevUtils\nversion: 1\nfeatures:\n  - yaml\n`
-const RIGHT = `name: DevUtils\nversion: 2\nfeatures:\n  - yaml\n  - diff\nlocal: true\n`
+const LEFT = `name: DevFusion\nversion: 1\nfeatures:\n  - yaml\n`
+const RIGHT = `name: DevFusion\nversion: 2\nfeatures:\n  - yaml\n  - diff\nlocal: true\n`
 
 type ViewMode = 'tree' | 'lines'
 

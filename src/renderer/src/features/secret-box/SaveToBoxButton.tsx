@@ -41,6 +41,7 @@ export function SaveToBoxButton({
     setOkMsg(null)
     try {
       const prep = await window.devutils.privateBox.prepareDefaultForSave()
+      let sessionId = prep.sessionId
       if (!prep.hasAccess) {
         const pw = password ?? keyB
         if (!pw.trim()) {
@@ -48,7 +49,7 @@ export function SaveToBoxButton({
           setBusy(false)
           return
         }
-        await window.devutils.privateBox.accessDefault(pw)
+        sessionId = await window.devutils.privateBox.accessDefault(pw)
       }
 
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
@@ -62,7 +63,7 @@ export function SaveToBoxButton({
         type,
         content,
         relativeDir: 'saves'
-      })
+      }, sessionId ?? '')
       setPrompt(false)
       setKeyB('')
       const msg = `Saved “${result.doc.name}” → ${result.boxName}/saves`

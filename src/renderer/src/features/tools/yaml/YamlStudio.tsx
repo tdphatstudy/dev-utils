@@ -1,16 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { TreeView, type JsonValue } from '@renderer/components/ui/TreeView'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
-import { formatYaml, jsonToYaml, parseYaml, yamlToJson } from '@shared/yaml'
+import { jsonToYaml, type YamlParseResult } from '@shared/yaml'
+import { useYamlAnalysis } from './useYamlAnalysis'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 
-const SAMPLE = `name: DevUtils
+const SAMPLE = `name: DevFusion
 version: 1
 features:
   - yaml
@@ -27,9 +28,11 @@ export default function YamlStudio(): JSX.Element {
   const [view, setView] = useState<ViewMode>('tree')
   useToolDraft('yaml.studio', input, setInput, { label: 'YAML Studio', historyOnUnmount: true })
 
-  const parsed = useMemo(() => parseYaml(input), [input])
-  const formatted = useMemo(() => formatYaml(input), [input])
-  const asJson = useMemo(() => yamlToJson(input), [input])
+  const { analysis, pending } = useYamlAnalysis(input)
+  const waiting: YamlParseResult = { ok: false, error: 'Processing YAML…' }
+  const parsed = analysis?.parsed ?? waiting
+  const formatted = analysis?.formatted ?? waiting
+  const asJson = analysis?.asJson ?? waiting
 
   const treeData: JsonValue | null = parsed.ok ? parsed.value : null
   const yamlOut = formatted.ok ? (formatted.text ?? '') : ''
@@ -37,6 +40,7 @@ export default function YamlStudio(): JSX.Element {
 
   const status = !input.trim()
     ? { tone: 'neutral' as const, text: 'Paste YAML to get started' }
+    : pending ? { tone: 'neutral' as const, text: 'Processing YAML…' }
     : parsed.ok
       ? { tone: 'success' as const, text: 'Valid YAML' }
       : {
@@ -110,19 +114,19 @@ export default function YamlStudio(): JSX.Element {
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder="Paste YAML…" label="YAML input" issue={!input.trim() || parsed.ok ? null : parsed} onRun={() => { if (formatted.ok && formatted.text) setInput(formatted.text) }} />
+        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder="Paste YAML…" label="YAML input" issue={pending || !input.trim() || parsed.ok ? null : parsed} onRun={() => { if (formatted.ok && formatted.text) setInput(formatted.text) }} />
         {view === 'tree' ? (
           parsed.ok && asJson.ok ? (
             <TreeView data={treeData} />
           ) : (
             <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
-              {input.trim() ? (asJson.ok ? 'Fix the highlighted YAML error to see the tree.' : asJson.error) : 'Paste YAML or open a file to get started.'}
+              {pending ? 'Processing YAML…' : input.trim() ? (asJson.ok ? 'Fix the highlighted YAML error to see the tree.' : asJson.error) : 'Paste YAML or open a file to get started.'}
             </div>
           )
         ) : view === 'json' ? (
           <CodeEditor value={jsonOut} language="json" readOnly label="JSON output" issue={input.trim() && !asJson.ok ? asJson : null} />
         ) : (
-          <CodeEditor value={yamlOut} language="yaml" readOnly label="Formatted YAML" />
+          <CodeEditor value={yamlOut} language="yaml" readOnly label="Formatted YAML" issue={null} />
         )}
       </SplitPane>
 

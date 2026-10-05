@@ -15,7 +15,6 @@ import { Clock3, Search } from 'lucide-react'
 export function CommandPalette(): JSX.Element {
   const open = useAppStore((s) => s.commandOpen)
   const setOpen = useAppStore((s) => s.setCommandOpen)
-  const setLastToolId = useAppStore((s) => s.setLastToolId)
   const recentToolIds = useAppStore((s) => s.recentToolIds)
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -48,7 +47,6 @@ export function CommandPalette(): JSX.Element {
   }, [open])
 
   const openTool = (id: string): void => {
-    setLastToolId(id)
     navigate(`/tool/${id}`)
     setOpen(false)
   }

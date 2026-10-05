@@ -23,4 +23,12 @@ describe('flattenJsonTree', () => {
     expect(paths).toContain('$')
     expect(paths).toContain('$.a')
   })
+
+  it('caps row work and expansion paths for wide inventories', () => {
+    const data = Array.from({ length: 12000 }, (_, i) => ({ value: i }))
+    const rows = flattenJsonTree(data, new Set(), { defaultOpenDepth: 3, maxRows: 10000 })
+    expect(rows).toHaveLength(10000)
+    expect(rows[9999]?.path).toBe('$[4999]')
+    expect(collectExpandablePaths(data)).toHaveLength(10000)
+  })
 })

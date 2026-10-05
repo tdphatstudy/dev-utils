@@ -1,10 +1,20 @@
 import { createHash } from 'crypto'
-import { existsSync } from 'fs'
-import { mkdir, readFile, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { AUTH_LOCKOUT_MS, MAX_AUTH_FAILURES } from '@shared/core/constants'
 import { SECRET_BOX_META_DIR } from '@shared/core/constants/paths'
 import { userDataRoot } from './paths'
+import { atomicWriteFile } from './atomic-write'
+import { readBoundedFile } from '../bounded-read'
+
+const queues = new Map<string, Promise<void>>()
+function serialized<T>(rootPath: string, operation: () => Promise<T>): Promise<T> {
+  const previous = queues.get(rootPath) ?? Promise.resolve()
+  const result = previous.then(operation)
+  const tail = result.then(() => undefined, () => undefined)
+  queues.set(rootPath, tail)
+  void tail.then(() => { if (queues.get(rootPath) === tail) queues.delete(rootPath) })
+  return result
+}
 
 interface RateState {
   failCount: number
@@ -35,21 +45,22 @@ function userDataRatePath(rootPath: string): string | null {
 
 async function readState(file: string): Promise<RateState> {
   try {
-    const raw = await readFile(file, 'utf8')
+    const raw = new TextDecoder('utf-8', { fatal: true }).decode(await readBoundedFile(file, 4096))
     const j = JSON.parse(raw) as Partial<RateState>
+    if (!j || !Number.isInteger(j.failCount) || j.failCount! < 0 || j.failCount! >= MAX_AUTH_FAILURES || !Number.isFinite(j.lockedUntil) || j.lockedUntil! < 0 || typeof j.updatedAt !== 'string') throw new Error('Invalid authentication state')
     return {
       failCount: Number(j.failCount) || 0,
       lockedUntil: Number(j.lockedUntil) || 0,
       updatedAt: typeof j.updatedAt === 'string' ? j.updatedAt : new Date().toISOString()
     }
-  } catch {
-    return emptyState()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyState()
+    throw new Error('Authentication state is unreadable or corrupt. Preserve it and restore a known-good backup before retrying.')
   }
 }
 
 async function writeState(file: string, state: RateState): Promise<void> {
-  await mkdir(join(file, '..'), { recursive: true })
-  await writeFile(file, JSON.stringify(state, null, 2), 'utf8')
+  await atomicWriteFile(file, JSON.stringify(state, null, 2), 'utf8', 0o600)
 }
 
 async function mergeStates(rootPath: string): Promise<RateState> {
@@ -79,7 +90,10 @@ function formatRemaining(ms: number): string {
   return r ? `${m}m ${r}s` : `${m}m`
 }
 
-export async function assertNotLocked(rootPath: string): Promise<void> {
+export function assertNotLocked(rootPath: string): Promise<void> {
+  return serialized(rootPath, () => assertNotLockedInternal(rootPath))
+}
+async function assertNotLockedInternal(rootPath: string): Promise<void> {
   const state = await mergeStates(rootPath)
   const now = Date.now()
   if (state.lockedUntil > now) {
@@ -92,7 +106,10 @@ export async function assertNotLocked(rootPath: string): Promise<void> {
   }
 }
 
-export async function recordAuthFailure(rootPath: string): Promise<void> {
+export function recordAuthFailure(rootPath: string): Promise<void> {
+  return serialized(rootPath, () => recordAuthFailureInternal(rootPath))
+}
+async function recordAuthFailureInternal(rootPath: string): Promise<void> {
   const state = await mergeStates(rootPath)
   const now = Date.now()
   if (state.lockedUntil > now) return
@@ -105,35 +122,24 @@ export async function recordAuthFailure(rootPath: string): Promise<void> {
   await persistBoth(rootPath, state)
 }
 
-export async function clearAuthFailures(rootPath: string): Promise<void> {
-  const state = emptyState()
-  await persistBoth(rootPath, state)
-  // best-effort delete
-  const files = [vaultRatePath(rootPath), userDataRatePath(rootPath)].filter(
-    (f): f is string => !!f
-  )
-  for (const f of files) {
-    if (existsSync(f)) {
-      try {
-        await unlink(f)
-      } catch {
-        /* ignore */
-      }
-    }
-  }
+export function clearAuthFailures(rootPath: string): Promise<void> {
+  // Keep the reset as an atomic state; deleting afterwards could erase a new failure.
+  return serialized(rootPath, () => persistBoth(rootPath, emptyState()))
 }
 
-export async function getAuthLockStatus(rootPath: string): Promise<{
+export function getAuthLockStatus(rootPath: string): Promise<{
   locked: boolean
   remainingMs: number
   failCount: number
 }> {
-  const state = await mergeStates(rootPath)
-  const now = Date.now()
-  const remainingMs = Math.max(0, state.lockedUntil - now)
-  return {
-    locked: remainingMs > 0,
-    remainingMs,
-    failCount: state.failCount
-  }
+  return serialized(rootPath, async () => {
+    const state = await mergeStates(rootPath)
+    const now = Date.now()
+    const remainingMs = Math.max(0, state.lockedUntil - now)
+    return {
+      locked: remainingMs > 0,
+      remainingMs,
+      failCount: state.failCount
+    }
+  })
 }

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Modal } from '@renderer/components/ui/Modal'
 
 interface Props {
   open: boolean
@@ -20,13 +21,10 @@ export function NameDialog({
   onCancel
 }: Props): JSX.Element | null {
   const [value, setValue] = useState(initialValue)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setValue(initialValue)
-      queueMicrotask(() => inputRef.current?.focus())
-      queueMicrotask(() => inputRef.current?.select())
     }
   }, [open, initialValue])
 
@@ -39,23 +37,15 @@ export function NameDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
-      <div
-        className="w-full max-w-sm rounded-mac-xl border border-mac-separator bg-mac-surface p-5 shadow-mac-lg"
-        role="dialog"
-        aria-modal
-      >
-        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+    <Modal open={open} title={title} onClose={onCancel} className="max-w-sm">
         <label className="mt-4 block text-[12px]">
           <span className="mb-1 block text-mac-label-secondary">{label}</span>
           <input
-            ref={inputRef}
             className="mac-input font-mono"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') submit()
-              if (e.key === 'Escape') onCancel()
+              if (e.key === 'Enter') { e.preventDefault(); submit() }
             }}
             spellCheck={false}
           />
@@ -68,7 +58,6 @@ export function NameDialog({
             {confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

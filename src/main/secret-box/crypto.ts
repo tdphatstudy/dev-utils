@@ -22,6 +22,9 @@ import {
   VERIFY_SCRYPT_R
 } from '@shared/core/constants'
 import { SCRYPT_PARAMS } from '@shared/secret-box/constants'
+import { CONTENT_KIND_IDS } from '@shared/secret-box/content-kinds'
+import { MAX_MEDIA_BYTES } from '@shared/secret-box/types'
+import { MAX_DOC_TEXT_BYTES, MAX_ENVELOPE_BYTES, MAX_PAYLOAD_BYTES } from '@shared/secret-box/limits'
 import type {
   DocPayload,
   PutlEnvelope,
@@ -80,10 +83,13 @@ export function sealDoc(
   mode: VaultMode,
   payload: DocPayload
 ): PutlEnvelope {
+  validatePayload(payload)
   // `salt` on the envelope is reserved/unused for key derivation (keys come from vault salt).
   // Kept for envelope shape compatibility with existing .putl files.
   const fileSalt = generateSalt()
-  const plain = Buffer.from(JSON.stringify(payload), 'utf8')
+  const json = JSON.stringify(payload)
+  if (Buffer.byteLength(json, 'utf8') > MAX_PAYLOAD_BYTES) throw new Error('Document exceeds the encrypted payload limit. Reduce its size; existing data was not changed.')
+  const plain = Buffer.from(json, 'utf8')
   const layer1 = encryptBuffer(keyA, plain)
   const packed1 = Buffer.concat([layer1.iv, layer1.ct])
   const layer2 = encryptBuffer(keyB, packed1)
@@ -112,7 +118,10 @@ export function openDoc(keyA: Buffer, keyB: Buffer, envelope: PutlEnvelope): Doc
     const iv1 = packed1.subarray(0, AES_GCM_IV_BYTES)
     const ct1 = packed1.subarray(AES_GCM_IV_BYTES)
     const plain = decryptBuffer(keyA, iv1, ct1)
-    return JSON.parse(plain.toString('utf8')) as DocPayload
+    if (plain.length > MAX_PAYLOAD_BYTES) throw new Error('Payload too large')
+    const payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain)) as DocPayload
+    validatePayload(payload)
+    return payload
   } catch {
     throw new Error('Cannot decrypt — wrong keys or corrupted file')
   }
@@ -123,11 +132,32 @@ export function serializeEnvelope(envelope: PutlEnvelope): string {
 }
 
 export function parseEnvelope(text: string): PutlEnvelope {
+  if (text.length > MAX_ENVELOPE_BYTES || Buffer.byteLength(text, 'utf8') > MAX_ENVELOPE_BYTES) throw new Error('Encrypted file exceeds the 96 MiB limit.')
   const data = JSON.parse(text) as PutlEnvelope
-  if (!data || data.v !== PUTL_ENVELOPE_VERSION || !data.ct || !data.iv2) {
+  if (!data || data.v !== PUTL_ENVELOPE_VERSION || !['device', 'portable'].includes(data.mode) || data.kdf !== 'scrypt' ||
+      !validBase64(data.iv2, AES_GCM_IV_BYTES) || !validBase64(data.iv1, AES_GCM_IV_BYTES) || !validBase64(data.salt, SALT_BYTES) ||
+      typeof data.ct !== 'string' || data.ct.length > Math.ceil((MAX_PAYLOAD_BYTES + AES_GCM_IV_BYTES + 2 * AES_GCM_TAG_BYTES) / 3) * 4 || !validBase64(data.ct)) {
     throw new Error('Invalid .putl file')
   }
   return data
+}
+
+function validBase64(value: unknown, bytes?: number): boolean {
+  if (typeof value !== 'string' || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return false
+  // Avoid decoding a large ciphertext merely to validate its encoding.
+  if (bytes !== undefined) return value.length === Math.ceil(bytes / 3) * 4 && Buffer.from(value, 'base64').length === bytes && Buffer.from(value, 'base64').toString('base64') === value
+  return value.length > 0
+}
+
+function validatePayload(payload: DocPayload): void {
+  if (!payload || typeof payload !== 'object' || typeof payload.name !== 'string' || payload.name.length > 4096 ||
+      !CONTENT_KIND_IDS.includes(payload.type) || typeof payload.content !== 'string' || typeof payload.createdAt !== 'string' || typeof payload.updatedAt !== 'string' ||
+      (payload.encoding !== undefined && payload.encoding !== 'utf-8' && payload.encoding !== 'base64') ||
+      (payload.mimeType !== undefined && (typeof payload.mimeType !== 'string' || payload.mimeType.length > 4096))) throw new Error('Invalid encrypted document payload.')
+  if (payload.encoding === 'base64') {
+    const maxLength = Math.ceil(MAX_MEDIA_BYTES / 3) * 4
+    if (payload.content.length > maxLength || (payload.content !== '' && !validBase64(payload.content)) || Buffer.byteLength(payload.content, 'base64') > MAX_MEDIA_BYTES) throw new Error('Encrypted media exceeds 40 MiB or has invalid Base64.')
+  } else if (payload.content.length > MAX_DOC_TEXT_BYTES || Buffer.byteLength(payload.content, 'utf8') > MAX_DOC_TEXT_BYTES) throw new Error('Text document exceeds 64 MiB.')
 }
 
 export function generateDeviceSecret(): string {

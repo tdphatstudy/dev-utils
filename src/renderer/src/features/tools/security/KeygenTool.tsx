@@ -18,7 +18,7 @@ const ALGS: { id: KeygenAlgorithm; label: string }[] = [
 export default function KeygenTool(): JSX.Element {
   const [algorithm, setAlgorithm] = useState<KeygenAlgorithm>('ed25519')
   const [modulus, setModulus] = useState<2048 | 3072 | 4096>(2048)
-  const [comment, setComment] = useState('devutils@local')
+  const [comment, setComment] = useState('devfusion@local')
   const [result, setResult] = useState<KeygenResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

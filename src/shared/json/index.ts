@@ -1,4 +1,5 @@
 import { diagnoseJson } from './diagnostics'
+import { assertJsonInput, assertStructuredValue } from './limits'
 
 export type JsonValue =
   | null
@@ -24,7 +25,9 @@ export type ParseResult =
 
 export function parseJson(input: string): ParseResult {
   try {
+    assertJsonInput(input)
     const value = JSON.parse(input) as JsonValue
+    assertStructuredValue(value)
     return { ok: true, value }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Invalid JSON'
@@ -38,13 +41,15 @@ export function formatJson(
 ): ParseResult & { text?: string } {
   const parsed = parseJson(input)
   if (!parsed.ok) return parsed
-  const indent = options.minify ? 0 : (options.indent ?? 2)
-  let value = parsed.value
-  if (options.sortKeys) {
-    value = sortKeysDeep(value)
-  }
-  const text = JSON.stringify(value, null, indent === 0 ? undefined : indent)
-  return { ok: true, value, text }
+  try {
+    const indent = options.minify ? 0 : (options.indent ?? 2)
+    let value = parsed.value
+    if (options.sortKeys) {
+      value = sortKeysDeep(value)
+    }
+    const text = JSON.stringify(value, null, indent === 0 ? undefined : indent)
+    return { ok: true, value, text }
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Could not format JSON', hint: 'Reduce the size or depth of the document.' } }
 }
 
 function sortKeysDeep(value: JsonValue): JsonValue {

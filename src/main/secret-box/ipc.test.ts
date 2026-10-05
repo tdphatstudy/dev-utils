@@ -1,9 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ handle: vi.fn(), trust: vi.fn(), service: vi.fn() }))
+const mocks = vi.hoisted(() => ({ handle: vi.fn(), trust: vi.fn(), service: vi.fn(), session: vi.fn(), bind: vi.fn() }))
+vi.mock('./session', () => ({ assertSessionId: mocks.session, bindSessionOwner: mocks.bind, getSessionId: () => 'fixture-session' }))
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle }, dialog: {}, BrowserWindow: {} }))
 vi.mock('../ipc-trust', () => ({ assertTrustedIpc: mocks.trust }))
 vi.mock('./vault', () => Object.fromEntries(['accessVault', 'recoverVaultMetadata', 'clearVaultAccess', 'ensureDefaultSecretBox', 'getStatus', 'isDirectoryEmpty', 'openExistingVaultPath', 'removeVaultFromList', 'renameVault', 'setActiveVault', 'setupVault'].map((name) => [name, mocks.service])))
-vi.mock('./fs-ops', () => Object.fromEntries(['listDir', 'listFoldersRecursive', 'mkdirPath', 'createFile', 'readDoc', 'writeDoc', 'renameEntry', 'removeEntry'].map((name) => [name, mocks.service])))
+vi.mock('./fs-ops', () => Object.fromEntries(['listDir', 'listKeepNotes', 'listFoldersRecursive', 'mkdirPath', 'createFile', 'readDoc', 'writeDoc', 'renameEntry', 'removeEntry'].map((name) => [name, mocks.service])))
 vi.mock('./export-import', () => Object.fromEntries(['exportDocPlain', 'exportDocToDisk', 'importPlainToActiveBox', 'importPlainFromDisk', 'saveDocument', 'prepareDefaultBoxForSave', 'accessDefaultBox'].map((name) => [name, mocks.service])))
 import { registerSecretBoxIpc } from './ipc'
 afterEach(() => vi.resetAllMocks())
@@ -35,8 +36,22 @@ it('rejects malformed mutations and keeps exact password/content characters for 
   ] as const) await expect(registered.get(name)!({}, payload)).rejects.toThrow('Invalid')
   expect(mocks.service).not.toHaveBeenCalled()
   const password = ' password\nwith whitespace '
-  await registered.get('privateBox:access')!({}, { keyB: password })
+  await registered.get('privateBox:access')!({ sender: { id: 1 } }, { keyB: password })
   expect(mocks.service).toHaveBeenLastCalledWith({ keyB: password })
-  await registered.get('privateBox:writeFile')!({}, { relativePath: 'sample.putl', content: ' a\n\0b ' })
+  await registered.get('privateBox:writeFile')!({ sender: { id: 1 } }, { relativePath: 'sample.putl', content: ' a\n\0b ', sessionId: 'fixture-session' })
   expect(mocks.service).toHaveBeenLastCalledWith('sample.putl', ' a\n\0b ')
+})
+it('refuses a stale session before dispatching a new mutation', async () => {
+  mocks.session.mockImplementation(() => { throw new Error('SESSION_CHANGED') })
+  await expect(handlers().get('privateBox:remove')!({ sender: { id: 1 } }, { relativePath: 'same.putl', sessionId: 'old-session' })).rejects.toThrow('SESSION_CHANGED')
+  expect(mocks.service).not.toHaveBeenCalled()
+})
+it('rejects overlapping authentication without queuing KDF work', async () => {
+  let finish!: () => void
+  mocks.service.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+  const registered = handlers(), event = { sender: { id: 1 } }
+  const first = registered.get('privateBox:access')!(event, { keyB: 'fixture' })
+  await expect(registered.get('privateBox:accessDefault')!(event, 'fixture')).rejects.toThrow('already running')
+  finish(); await first
+  expect(mocks.service).toHaveBeenCalledTimes(1)
 })

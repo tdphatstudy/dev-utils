@@ -3,6 +3,7 @@ import { useSessionStore } from '@renderer/store/session-store'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { useNavigate } from 'react-router-dom'
 import { getToolById } from '@renderer/registry/tools'
+import { useEffect, useState } from 'react'
 
 export function SettingsPage(): JSX.Element {
   const theme = useAppStore((s) => s.theme)
@@ -16,6 +17,9 @@ export function SettingsPage(): JSX.Element {
   const draftCount = useSessionStore((s) => Object.keys(s.drafts).length)
   const clearDrafts = useSessionStore((s) => s.clearDrafts)
   const navigate = useNavigate()
+  const [tray, setTray] = useState<boolean | null>(null)
+  const [quitError, setQuitError] = useState<string | null>(null)
+  useEffect(() => { let live = true; void window.devutils?.app?.trayAvailable().then((value) => { if (live) setTray(value) }).catch(() => { if (live) setTray(false) }); return () => { live = false } }, [])
 
   return (
     <div className="h-full overflow-auto p-4 sm:p-6">
@@ -32,6 +36,14 @@ export function SettingsPage(): JSX.Element {
             history stay in memory for this window; security and vault tools are excluded.
           </p>
         </div>
+
+        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 className="mb-2 text-[12px] font-semibold text-mac-label">Desktop tray</h2>
+          <p className="text-[13px] leading-relaxed text-mac-label-secondary">{tray === true ? 'Closing the window frees its renderer and locks the vault. DevFusion stays in the tray for color picking, UUID copying and quick tools. Drafts and session history clear when the window closes.' : tray === false ? 'The desktop tray is unavailable. Closing the last window exits normally on Windows and Linux.' : window.devutils?.app ? 'Checking desktop tray…' : 'The tray is available in the desktop app.'}</p>
+          <p className="mt-2 text-[12px] text-mac-label-tertiary">No hidden tool window, screen polling or automatic startup. Use Quit to stop the app completely.</p>
+          {window.devutils?.app && <button type="button" className="mac-btn-secondary mt-3" onClick={() => { void window.devutils.app.quit().catch(() => setQuitError('Could not quit. Try Quit from the tray menu.')) }}>Quit DevFusion</button>}
+          {quitError && <p role="alert" className="mt-2 text-[12px] text-mac-danger">{quitError}</p>}
+        </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">

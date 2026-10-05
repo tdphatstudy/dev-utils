@@ -191,6 +191,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
 }
 
 export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Props): JSX.Element {
+  const sessionId = status.sessionId ?? ''
   const listVersion = useRef(0)
   const openVersion = useRef(0)
   const saving = useRef(false)
@@ -218,7 +219,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     const version = ++listVersion.current
     setError(null)
     try {
-      const list = await window.devutils.privateBox.list(cwd)
+      const list = await window.devutils.privateBox.list(cwd, sessionId)
       if (version !== listVersion.current) return
       setEntries(list)
     } catch (e) {
@@ -227,7 +228,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
       if (isNeedsAccess(e)) onSignOut()
       else setError(e instanceof Error ? e.message : 'Failed to list')
     }
-  }, [cwd, onSignOut])
+  }, [cwd, onSignOut, sessionId])
 
   useEffect(() => {
     void loadList()
@@ -262,7 +263,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     setBusy(true)
     setError(null)
     try {
-      const file = await window.devutils.privateBox.readFile(entry.relativePath)
+      const file = await window.devutils.privateBox.readFile(entry.relativePath, sessionId)
       if (version !== openVersion.current) return
       setDoc(file)
       setDraft(file.content)
@@ -289,7 +290,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     setError(null)
     try {
       if (doc.type === 'json') JSON.parse(draft)
-      const next = await window.devutils.privateBox.writeFile(doc.relativePath, draft)
+      const next = await window.devutils.privateBox.writeFile(doc.relativePath, draft, doc.sessionId)
       if (version !== openVersion.current) return
       setDoc(next)
       setDirty(draftRef.current !== next.content)
@@ -307,7 +308,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     setBusy(true)
     setError(null)
     try {
-      await window.devutils.privateBox.exportToDisk(doc.relativePath)
+      await window.devutils.privateBox.exportToDisk(doc.relativePath, doc.sessionId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed')
     } finally {
@@ -323,7 +324,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     setError(null)
     try {
       if (promptState.kind === 'file') {
-        const file = await window.devutils.privateBox.createFile(cwd, name, promptState.type)
+        const file = await window.devutils.privateBox.createFile(cwd, name, promptState.type, sessionId)
         await loadList()
         setDoc(file)
         setDraft(file.content)
@@ -331,15 +332,16 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
         setSelectedId(file.id)
       } else if (promptState.kind === 'folder') {
         const rel = cwd ? `${cwd}/${name}` : name
-        await window.devutils.privateBox.mkdir(rel)
+        await window.devutils.privateBox.mkdir(rel, sessionId)
         await loadList()
       } else {
         const updated = await window.devutils.privateBox.rename(
           promptState.entry.relativePath,
-          name
+          name,
+          sessionId
         )
         if (doc?.relativePath === promptState.entry.relativePath && updated.kind === 'file') {
-          const file = await window.devutils.privateBox.readFile(updated.relativePath)
+          const file = await window.devutils.privateBox.readFile(updated.relativePath, sessionId)
           setDoc(file)
           setDraft(file.content)
           setDirty(false)
@@ -358,7 +360,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     if (!window.confirm(`Delete “${entry.name}”?`)) return
     setBusy(true)
     try {
-      await window.devutils.privateBox.remove(entry.relativePath)
+      await window.devutils.privateBox.remove(entry.relativePath, sessionId)
       if (doc?.relativePath === entry.relativePath) {
         setDoc(null)
         setDraft('')
@@ -506,7 +508,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     else if (id === 'export' && target && target.kind === 'file') {
       void (async () => {
         try {
-          const path = await window.devutils.privateBox.exportToDisk(target.relativePath)
+          const path = await window.devutils.privateBox.exportToDisk(target.relativePath, sessionId)
           if (path) setError(null)
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Export failed')
@@ -517,7 +519,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
         try {
           const dir =
             target?.kind === 'dir' ? target.relativePath : cwd
-          const result = await window.devutils.privateBox.importFromDisk(dir)
+          const result = await window.devutils.privateBox.importFromDisk(dir, sessionId)
           if (result) await loadList()
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Import failed')

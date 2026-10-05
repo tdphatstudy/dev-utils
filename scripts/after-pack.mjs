@@ -1,5 +1,5 @@
 /**
- * electron-builder afterPack: embed DevUtils icon into Windows .exe
+ * electron-builder afterPack: embed DevFusion icon into Windows .exe
  * without winCodeSign (avoids symlink privilege errors on Windows).
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs'
@@ -16,7 +16,7 @@ const PELibrary = require('pe-library')
 export default async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return
 
-  const productName = context.packager.appInfo.productFilename || 'DevUtils'
+  const productName = context.packager.appInfo.productFilename || 'DevFusion'
   const exePath = join(context.appOutDir, `${productName}.exe`)
   const icoPath = join(context.packager.projectDir, 'resources', 'icon.ico')
 
@@ -58,5 +58,5 @@ export default async function afterPack(context) {
 
   res.outputResource(exe)
   writeFileSync(exePath, Buffer.from(exe.generate()))
-  console.log('[after-pack] Embedded DevUtils icon into', exePath)
+  console.log('[after-pack] Embedded DevFusion icon into', exePath)
 }

@@ -1,6 +1,6 @@
 /**
- * Global crash / exception recovery helpers.
- * Navigates to Home (HashRouter) and stores a short message for the banner.
+ * Global error feedback helpers. Async failures leave the current view intact.
+ * Crash history contains a generic notice, never exception text or tool content.
  */
 
 export interface CrashReport {
@@ -11,9 +11,6 @@ export interface CrashReport {
 }
 
 const STORAGE_KEY = 'devutils-last-error'
-const COOLDOWN_MS = 2500
-
-let lastRedirectAt = 0
 
 export function formatError(error: unknown): string {
   if (error instanceof Error) return error.message || error.name
@@ -27,7 +24,11 @@ export function formatError(error: unknown): string {
 
 export function saveCrashReport(report: CrashReport): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(report))
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+      message: 'A tool or page could not be displayed.',
+      source: report.source === 'ErrorBoundary:app' ? 'ErrorBoundary:app' : 'ErrorBoundary:route',
+      at: report.at
+    }))
   } catch {
     /* ignore quota / private mode */
   }
@@ -62,44 +63,6 @@ export function clearCrashReport(): void {
   }
 }
 
-/** True when we are already on the home hash route. */
-export function isOnHomeRoute(): boolean {
-  const h = window.location.hash.replace(/^#/, '') || '/'
-  return h === '/' || h === ''
-}
-
-/**
- * Record a fatal error and bounce to Home (unless already there / cooldown).
- * Returns true if a redirect was triggered.
- */
-export function recoverToHome(
-  error: unknown,
-  source: string,
-  options?: { force?: boolean }
-): boolean {
-  const message = formatError(error)
-  const stack = error instanceof Error ? error.stack : undefined
-
-  console.error(`[DevUtils] ${source}:`, error)
-
-  saveCrashReport({
-    message,
-    source,
-    stack,
-    at: Date.now()
-  })
-
-  if (isOnHomeRoute() && !options?.force) return false
-
-  const now = Date.now()
-  if (!options?.force && now - lastRedirectAt < COOLDOWN_MS) return false
-  lastRedirectAt = now
-
-  // HashRouter — hard navigation resets React tree cleanly after a crash
-  window.location.hash = '#/'
-  return true
-}
-
 function isBenign(error: unknown, messageHint = ''): boolean {
   const msg = `${messageHint} ${formatError(error)}`.toLowerCase()
   if (msg.includes('resizeobserver')) return true
@@ -114,21 +77,23 @@ function isBenign(error: unknown, messageHint = ''): boolean {
 }
 
 /**
- * Install window-level guards for uncaught errors & promise rejections.
+ * Report uncaught errors & promise rejections without navigating or recording payloads.
  * Call once from the app root.
  */
-export function installGlobalErrorGuards(): () => void {
+export function installGlobalErrorGuards(onFailure: () => void = () => undefined): () => void {
   const onError = (event: ErrorEvent): void => {
     // Ignore ResizeObserver noise and cross-origin script errors without detail
     if (!event.message && !event.error) return
     if (isBenign(event.error, event.message ?? '')) return
 
-    recoverToHome(event.error ?? event.message, 'window.error')
+    console.error('[DevFusion] window.error: an action failed')
+    onFailure()
   }
 
   const onRejection = (event: PromiseRejectionEvent): void => {
     if (isBenign(event.reason)) return
-    recoverToHome(event.reason, 'unhandledrejection')
+    console.error('[DevFusion] unhandledrejection: an action failed')
+    onFailure()
   }
 
   window.addEventListener('error', onError)

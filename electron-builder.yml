@@ -1,6 +1,6 @@
 appId: com.devutils.app
-productName: DevUtils
-copyright: Copyright © DevUtils
+productName: DevFusion
+copyright: Copyright © DevFusion
 directories:
   output: release
   buildResources: resources
@@ -26,6 +26,22 @@ extraResources:
     to: icon.png
   - from: resources/icon.ico
     to: icon.ico
+  - from: resources/tray.png
+    to: tray.png
+  - from: resources/tray.ico
+    to: tray.ico
+  - from: resources/trayTemplate.png
+    to: trayTemplate.png
+  - from: resources/trayTemplate@2x.png
+    to: trayTemplate@2x.png
+  - from: resources/color-picker.html
+    to: color-picker.html
+  - from: resources/color-picker.js
+    to: color-picker.js
+  - from: resources/ocr-helper.html
+    to: ocr-helper.html
+  - from: resources/ocr-helper.js
+    to: ocr-helper.js
 
 # Root icon for all platforms (buildResources = resources/)
 icon: icon.png
@@ -48,10 +64,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: DevUtils
+  shortcutName: DevFusion
   deleteAppDataOnUninstall: false
 
 mac:
+  minimumSystemVersion: '13.0'
   icon: icon.png
   category: public.app-category.developer-tools
   target:

@@ -21,11 +21,20 @@ import {
 } from '@shared/secret-box/keep-note'
 import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
+import { Modal } from '@renderer/components/ui/Modal'
+import { useUnsavedChanges } from '@renderer/hooks/useUnsavedChanges'
 
 interface NoteCard {
   entry: DirEntry
   doc: DocContent
   note: KeepNote
+}
+
+function cardFor(doc: DocContent): NoteCard {
+  return { doc, note: parseKeepNote(doc.content), entry: { id: doc.id, name: doc.name, kind: 'file', type: doc.type, relativePath: doc.relativePath, updatedAt: doc.updatedAt } }
+}
+function sortedCards(cards: NoteCard[]): NoteCard[] {
+  return cards.slice().sort((a, b) => a.note.pinned !== b.note.pinned ? (a.note.pinned ? -1 : 1) : (b.note.updatedAt || '').localeCompare(a.note.updatedAt || ''))
 }
 
 function isNeedsAccess(e: unknown): boolean {
@@ -36,6 +45,8 @@ export default function KeepApp(): JSX.Element {
   const desktop = !!window.devutils?.privateBox
   const inventoryVersion = useRef(0)
   const defaultBoxId = useRef<string>()
+  const sessionId = useRef('')
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const mutating = useRef(false)
   const [saving, setSaving] = useState(false)
   const [unreadable, setUnreadable] = useState<string[]>([])
@@ -51,6 +62,47 @@ export default function KeepApp(): JSX.Element {
   const [creating, setCreating] = useState(false)
   const [composer, setComposer] = useState<KeepNote>(emptyKeepNote())
   const [showPalette, setShowPalette] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const editorDirty = !!editing && (draft.title !== editing.note.title || draft.body !== editing.note.body || draft.color !== editing.note.color || draft.pinned !== editing.note.pinned)
+  const composerDirty = creating && Boolean(composer.title || composer.body)
+  const { requestLeave, dialog: leaveDialog } = useUnsavedChanges({
+    dirty: editorDirty || composerDirty,
+    busy: saving || signingOut,
+    onSave: async () => {
+      if (editing && editorDirty && !await saveCard(editing, draft)) return false
+      if (creating && composerDirty && !await createNote(composer)) return false
+      return true
+    }
+  })
+
+  const openNote = (card: NoteCard): void => requestLeave(() => {
+    setCreating(false)
+    setComposer(emptyKeepNote())
+    setEditing(card)
+    setDraft({ ...card.note })
+    setShowPalette(false)
+  })
+
+  const closeEditor = (): void => requestLeave(() => {
+    setEditing(null)
+    setDraft(emptyKeepNote())
+    setShowPalette(false)
+  })
+
+  const signOut = async (): Promise<void> => {
+    setSigningOut(true)
+    try {
+      await window.devutils.privateBox.clearAccess()
+      inventoryVersion.current++
+      sessionId.current = ''; setNextCursor(null)
+      setHasAccess(false)
+      setCards([]); setUnreadable([]); setEditing(null); setDraft(emptyKeepNote())
+      setCreating(false); setComposer(emptyKeepNote()); setKeyB('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not sign out. Try again.')
+      throw e
+    } finally { setSigningOut(false) }
+  }
 
   const unlock = useCallback(async (password: string): Promise<void> => {
     if (!desktop || mutating.current || !password.trim()) return
@@ -60,7 +112,7 @@ export default function KeepApp(): JSX.Element {
     try {
       const box = await window.devutils.privateBox.ensureDefault()
       defaultBoxId.current = box.id
-      await window.devutils.privateBox.accessDefault(password)
+      sessionId.current = await window.devutils.privateBox.accessDefault(password)
       setHasAccess(true)
       setKeyB('')
     } catch (e) {
@@ -80,6 +132,7 @@ export default function KeepApp(): JSX.Element {
       await window.devutils.privateBox.ensureDefault()
       const prep = await window.devutils.privateBox.prepareDefaultForSave()
       defaultBoxId.current = prep.boxId
+      sessionId.current = prep.sessionId ?? ''
       if (prep.hasAccess) {
         setHasAccess(true)
       } else {
@@ -93,42 +146,28 @@ export default function KeepApp(): JSX.Element {
     }
   }, [desktop])
 
-  const loadNotes = useCallback(async (): Promise<void> => {
+  const loadNotes = useCallback(async (cursor?: string): Promise<void> => {
     if (!hasAccess) return
     const version = ++inventoryVersion.current
     setBusy(true)
     setError(null)
     try {
       try {
-        await window.devutils.privateBox.mkdir(KEEP_FOLDER)
+        await window.devutils.privateBox.mkdir(KEEP_FOLDER, sessionId.current)
       } catch {
         /* exists */
       }
-      const list = await window.devutils.privateBox.list(KEEP_FOLDER)
-      const files = list.filter(
-        (e) => e.kind === 'file' && (!e.type || e.type === 'keep-note' || e.name.endsWith('.keep.json'))
-      )
-      const loaded: NoteCard[] = []
-      const failures: string[] = []
-      for (const entry of files) {
-        try {
-          const doc = await window.devutils.privateBox.readFile(entry.relativePath)
-          loaded.push({ entry, doc, note: parseKeepNote(doc.content) })
-        } catch (e) {
-          if (isNeedsAccess(e)) throw e
-          failures.push(`${entry.name}: ${e instanceof Error ? e.message : 'Could not read note'}`)
-        }
-      }
-      loaded.sort((a, b) => {
-        if (a.note.pinned !== b.note.pinned) return a.note.pinned ? -1 : 1
-        return (b.note.updatedAt || '').localeCompare(a.note.updatedAt || '')
-      })
+      const page = await window.devutils.privateBox.listKeepNotes(sessionId.current, cursor)
+      const loaded = page.notes.map(cardFor)
       if (version !== inventoryVersion.current) return
-      setCards(loaded); setUnreadable(failures)
+      setCards((previous) => sortedCards(cursor ? [...previous.filter((card) => !loaded.some((next) => next.doc.id === card.doc.id)), ...loaded] : loaded))
+      setUnreadable((previous) => cursor ? [...previous, ...page.unreadable] : page.unreadable)
+      setNextCursor(page.nextCursor)
     } catch (e) {
       if (version !== inventoryVersion.current) return
-      setCards([]); setUnreadable([])
+      if (!cursor) { setCards([]); setUnreadable([]) }
       if (isNeedsAccess(e)) {
+        setCards([]); setUnreadable([]); sessionId.current = ''
         setHasAccess(false)
       } else {
         setError(e instanceof Error ? e.message : 'Failed to load notes')
@@ -167,8 +206,10 @@ export default function KeepApp(): JSX.Element {
     mutating.current = true; setSaving(true); setError(null)
     try {
       const next = { ...note, updatedAt: new Date().toISOString() }
-      await window.devutils.privateBox.writeFile(card.doc.relativePath, serializeKeepNote(next, card.doc.content))
-      await loadNotes()
+      const doc = await window.devutils.privateBox.writeFile(card.doc.relativePath, serializeKeepNote(next, card.doc.content), card.doc.sessionId)
+      const updated = cardFor(doc)
+      setCards((previous) => sortedCards(previous.map((item) => item.doc.id === doc.id ? updated : item)))
+      setEditing((previous) => previous?.doc.id === doc.id ? updated : previous)
       return true
     } catch (e) {
       setError(`${e instanceof Error ? e.message : 'Could not save note'}. Draft kept in memory; retry before closing Keep.`)
@@ -176,12 +217,12 @@ export default function KeepApp(): JSX.Element {
     } finally { mutating.current = false; setSaving(false) }
   }
 
-  const createNote = async (note: KeepNote): Promise<void> => {
-    if (mutating.current) return
+  const createNote = async (note: KeepNote): Promise<boolean> => {
+    if (mutating.current) return false
     if (!note.title.trim() && !note.body.trim()) {
       setCreating(false)
       setComposer(emptyKeepNote())
-      return
+      return true
     }
     mutating.current = true; setSaving(true); setError(null)
     try {
@@ -191,18 +232,20 @@ export default function KeepApp(): JSX.Element {
         createdAt: now,
         updatedAt: now
       })
-      await window.devutils.privateBox.saveDocument({
+      const saved = await window.devutils.privateBox.saveDocument({
         boxId: defaultBoxId.current,
         name: keepNoteFileName(note.title || 'note'),
         type: 'keep-note',
         content: payload,
         relativeDir: KEEP_FOLDER
-      })
+      }, sessionId.current)
       setCreating(false)
       setComposer(emptyKeepNote())
-      await loadNotes()
+      setCards((previous) => sortedCards([...previous, cardFor(saved.doc)]))
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create note')
+      return false
     } finally {
       mutating.current = false; setSaving(false)
     }
@@ -212,9 +255,9 @@ export default function KeepApp(): JSX.Element {
     if (mutating.current || !window.confirm('Permanently delete this note? This cannot be undone.')) return
     mutating.current = true; setSaving(true); setError(null)
     try {
-      await window.devutils.privateBox.remove(card.doc.relativePath)
+      await window.devutils.privateBox.remove(card.doc.relativePath, card.doc.sessionId)
       setEditing(null)
-      await loadNotes()
+      setCards((previous) => previous.filter((item) => item.doc.id !== card.doc.id))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed')
     } finally { mutating.current = false; setSaving(false) }
@@ -293,14 +336,8 @@ export default function KeepApp(): JSX.Element {
           className="rounded-lg px-2 py-1.5 text-[12px] text-white/60 hover:bg-white/10 hover:text-white"
           title="Sign out of box"
           aria-label="Sign out of box"
-          disabled={busy || saving}
-          onClick={() => {
-            void window.devutils.privateBox.clearAccess()
-            inventoryVersion.current++
-            setHasAccess(false)
-            setCards([]); setUnreadable([]); setEditing(null); setDraft(emptyKeepNote())
-            setCreating(false); setComposer(emptyKeepNote()); setKeyB('')
-          }}
+          disabled={busy || saving || signingOut}
+          onClick={() => requestLeave(signOut)}
         >
           <LogOut className="h-4 w-4" />
         </button>
@@ -327,6 +364,7 @@ export default function KeepApp(): JSX.Element {
               void createNote(composer)
             }}
             submitLabel="Save note"
+            onCancel={() => requestLeave(() => { setCreating(false); setComposer(emptyKeepNote()); setShowPalette(false) })}
             busy={saving}
             showPalette={showPalette}
             setShowPalette={setShowPalette}
@@ -358,11 +396,7 @@ export default function KeepApp(): JSX.Element {
                 <KeepCard
                   key={c.doc.relativePath}
                   card={c}
-                  onOpen={() => {
-                    setEditing(c)
-                    setDraft({ ...c.note })
-                    setShowPalette(false)
-                  }}
+                  onOpen={() => openNote(c)}
                 />
               ))}
             </div>
@@ -376,21 +410,20 @@ export default function KeepApp(): JSX.Element {
                 <KeepCard
                   key={c.doc.relativePath}
                   card={c}
-                  onOpen={() => {
-                    setEditing(c)
-                    setDraft({ ...c.note })
-                    setShowPalette(false)
-                  }}
+                  onOpen={() => openNote(c)}
                 />
               ))}
             </div>
           </Section>
         )}
+        {nextCursor && <div className="mx-auto max-w-3xl text-center">
+          <p role="status" className="mb-2 text-[12px] text-white/50">{cards.length} notes loaded. Load more to search the remaining notes.</p>
+          <button type="button" disabled={busy || saving} className="rounded-lg border border-white/20 px-4 py-2 text-[13px] disabled:opacity-40" onClick={() => void loadNotes(nextCursor)}>{busy ? 'Loading…' : 'Load more notes'}</button>
+        </div>}
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-[200] flex items-start justify-center overflow-auto bg-black/60 p-4 pt-[10vh] backdrop-blur-[2px]">
-          <div role="dialog" aria-label="Edit note" className="w-full max-w-lg">
+        <Modal open title="Edit note" description="Changes are saved only when you choose Save changes." onClose={closeEditor} busy={saving}>
             {error && <p role="alert" className="mb-3 rounded-lg bg-[#2d2e30] p-3 text-[12px] text-red-300">{error}</p>}
             <NoteEditor
               note={draft}
@@ -402,13 +435,14 @@ export default function KeepApp(): JSX.Element {
               }}
               onDelete={() => void deleteCard(editing)}
               submitLabel="Save changes"
+              onCancel={closeEditor}
               busy={saving}
               showPalette={showPalette}
               setShowPalette={setShowPalette}
             />
-          </div>
-        </div>
+        </Modal>
       )}
+      {leaveDialog}
     </div>
   )
 }
@@ -473,6 +507,7 @@ function NoteEditor({
   onChange,
   onClose,
   onDelete,
+  onCancel,
   submitLabel,
   showPalette,
   setShowPalette,
@@ -482,6 +517,7 @@ function NoteEditor({
   onChange: (n: KeepNote) => void
   onClose: () => void
   onDelete?: () => void
+  onCancel: () => void
   submitLabel: string
   showPalette: boolean
   setShowPalette: (v: boolean) => void
@@ -542,9 +578,10 @@ function NoteEditor({
             <Trash2 className="h-4 w-4" />
           </button>
         )}
+        <button type="button" className="ml-auto rounded-lg px-3 py-1.5 text-[13px] text-white/70 hover:bg-white/10" disabled={busy} onClick={onCancel}>Close</button>
         <button
           type="button"
-          className="ml-auto rounded-lg px-3 py-1.5 text-[13px] font-medium text-white/80 hover:bg-white/10"
+          className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-white/80 hover:bg-white/10"
           onClick={onClose}
           disabled={busy}
         >

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 
 export const NO_HISTORY_TOOLS = new Set([
+  'design.color',
+  'text.ocr',
   'security.random',
   'security.keygen',
   'security.hash',
@@ -11,6 +13,7 @@ export const NO_HISTORY_TOOLS = new Set([
   'privatebox.keep',
   'network.ssh',
   'network.http',
+  'network.mock-api',
   'network.url',
   'text.qr'
 ])

@@ -16,6 +16,48 @@ Acceptance per tool:
 - Domain regression tests and actual renderer interactions verify changed behavior.
 - Native tools also need bridge/OS checks; a browser preview cannot prove these.
 
+## UX foundation follow-up (2026-10-05)
+
+The first priority batch protects Keep edits/new notes with explicit Save and
+continue / Discard / Keep editing before route navigation, Sign out, editor close
+or composer replacement. React Router still uses the existing hash URLs and lazy
+registry, now through the data router so Back and programmatic navigation can be
+blocked. A failed save leaves the draft available; active writes cannot be
+discarded or cancelled through the guard. A beforeunload handler requests host
+confirmation for reload/close, subject to Electron/browser behavior.
+
+The shared Radix modal now contains/restores focus in Keep and vault naming.
+Segmented controls support Left/Right/Home/End and a single Tab stop. JSON tree
+expand buttons have names; path copy reports failures locally. Async errors leave
+the current tool mounted and show a dismissible notice. Render errors no longer
+auto-return to Home. Crash history persists generic notices only. Recent IDs
+record completed navigation, so cancelled navigation does not change Last tool.
+
+Verification: full Vitest regression passed 466/466 tests across 68 files with
+one worker, no file parallelism and a 30-second test timeout. Web and Node
+typechecks passed. Final main/preload/renderer production build passed; the
+existing 2.9 MB SQL vendor chunk warning remains. The production renderer smoke
+passed on Windows Edge headless: failed-save retention/retry, active-write
+dismissal protection, save/discard before sign out, nested editor focus,
+Left/Right/Home/End, async failure retention, 720x600 dialog bounds,
+Back/beforeunload/palette blocking, cancelled-navigation recent IDs, tree copy
+failure/retry, render failure past the old redirect delay and bridge-absent
+preview. Save and clipboard calls in this smoke are synthetic in-memory fixtures,
+not native vault/clipboard integration. Render-crash retry cannot recover state
+already lost when a component crashed. Native writes, close prompts and other
+platforms remain unverified. Toolbar/split-pane/search/theme/image/recovery
+discovery improvements are still pending; this batch does not complete every
+inventory row.
+
+`tests/renderer-ux.smoke.mjs` exercises the production renderer through a local
+HTTP server and a clearly isolated in-memory bridge fixture. Run it after the
+build with an available Playwright module (`PLAYWRIGHT_MODULE` can specify its
+module URL) and optional `UX_BROWSER_CHANNEL`, e.g. `msedge`. This standalone
+check is separate from the Node-only Vitest suite and does not prove native
+IPC, encryption, OS dialogs or Electron close behavior. It covers save failure
+and retry, busy-write dismissal, sign out, edit modal focus, keyboard controls,
+async failure feedback, narrow dialogs, Back/palette guards and render failure.
+
 ## Inventory (2026-10-04)
 
 “Updated” below describes changes delivered so far, not completion of the whole

@@ -397,7 +397,7 @@ export async function createSampleJwt(): Promise<string> {
     algorithm: 'HS256',
     payload: {
       sub: '1234567890',
-      name: 'DevUtils',
+      name: 'DevFusion',
       iat: now,
       exp: now + 60 * 60 * 24 * 365
     }

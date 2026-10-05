@@ -9,8 +9,8 @@ import { formatJson, parseJson } from '@shared/json'
 import { diffJson, summarizeDiff } from '@shared/json/diff'
 import { diffLines, lineDiffReport } from '@shared/text/line-diff'
 
-const LEFT = `{\n  "name": "DevUtils",\n  "version": 1,\n  "features": ["json", "yaml"]\n}`
-const RIGHT = `{\n  "name": "DevUtils",\n  "version": 2,\n  "features": ["json", "yaml", "diff"],\n  "local": true\n}`
+const LEFT = `{\n  "name": "DevFusion",\n  "version": 1,\n  "features": ["json", "yaml"]\n}`
+const RIGHT = `{\n  "name": "DevFusion",\n  "version": 2,\n  "features": ["json", "yaml", "diff"],\n  "local": true\n}`
 
 type ViewMode = 'tree' | 'lines'
 

@@ -18,7 +18,6 @@ function navClass(isActive: boolean, compact: boolean): string {
 export function Sidebar(): JSX.Element {
   const collapsed = useAppStore((s) => s.sidebarCollapsed)
   const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
-  const setLastToolId = useAppStore((s) => s.setLastToolId)
   const isNarrow = useIsNarrow()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -154,7 +153,6 @@ export function Sidebar(): JSX.Element {
                       <NavLink
                         to={`/tool/${tool.id}`}
                         onClick={() => {
-                          setLastToolId(tool.id)
                           closeDrawer()
                         }}
                         title={tool.name}
@@ -243,7 +241,6 @@ export function Sidebar(): JSX.Element {
                           title={tool.name}
                           aria-label={tool.name}
                           onClick={() => {
-                            setLastToolId(tool.id)
                             closeDrawer()
                           }}
                           className={({ isActive }) =>

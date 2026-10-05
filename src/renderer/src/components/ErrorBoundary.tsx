@@ -1,18 +1,16 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, type ReactNode } from 'react'
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react'
-import { formatError, recoverToHome, saveCrashReport } from '@renderer/lib/error-guard'
+import { saveCrashReport } from '@renderer/lib/error-guard'
 
 interface Props {
   children: ReactNode
   /** Isolate tool pane only (keeps shell chrome). */
   scope?: 'app' | 'route'
-  /** Auto-return to Home after N ms (default 0 = manual). */
-  autoHomeMs?: number
+  onHome: () => void
 }
 
 interface State {
   error: Error | null
-  info: string | null
 }
 
 /**
@@ -20,44 +18,29 @@ interface State {
  * Window-level async errors are handled by installGlobalErrorGuards().
  */
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null, info: null }
-  private autoTimer: ReturnType<typeof setTimeout> | null = null
+  state: State = { error: null }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { error }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  componentDidCatch(): void {
     const source = `ErrorBoundary:${this.props.scope ?? 'app'}`
-    console.error(`[DevUtils] ${source}`, error, info.componentStack)
+    console.error(`[DevFusion] ${source}: render failed`)
     saveCrashReport({
-      message: formatError(error),
+      message: 'A tool or page could not be displayed.',
       source,
-      stack: [error.stack, info.componentStack].filter(Boolean).join('\n'),
       at: Date.now()
     })
-
-    const ms = this.props.autoHomeMs ?? 0
-    if (ms > 0) {
-      this.autoTimer = setTimeout(() => this.goHome(), ms)
-    }
-  }
-
-  componentWillUnmount(): void {
-    if (this.autoTimer) clearTimeout(this.autoTimer)
   }
 
   private reset = (): void => {
-    if (this.autoTimer) clearTimeout(this.autoTimer)
-    this.setState({ error: null, info: null })
+    this.setState({ error: null })
   }
 
   private goHome = (): void => {
-    if (this.autoTimer) clearTimeout(this.autoTimer)
-    this.setState({ error: null, info: null })
-    recoverToHome(this.state.error ?? 'Unknown render error', `ErrorBoundary:${this.props.scope ?? 'app'}`, {
-      force: true
-    })
+    this.setState({ error: null })
+    this.props.onHome()
   }
 
   private retry = (): void => {
@@ -78,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
             Something went wrong
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">
-            A tool or page crashed. Retry or return to Home — the rest of the app is fine.
+            This view could not be displayed. Retry or choose Home when you are ready.
           </p>
           <pre className="mt-3 max-h-28 overflow-auto rounded-mac border border-mac-separator bg-mac-surface px-3 py-2 text-left font-mono text-[11px] text-mac-danger shadow-[var(--mac-shadow-sm)]">
             {error.message || String(error)}
@@ -94,11 +77,6 @@ export class ErrorBoundary extends Component<Props, State> {
             Back to Home
           </button>
         </div>
-        {(this.props.autoHomeMs ?? 0) > 0 && (
-          <p className="text-[11px] text-mac-label-tertiary">
-            Returning to Home automatically…
-          </p>
-        )}
       </div>
     )
   }
