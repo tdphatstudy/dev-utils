@@ -1,3 +1,7 @@
+import { LocalDomainsService } from './local-domains/service'
+import { MkcertCertificates } from './local-domains/certificates'
+import { SystemHosts } from './platform/local-domains/hosts'
+import { registerLocalDomainsIpc, clearLocalResolverCache } from './local-domains/ipc'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol } from 'electron'
 import { join } from 'path'
 import { stat } from 'fs/promises'
@@ -41,9 +45,13 @@ applyMemorySwitches()
 configureBrand()
 let desktopTray: DesktopTray | undefined
 let quitting = false
+let domainsCleanedForQuit = false
+let domainsCleanupPending = false
 const colorPicker: ScreenColorPicker = new ScreenColorPicker((selected) => { desktopTray?.refresh(); if (selected) desktopTray?.notifyColor(selected) }, (): boolean => !desktopOcr.isBusy())
 const desktopOcr: DesktopOcr = new DesktopOcr(() => desktopTray?.refresh(), (): boolean => !colorPicker.isBusy())
 const mockApi = new MockApiServer(() => desktopTray?.refresh())
+const localDomainsDirectory = join(app.getPath('userData'), 'local-domains')
+const localDomains = new LocalDomainsService(localDomainsDirectory, new SystemHosts(), new MkcertCertificates(localDomainsDirectory), clearLocalResolverCache)
 
 function resolveAppIcon(): string | undefined {
   return resourcePath(process.platform === 'win32' ? 'icon.ico' : 'icon.png')
@@ -94,7 +102,7 @@ function createWindow(route = '/'): BrowserWindow {
       buttons: ['Keep editing', 'Close without saving'], defaultId: 0, cancelId: 0, noLink: true
     })
     if (choice === 1) event.preventDefault()
-    else quitting = false
+    else { quitting = false; domainsCleanedForQuit = false; localDomains.cancelQuit() }
   })
 
   const rendererUrl = is.dev && process.env['ELECTRON_RENDERER_URL'] ? process.env['ELECTRON_RENDERER_URL'] : pathToFileURL(join(__dirname, '../renderer/index.html')).href
@@ -182,6 +190,7 @@ function registerIpc(): void {
   registerColorPickerIpc(colorPicker)
   registerOcrIpc(desktopOcr)
   registerMockApiIpc(mockApi)
+  registerLocalDomainsIpc(localDomains)
 
   ipcMain.handle('app:platform', (event) => { assertTrustedIpc(event); return process.platform })
   ipcMain.handle('app:version', (event) => { assertTrustedIpc(event); return app.getVersion() })
@@ -193,7 +202,30 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('before-quit', () => { quitting = true })
+  app.on('before-quit', (event) => {
+    quitting = true
+    if (domainsCleanedForQuit) return
+    event.preventDefault()
+    if (domainsCleanupPending) return
+    domainsCleanupPending = true
+    localDomains.beginQuit()
+    void localDomains.cleanup().then(() => {
+      domainsCleanupPending = false
+      domainsCleanedForQuit = true
+      app.quit()
+    }).catch(async () => {
+      quitting = false
+      localDomains.cancelQuit()
+      const choice = await dialog.showMessageBox({
+        type: 'warning', title: APP_NAME,
+        message: 'Local domain overrides could not be removed.',
+        detail: 'Keep DevFusion open to retry Remove local overrides. If you quit now, marked hosts entries may still send those domains to localhost until you remove them.',
+        buttons: ['Keep DevFusion open', 'Quit with overrides remaining'], defaultId: 0, cancelId: 0, noLink: true
+      })
+      domainsCleanupPending = false
+      if (choice.response === 1) { domainsCleanedForQuit = true; app.quit() }
+    })
+  })
   app.on('second-instance', () => {
     desktopTray?.open()
   })
@@ -220,5 +252,5 @@ if (!gotLock) {
   app.on('window-all-closed', () => {
     if (!desktopTray?.hasTray() && process.platform !== 'darwin') app.quit()
   })
-  app.on('will-quit', () => { mockApi.dispose(); desktopTray?.dispose(); clearAccess() })
+  app.on('will-quit', () => { mockApi.dispose(); localDomains.dispose(); desktopTray?.dispose(); clearAccess() })
 }

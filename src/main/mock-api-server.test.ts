@@ -292,17 +292,62 @@ it('guards every named IPC method and validates YAML byte limits before service 
   const server = new MockApiServer()
   servers.push(server)
   registerMockApiIpc(server)
-  expect([...ipc.handlers.keys()]).toEqual(['mock-api:start', 'mock-api:stop', 'mock-api:status', 'mock-api:config', 'mock-api:clear-logs'])
+  expect([...ipc.handlers.keys()]).toEqual(['mock-api:start', 'mock-api:apply', 'mock-api:stop', 'mock-api:status', 'mock-api:config', 'mock-api:clear-logs'])
   const event = {}
   for (const [name, handler] of ipc.handlers) {
     ipc.trusted.mockImplementationOnce(() => { throw new Error('Untrusted fixture') })
     expect(() => handler(event, 'fixture')).toThrow('Untrusted fixture')
     expect(ipc.trusted).toHaveBeenLastCalledWith(event)
-    if (name !== 'mock-api:start') await handler(event)
+    if (name !== 'mock-api:start' && name !== 'mock-api:apply') await handler(event)
   }
-  const handler = ipc.handlers.get('mock-api:start')!
-  expect(() => handler(event, 42)).toThrow('string')
-  expect(() => handler(event, 'é'.repeat(MOCK_LIMITS.yamlBytes / 2 + 1))).toThrow('1 MiB')
-  expect(() => handler(event, 'x'.repeat(MOCK_LIMITS.yamlBytes + 1))).toThrow('1 MiB')
+  for (const operation of ['start', 'apply']) {
+    const handler = ipc.handlers.get('mock-api:' + operation)!
+    expect(() => handler(event, 42)).toThrow('string')
+    expect(() => handler(event, 'é'.repeat(MOCK_LIMITS.yamlBytes / 2 + 1))).toThrow('1 MiB')
+    expect(() => handler(event, 'x'.repeat(MOCK_LIMITS.yamlBytes + 1))).toThrow('1 MiB')
+  }
   expect(server.status().running).toBe(false)
+})
+
+it('applies a new /hello endpoint without restarting, validates first and preserves the active listener on failures', async () => {
+  const { server, port } = await start()
+  const original = server.getConfig()!, startedAt = server.status().startedAt
+  expect((await http(port, '/hello')).status).toBe(404)
+  const next = config(port)
+  next.endpoints.push({ id: 'hello', name: 'Health', method: 'GET', path: '/hello', responses: [{ id: 'default', name: 'Default', status: 200, body: { message: 'Hello from DevFusion' } }] })
+  const yaml = serializeMockConfig(next)
+  await expect(server.apply('invalid: config')).rejects.toThrow()
+  expect(server.getConfig()).toBe(original)
+  const applied = await server.apply(yaml)
+  expect(applied).toMatchObject({ running: true, port, startedAt })
+  expect(JSON.parse((await http(port, '/hello')).body)).toEqual({ message: 'Hello from DevFusion' })
+  expect(server.getConfig()).toBe(yaml)
+  await expect(server.apply(serializeMockConfig({ ...next, port: port === 65535 ? port - 1 : port + 1 }))).rejects.toThrow('requires Stop')
+  expect(server.getConfig()).toBe(yaml)
+  expect((await http(port, '/hello')).status).toBe(200)
+  await server.stop()
+  await expect(server.apply(yaml)).rejects.toThrow('Start the server')
+})
+
+it('keeps one config snapshot for an in-flight body read while Apply changes updates new requests', async () => {
+  const { server, port } = await start()
+  let started: () => void = () => {}
+  const ready = new Promise<void>((done) => { started = done })
+  let client: ReturnType<typeof request>
+  const pending = new Promise<{ status: number; body: string }>((done, reject) => {
+    client = request({ host: '127.0.0.1', port, path: '/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': '3' }, agent: false }, (res) => {
+      let body = ''; res.on('data', (part) => { body += part }); res.on('end', () => done({ status: res.statusCode!, body }))
+    })
+    client.on('error', reject); client.flushHeaders(); client.write('{')
+    client.once('socket', (socket) => { socket.once('connect', started) })
+  })
+  await ready
+  // Wait for the server to accept this request (no arbitrary timing sleep).
+  await vi.waitFor(() => expect(server.status().requests).toBe(1))
+  const next = config(port)
+  next.endpoints[1].responses = [{ id: 'changed', name: 'Changed', status: 200, body: { changed: true } }]
+  await server.apply(serializeMockConfig(next))
+  client!.end('} ')
+  expect((await pending).status).toBe(422)
+  expect((await http(port, '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(200)
 })

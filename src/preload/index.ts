@@ -1,3 +1,4 @@
+import type { LocalDomainInput, LocalDomainPorts, LocalDomainsStatus, DomainResolution } from '@shared/local-domains/types'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { HttpRequestPayload, HttpResponsePayload } from '@shared/http/types'
 import type {
@@ -87,8 +88,24 @@ const api = {
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized')
   },
 
+  localDomains: {
+    status: (): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:status'),
+    add: (input: LocalDomainInput): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:add', input),
+    setPorts: (ports: LocalDomainPorts): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:ports', ports),
+    enable: (id: string): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:enable', id),
+    disable: (id: string): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:disable', id),
+    remove: (id: string): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:remove', id),
+    cleanup: (): Promise<void> => ipcRenderer.invoke('local-domains:cleanup'),
+    setupHttps: (): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:setup-https'),
+    removeCa: (): Promise<LocalDomainsStatus> => ipcRenderer.invoke('local-domains:remove-ca'),
+    resolve: (domain: string): Promise<DomainResolution> => ipcRenderer.invoke('local-domains:resolve', domain),
+    open: (id: string): Promise<void> => ipcRenderer.invoke('local-domains:open', id),
+    mkcertHelp: (): Promise<void> => ipcRenderer.invoke('local-domains:mkcert-help')
+  },
+
   mockApi: {
     start: (yaml: string): Promise<MockStatus> => ipcRenderer.invoke('mock-api:start', yaml),
+    apply: (yaml: string): Promise<MockStatus> => ipcRenderer.invoke('mock-api:apply', yaml),
     stop: (): Promise<MockStatus> => ipcRenderer.invoke('mock-api:stop'),
     status: (): Promise<MockStatus> => ipcRenderer.invoke('mock-api:status'),
     getConfig: (): Promise<string | null> => ipcRenderer.invoke('mock-api:config'),

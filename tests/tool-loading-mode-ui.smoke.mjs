@@ -5,6 +5,8 @@ import assert from 'node:assert/strict'
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const root = resolve('out/renderer')
+const registry = await readFile('src/renderer/src/registry/tools.ts', 'utf8')
+const expectedTools = (registry.match(/\.\.\.createToolLoader\(/g) || []).length
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' }
 const server = createServer(async (request, response) => {
   try {
@@ -133,7 +135,7 @@ try {
   }
   const text = await status(page).textContent()
   const total = Number(text.match(/^(\d+)/)[1])
-  assert.equal(total, 39)
+  assert.equal(total, expectedTools)
   await assertDormant(page, baseline)
   assert.equal(requests.some((value) => /(?:tesseract|traineddata|pdf\.worker|ocr-engine)/i.test(value)), false)
   assert.equal(requests.some((value) => !value.startsWith(url)), false)
@@ -146,8 +148,8 @@ try {
   await page.getByRole('button', { name: 'Switch to light theme', exact: true }).click()
   await screenshot(page, 'tool-loading-preload-light-720')
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
-  report.scenarios.push('visibility pause/resume, all 39 interfaces prepared, no tool effects/workers/processing, metadata-only persistence')
-  console.log('PASS 39 interfaces prepared without privileged actions or processing workers')
+  report.scenarios.push(`visibility pause/resume, all ${total} interfaces prepared, no tool effects/workers/processing, metadata-only persistence`)
+  console.log(`PASS ${total} interfaces prepared without privileged actions or processing workers`)
 
   const before = requests.filter((value) => /(?:SqlStudio|vendor-sql)-/.test(value)).length
   await go(page, 'sql.studio')
@@ -175,7 +177,7 @@ try {
   await broken.page.route('**/assets/SqlStudio-*.js', (route) => route.abort('failed'))
   await broken.page.goto(url + '/#/tool/app.settings')
   await broken.page.getByText(/could not be prepared/).waitFor({ timeout: 60000 })
-  assert.match(await status(broken.page).textContent(), /38 of 39.*1 could not/)
+  assert.match(await status(broken.page).textContent(), new RegExp(`${expectedTools - 1} of ${expectedTools}.*1 could not`))
   await go(broken.page, 'text.lorem')
   await broken.page.locator('#lorem-output').waitFor()
   await go(broken.page, 'app.settings')

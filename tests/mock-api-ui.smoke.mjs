@@ -20,7 +20,7 @@ page.setDefaultTimeout(12000)
 const errors = [], requests = []
 page.on('pageerror', error => errors.push(error.message)); page.on('request', request => requests.push(request.url()))
 await page.addInitScript(() => {
-  const state = window.__mock = { running: false, yaml: null, starts: 0, copied: '', failStart: false, holdPoll: false, pending: null }
+  const state = window.__mock = { running: false, yaml: null, starts: 0, applies: 0, copied: '', failStart: false, failApply: false, holdApply: false, releaseApply: null, holdPoll: false, pending: null }
   const status = () => ({ running: state.running, port: state.running ? 4010 : null, baseUrl: state.running ? 'http://127.0.0.1:4010' : null, name: state.running ? 'Fixture API' : null, startedAt: null, requests: 0, logs: [] })
   window.devutils = {
     platform: async () => 'win32', app: { trayAvailable: async () => true, onOpenTool: () => () => {} },
@@ -29,6 +29,7 @@ await page.addInitScript(() => {
       status: async () => { const snapshot = status(); if (state.holdPoll) return new Promise(ok => { state.pending = () => ok(snapshot) }); return snapshot },
       getConfig: async () => state.yaml,
       start: async yaml => { state.starts++; if (state.failStart) throw new Error('Port 4010 is already in use. Choose a different port.'); state.yaml = yaml; state.running = true; return status() },
+      apply: async yaml => { state.applies++; if (state.failApply) throw new Error('Apply failed; running configuration unchanged'); if (state.holdApply) await new Promise(done => { state.releaseApply = done }); state.yaml = yaml; return status() },
       stop: async () => { state.running = false; state.yaml = null; return status() }, clearLogs: async () => status()
     }
   }
@@ -118,6 +119,49 @@ try {
   await page.evaluate(() => { window.__mock.failStart = false })
   await page.getByRole('button', { name: 'Start server', exact: true }).click()
   await page.getByRole('button', { name: 'Stop server', exact: true }).waitFor()
+  const starts = await page.evaluate(() => window.__mock.starts)
+  const beforeApply = await page.evaluate(() => window.__mock.yaml)
+  await page.getByRole('button', { name: 'Add endpoint', exact: true }).click()
+  await page.getByRole('dialog').getByLabel('Endpoint name', { exact: true }).fill('Hello')
+  await page.getByRole('dialog').getByLabel('Path', { exact: true }).fill('/hello')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save endpoint', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Unapplied changes.' }).waitFor()
+  if (process.env.BRAND_SCREENSHOT_DIR) { await mkdir(process.env.BRAND_SCREENSHOT_DIR, { recursive: true }); await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'mock-api-pending-changes.png') }) }
+  assert.equal(await page.evaluate(() => window.__mock.yaml), beforeApply, 'Editing silently changed live configuration')
+  await page.evaluate(() => { window.__mock.failApply = true })
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: 'Apply failed' }).waitFor()
+  assert.equal(await page.evaluate(() => window.__mock.yaml), beforeApply)
+  await page.evaluate(() => { window.__mock.failApply = false; window.__mock.holdApply = true })
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
+  await page.waitForFunction(() => window.__mock.releaseApply)
+  assert.equal(await page.getByRole('button', { name: 'Stop server', exact: true }).isDisabled(), true)
+  await page.getByRole('button', { name: 'Edit endpoint', exact: true }).click()
+  await page.getByRole('dialog').getByLabel('Endpoint name', { exact: true }).fill('Hello revised during Apply')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save endpoint', exact: true }).click()
+  await page.evaluate(() => { window.__mock.holdApply = false; window.__mock.releaseApply() })
+  await page.waitForFunction(() => window.__mock.yaml.includes('/hello'))
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).waitFor({ state: 'visible' })
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'Apply changes').disabled)
+  await page.getByRole('status').filter({ hasText: 'Unapplied changes.' }).waitFor()
+  assert.equal((await page.evaluate(() => window.__mock.yaml)).includes('revised during Apply'), false, 'An unsent edit was marked applied')
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'All changes applied' }).waitFor()
+  assert.equal(await page.evaluate(() => window.__mock.starts), starts, 'Apply restarted the listener')
+  assert.equal(await page.evaluate(() => window.__mock.applies), 3)
+  await page.setViewportSize({ width: 720, height: 650 })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+  await page.setViewportSize({ width: 1100, height: 820 })
+  await page.getByText('Server settings', { exact: true }).click()
+  await page.getByLabel('Port', { exact: true }).fill('4011')
+  await page.getByRole('button', { name: 'Apply server settings', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Stop and start the server to change its port.' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Apply changes', exact: true }).isDisabled(), true)
+  await page.getByText('Server settings', { exact: true }).click()
+  await page.getByLabel('Port', { exact: true }).fill('4010')
+  await page.getByRole('button', { name: 'Apply server settings', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'All changes applied' }).waitFor()
+  console.log('PASS live draft changes require Apply, failed updates preserve live config, later edits stay pending, port changes require restart')
   await page.evaluate(() => { window.__mock.holdPoll = true })
   await page.waitForFunction(() => window.__mock.pending)
   await page.getByRole('button', { name: 'Stop server', exact: true }).click()

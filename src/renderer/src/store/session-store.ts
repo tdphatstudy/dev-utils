@@ -14,6 +14,7 @@ export const NO_HISTORY_TOOLS = new Set([
   'network.ssh',
   'network.http',
   'network.mock-api',
+  'network.local-domains',
   'network.url',
   'text.qr'
 ])

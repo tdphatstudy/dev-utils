@@ -140,6 +140,22 @@ media type `+json`; JSON sai trả 400. Body không phải JSON không có field
 
 ## CORS và vòng đời
 
+Khi server đang chạy, sửa/thêm endpoint chỉ đổi **bản nháp** trong view. UI hiển
+thị **Unapplied changes** cho đến khi bấm **Apply changes** (hoặc Ctrl/⌘ + Enter
+trong YAML). Ví dụ thêm GET `/hello`, Save endpoint rồi Apply changes: request
+tiếp theo tới `/hello` mới dùng response vừa thêm. Nếu chưa Apply, server vẫn
+phục vụ cấu hình trước đó và có thể trả 404 cho endpoint mới.
+
+Apply kiểm tra toàn bộ YAML trước, thay snapshot cấu hình trên cùng listener,
+giữ port, startedAt và activity. Request đã được nhận giữ snapshot cũ qua body
+read/delay; request mới dùng snapshot mới. YAML lỗi không thay cấu hình đang chạy.
+Đổi port cần **Stop server → Start server**; Apply từ chối port mới và giữ server
+cũ. Edit tiếp khi Apply đang chờ sẽ vẫn hiện pending, không bị đánh dấu đã áp dụng.
+Không tự reload theo mỗi phím gõ, ghi ra disk hoặc khởi động lại listener nền.
+
+Nếu cần reload app, **Export YAML trước** để giữ bản nháp. Mở lại tool trong khi
+server chạy lấy cấu hình đã Apply; bản nháp chưa Apply không được tự lưu.
+
 Server chỉ bind `127.0.0.1`, không mở LAN. Browser origin mặc định cho frontend
 HTTP localhost và 127.0.0.1 trên mọi port; wildcard chỉ hỗ trợ hai dạng trên.
 Origin khác cần nhập origin HTTP/HTTPS chính xác, không có path. Preflight OPTIONS
@@ -178,3 +194,9 @@ Try rules, import/export và minimum window width. Native Electron smoke kiểm 
 production preload/IPC, tiếp tục phục vụ sau khi đóng renderer và Stop/Quit.
 Vitest không tự chứng minh giao diện hoặc IPC Electron. Các kiểm tra native chạy
 trên Windows; macOS/Linux cần smoke riêng trước phát hành.
+
+Regression Apply bao phủ `/hello` từ 404 thành 200 trên cùng listener, malformed
+YAML/port mismatch giữ cấu hình active, snapshot của request đang đọc body và
+trusted named IPC. UI smoke kiểm tra pending/apply/error, edit tiếp trong Apply,
+port-change guidance và stale polling. Native smoke dùng production preload và
+server loopback riêng; không đổi cấu hình server đang dùng của người dùng.

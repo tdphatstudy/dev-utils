@@ -184,6 +184,22 @@ export class MockApiServer {
     })
   }
 
+  /** Replace one validated configuration atomically without reopening the port. */
+  apply(yaml: string): Promise<MockStatus> {
+    return this.serialize(async () => {
+      if (this.disposed) throw new Error('Mock API is shutting down.')
+      const runtime = this.runtime
+      if (!runtime || runtime.closed || !runtime.server.listening) throw new Error('Start the server before applying changes.')
+      const config = parseMockConfig(yaml)
+      if (config.port !== runtime.config.port) throw new Error('Changing the port requires Stop server, then Start server. The running configuration was left unchanged.')
+      const canonical = serializeMockConfig(config)
+      runtime.config = config
+      runtime.yaml = canonical
+      this.changed()
+      return this.status()
+    })
+  }
+
   private closeRuntime(runtime: Runtime): Promise<void> {
     runtime.closed = true
     runtime.cancelStart?.()
@@ -227,6 +243,8 @@ export class MockApiServer {
   }
 
   private async handleRequest(runtime: Runtime, req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Keep the arrival snapshot across body reads and delayed responses.
+    const config = runtime.config
     const started = Date.now()
     let endpoint = '[rejected]'
     let rule = ''
@@ -261,11 +279,11 @@ export class MockApiServer {
       runtime.requests++
       if (req.rawHeaders.length / 2 > 100) throw new RequestIssue(431, 'Too many request headers.')
       const host = req.headers.host?.toLowerCase()
-      if (host !== `${LOOPBACK}:${runtime.config.port}` && host !== `localhost:${runtime.config.port}`) {
+      if (host !== `${LOOPBACK}:${config.port}` && host !== `localhost:${config.port}`) {
         throw new RequestIssue(403, 'Only a loopback Host header is allowed.')
       }
       const origin = req.headers.origin
-      if (origin !== undefined && (typeof origin !== 'string' || !runtime.config.cors.enabled || !matchesCorsOrigin(runtime.config, origin))) {
+      if (origin !== undefined && (typeof origin !== 'string' || !config.cors.enabled || !matchesCorsOrigin(config, origin))) {
         throw new RequestIssue(403, 'This browser origin is not allowed. Add it to CORS origins in the mock configuration.')
       }
       if (origin) { corsHeaders['Access-Control-Allow-Origin'] = origin; corsHeaders['Vary'] = 'Origin' }
@@ -278,7 +296,7 @@ export class MockApiServer {
         if (!origin) throw new RequestIssue(400, 'CORS preflight requires an Origin header.')
         const requestedMethod = req.headers['access-control-request-method']
         if (typeof requestedMethod !== 'string' || !MOCK_METHODS.includes(requestedMethod as typeof MOCK_METHODS[number])) throw new RequestIssue(400, 'Invalid preflight method.')
-        const methods = this.allowedMethods(runtime.config, request)
+        const methods = this.allowedMethods(config, request)
         if (!methods.length) { endpoint = '[unmatched]'; send(404, JSON.stringify({ error: 'No mock endpoint matches this path.' }), {}, true); return }
         if (!methods.includes(requestedMethod)) { endpoint = '[unmatched]'; send(405, JSON.stringify({ error: 'Method is not configured for this endpoint.' }), { Allow: methods.join(', ') }, true); return }
         const requestedHeaders = req.headers['access-control-request-headers'] ?? ''
@@ -293,10 +311,10 @@ export class MockApiServer {
       }
       request.body = await readBody(req)
       if (runtime.closed || res.destroyed) return
-      const match = matchMockRequest(runtime.config, request) ?? (method === 'HEAD' ? matchMockRequest(runtime.config, { ...request, method: 'GET' }) : null)
+      const match = matchMockRequest(config, request) ?? (method === 'HEAD' ? matchMockRequest(config, { ...request, method: 'GET' }) : null)
       if (!match) {
         endpoint = '[unmatched]'
-        const methods = this.allowedMethods(runtime.config, request)
+        const methods = this.allowedMethods(config, request)
         send(methods.length ? 405 : 404, JSON.stringify({ error: methods.length ? 'Method is not configured for this endpoint.' : 'No mock endpoint matches this path.' }), methods.length ? { Allow: methods.join(', ') } : {})
         return
       }

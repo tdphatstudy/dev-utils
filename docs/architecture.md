@@ -63,6 +63,7 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 | OCR ảnh/PDF và chụp màn hình | `src/shared/ocr/types.ts`, `src/main/ocr.ts`, `src/renderer/src/ocr-helper` | `text.ocr`, app OCR bridge, isolated preload, local assets plugin, lightweight resource popup |
 | Lorem và time/date | `src/shared/lorem`, `src/shared/time` | lazy `text.lorem`, `time.timestamp`, `time.date`, tool components |
 | Mock API local server | `src/shared/mock-api`, `src/main/mock-api-server.ts` | `mock-api-ipc.ts`, typed `mockApi` preload, `network.mock-api`, tray status/Stop |
+| Local Domains / HTTPS | `src/shared/local-domains`, `src/main/local-domains`, `src/main/platform/local-domains` | named `localDomains` preload/IPC, lazy `network.local-domains`, loopback proxy, tagged hosts, dedicated mkcert CA; [usage and cleanup](local-domains.md) |
 | API giữa UI và OS | `src/preload/index.ts` | `index.d.ts`, shared types, main handlers |
 | Route, shell, phím tắt, theme | `src/renderer/src/App.tsx`, `layouts/AppShell.tsx` | `main.tsx`, `components/chrome` |
 | Thêm/sửa tool và tìm kiếm | `src/renderer/src/registry/tools.ts` | `pages/ToolPage.tsx`, `features/tools/<group>` |
@@ -569,6 +570,16 @@ xóa config/logs RAM. Activity không chứa incoming URL/header/query/body;
 `network.mock-api` thuộc NO_HISTORY_TOOLS. Export YAML explicit là plaintext.
 Xem [Mock API schema, limits và verification](mock-api.md).
 
+Mock API supports explicit `mockApi.apply(yaml)` / `mock-api:apply` for a running
+server on the same port. Main validates before atomically replacing config/YAML,
+retaining the listener, counters and activity. Each request captures its arrival
+config through awaited body reads/delays. Invalid updates and port changes leave
+the active server intact; port changes require Stop/Start. UI tracks canonical
+applied YAML separately from its draft, marks unapplied edits and only updates
+the applied snapshot acknowledged by the main operation. No automatic background
+save/reload is introduced; reopening still restores the live config rather than
+an unsaved draft. Both Start and Apply use the same trusted sender/byte bounds.
+
 Chuẩn AI gồm Markdown + Mermaid trong Git. Không cần package runtime. Hướng dẫn
 thao tác và các nguồn chính thức nằm trong [AI workflow](ai-workflow.md).
 
@@ -638,3 +649,37 @@ network actions still initialize through their existing render/action paths.
 The mode does not change preload IPC contracts or vault storage.
 
 See [tool loading modes](tool-loading-modes.md) for resource tradeoffs and checks.
+
+### Local Domains (2026-10-06)
+
+`network.local-domains` loads its React interface lazily. The named typed
+`localDomains` bridge invokes trusted main-frame handlers; main validates domain,
+UUID v4 and port payloads before OS actions. Construction/preloading starts no
+listeners or certificate processes. Local domain payloads are excluded from
+generic drafts/history. Only versioned domain metadata and proxy ports persist
+in `userData/local-domains/domains.json`; active state is rebuilt from live
+listeners and marked system-hosts entries, never auto-restored from metadata.
+
+An explicit Enable binds HTTP/HTTPS on IPv4 and IPv6 loopback before installing
+tagged hosts entries. Requests stream to an HTTP target on IPv4/IPv6 loopback
+with a fixed local-only lookup (no DNS or remote target); Host/SNI
+must match a saved active domain. Proxy forwards WebSocket upgrades, bounds
+requests/connections/headers/timeouts, strips HSTS/cache headers and sends no-store.
+Main does not store traffic. Disable removes the OS override before closing route
+sockets; a cancelled authorization retains the active route. Remove all performs
+one guarded hosts mutation, also usable with corrupt metadata or orphaned entries.
+
+Platform adapters pass fixed inline code to UAC/osascript/pkexec, never elevate a
+user-writable script file. They check the original hosts hash while holding a
+file lock, back up original bytes, preserve unrelated entries, verify ownership
+after the write, and flush OS DNS caches when supported. DNS verification is an
+explicit operation. The app clears its own resolver cache; browser DNS/service
+workers/HSTS state remains outside its control.
+
+HTTPS invokes an installed mkcert only on explicit CA setup/Enable, using a
+dedicated protected CAROOT. Trust setup has a native confirmation. CA/key recovery
+files persist until deliberately managed; incomplete pairs fail closed and leaf
+publication never overwrites keys. Quit gates new Enable actions and attempts
+hosts cleanup, prompting on failure; cancelling an unsaved-edit quit resets the
+gate. Crash recovery is explicit on next tool open. See
+[Local Domains](local-domains.md) for the user flow, privacy and platform limits.

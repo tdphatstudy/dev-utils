@@ -89,6 +89,15 @@ export const toolGroups: ToolGroup[] = [
 
 export const tools: ToolDefinition[] = [
   {
+    id: 'network.local-domains',
+    group: 'network',
+    name: 'Local Domains',
+    description: 'Local domains, port forwarding and HTTPS',
+    keywords: ['dns', 'hosts', 'domain', 'localhost', 'reverse proxy', 'https', 'ssl', 'certificate', 'mkcert'],
+    icon: Globe,
+    ...createToolLoader(() => import('@renderer/features/tools/network/LocalDomainsTool'))
+  },
+  {
     id: 'text.lorem', group: 'text', name: 'Lorem Text',
     description: 'Generate placeholder words, sentences and paragraphs for layouts',
     keywords: ['lorem', 'ipsum', 'placeholder', 'dummy', 'text', 'paragraph', 'sentence'],

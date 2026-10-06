@@ -66,10 +66,30 @@ try {
         const logs = (await invoke(first, 'status')).logs
         assert(!JSON.stringify(logs).includes('fixture-secret') && !JSON.stringify(logs).includes('role=admin'), 'Native activity leaked request content')
         console.log('PASS production preload/trusted IPC starts actual localhost API, conditional response and CORS')
+        assert((await fetch(started.baseUrl + '/hello')).status === 404, 'Fixture unexpectedly had /hello before Apply')
+        config.endpoints.push({ id: 'hello', name: 'Health', method: 'GET', path: '/hello', responses: [{ id: 'hello-default', name: 'Default', status: 200, body: { message: 'Hello from DevFusion' } }] })
+        const appliedYaml = serializeMockConfig(config)
+        const applied = await invoke(first, 'apply', appliedYaml)
+        assert(applied.running && applied.port === port && applied.startedAt === started.startedAt, 'Apply restarted the listener')
+        const hello = await fetch(started.baseUrl + '/hello')
+        assert(hello.status === 200 && (await hello.json()).message === 'Hello from DevFusion', 'Native Apply failed to serve the new endpoint')
+        const browserProbe = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } })
+        windows.push(browserProbe)
+        await browserProbe.loadURL(started.baseUrl + '/hello')
+        const browserText = await browserProbe.webContents.executeJavaScript('document.body.innerText')
+        assert(browserText.includes('Hello from DevFusion'), 'Chromium navigation failed to display the new endpoint response')
+        browserProbe.destroy()
+        let invalidRefused = false
+        try { await invoke(first, 'apply', 'version: broken') } catch { invalidRefused = true }
+        assert(invalidRefused && await invoke(first, 'getConfig') === appliedYaml && (await fetch(started.baseUrl + '/hello')).status === 200, 'Invalid Apply lost active endpoints')
+        console.log('PASS native Apply exposes /hello in Chromium without Stop/Start and invalid updates keep its 200 response')
         const untrusted = await create(false)
         let refused = false
         try { await invoke(untrusted, 'stop') } catch (error) { refused = error.message.includes('app window') }
         assert(refused && mock.status().running, 'Untrusted native window stopped the server')
+        let applyRefused = false
+        try { await invoke(untrusted, 'apply', yaml) } catch { applyRefused = true }
+        assert(applyRefused && mock.getConfig() === appliedYaml, 'Untrusted window replaced live configuration')
         untrusted.destroy(); first.destroy()
         await sleep(200)
         assert(BrowserWindow.getAllWindows().length === 0 && mock.status().running, 'Closing renderer stopped explicit background server')

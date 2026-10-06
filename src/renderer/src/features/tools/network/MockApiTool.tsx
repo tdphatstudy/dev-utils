@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Play, Plus, Square, Trash2, Undo2, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Download, Play, Plus, Square, Trash2, Undo2, Upload } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { Modal } from '@renderer/components/ui/Modal'
@@ -36,6 +36,7 @@ export default function MockApiTool(): JSX.Element {
   const [tab, setTab] = useState<Tab>('Endpoints')
   const [selected, setSelected] = useState('')
   const [status, setStatus] = useState<MockStatus>(stopped)
+  const [appliedYaml, setAppliedYaml] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [initialAttempt, setInitialAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -48,12 +49,16 @@ export default function MockApiTool(): JSX.Element {
   const importVersion = useRef(0)
   const statusGeneration = useRef(0)
   const polling = useRef(false)
+  const operationPending = useRef(false)
   const api = window.devutils?.mockApi
   const parsed = useMemo(() => {
     try { return { config: parseMockConfig(yaml), error: '' } }
     catch (failure) { return { config: null, error: message(failure) } }
   }, [yaml])
   const config = parsed.config
+  const canonicalDraft = useMemo(() => config ? serializeMockConfig(config) : null, [config])
+  const hasPendingChanges = status.running && canonicalDraft !== appliedYaml
+  const portChanged = status.running && !!config && config.port !== status.port
   const endpoint = config?.endpoints.find((entry) => entry.id === selected) ?? config?.endpoints[0]
 
   useEffect(() => {
@@ -65,7 +70,8 @@ export default function MockApiTool(): JSX.Element {
       const active = value.running ? await api.getConfig() : null
       if (!alive.current || generation !== statusGeneration.current) return
       setStatus(value)
-      if (active) setYaml(active)
+      if (active) { setYaml(active); setAppliedYaml(serializeMockConfig(parseMockConfig(active))) }
+      else setAppliedYaml(null)
       setReady(true)
     }).catch(() => { if (alive.current && generation === statusGeneration.current) { setError('Could not read server status. Retry to reconnect.'); setReady(false) } })
     return () => { alive.current = false; importVersion.current++; statusGeneration.current++ }
@@ -76,7 +82,7 @@ export default function MockApiTool(): JSX.Element {
       if (document.hidden || polling.current || busy) return
       polling.current = true
       const generation = statusGeneration.current
-      void api.status().then((value) => { if (alive.current && generation === statusGeneration.current) setStatus(value) }).catch(() => {
+      void api.status().then((value) => { if (alive.current && generation === statusGeneration.current) { setStatus(value); if (!value.running) setAppliedYaml(null) } }).catch(() => {
         if (alive.current && generation === statusGeneration.current) setError('Could not refresh server status. Reopen this tool to retry.')
       }).finally(() => { polling.current = false })
     }, 2000)
@@ -89,15 +95,21 @@ export default function MockApiTool(): JSX.Element {
     setUndo(null)
     setYaml(serializeMockConfig(next)); setError('')
   }
-  const run = async (operation: 'start' | 'stop' | 'clear'): Promise<void> => {
-    if (!api || busy) return
+  const run = async (operation: 'start' | 'apply' | 'stop' | 'clear'): Promise<void> => {
+    if (!api || operationPending.current) return
+    operationPending.current = true
+    const snapshot = yaml
     statusGeneration.current++
     setBusy(true); setError('')
     try {
-      const result = operation === 'start' ? await api.start(yaml) : operation === 'stop' ? await api.stop() : await api.clearLogs()
-      if (alive.current) setStatus(result)
+      const result = operation === 'start' ? await api.start(snapshot) : operation === 'apply' ? await api.apply(snapshot) : operation === 'stop' ? await api.stop() : await api.clearLogs()
+      if (alive.current) {
+        setStatus(result)
+        if (operation === 'start' || operation === 'apply') setAppliedYaml(serializeMockConfig(parseMockConfig(snapshot)))
+        else if (operation === 'stop') setAppliedYaml(null)
+      }
     } catch (failure) { if (alive.current) setError(message(failure)) }
-    finally { if (alive.current) setBusy(false) }
+    finally { operationPending.current = false; if (alive.current) setBusy(false) }
   }
   const importFile = async (file: File | undefined): Promise<void> => {
     if (!file) return
@@ -141,6 +153,7 @@ export default function MockApiTool(): JSX.Element {
       <ToolToolbar>
         {status.running ? <button className="mac-btn-secondary" disabled={busy} onClick={() => void run('stop')}><Square size={14} />Stop server</button>
           : <button className="mac-btn-primary" disabled={!api || !ready || busy || !config} onClick={() => void run('start')}><Play size={14} />Start server</button>}
+        {status.running && <button className="mac-btn-primary" disabled={busy || !config || !hasPendingChanges || portChanged} title={portChanged ? 'Stop and start the server to change its port' : undefined} onClick={() => void run('apply')}><Check size={14} />Apply changes</button>}
         <ToolStatus tone={status.running ? 'success' : 'neutral'}>{busy ? 'Working…' : status.running ? `Serving ${status.name} · ${status.requests} requests` : 'Stopped · no listening port'}</ToolStatus>
         <div className="ml-auto flex flex-wrap gap-2">
           <button className="mac-btn-secondary" onClick={() => importRef.current?.click()}><Upload size={14} />Import YAML</button>
@@ -150,7 +163,7 @@ export default function MockApiTool(): JSX.Element {
         </div>
       </ToolToolbar>
       <div className="shrink-0 space-y-2 border-b border-mac-separator px-4 py-3 text-[13px]">
-        {status.baseUrl && <div className="flex flex-wrap items-center gap-2"><code className="selectable break-all text-mac-success">{status.baseUrl}</code><CopyButton text={status.baseUrl} label="Copy base URL" /><span className="text-mac-label-secondary">Stop to apply configuration changes.</span></div>}
+        {status.baseUrl && <div className="flex flex-wrap items-center gap-2"><code className="selectable break-all text-mac-success">{status.baseUrl}</code><CopyButton text={status.baseUrl} label="Copy base URL" /><span role="status" className={hasPendingChanges ? 'text-mac-warning' : 'text-mac-label-secondary'}>{hasPendingChanges ? portChanged ? 'Unapplied changes. Stop and start the server to change its port.' : 'Unapplied changes. Click Apply changes to serve this draft; the server is still using the previous configuration.' : 'All changes applied to the running server.'}</span></div>}
         <p className="text-mac-label-secondary">Export YAML to keep your draft. A started server stays active in the tray until Stop or Quit.</p>
         {undo && <div className="flex flex-wrap items-center gap-2 rounded-mac-lg bg-mac-control px-3 py-2"><span role="status" className="min-w-0 flex-1">{undo.message}</span><button type="button" className="mac-btn-secondary" onClick={() => { importVersion.current++; setYaml(undo.yaml); setSelected(undo.selected); setUndo(null); setError('') }}><Undo2 size={14} />Undo delete</button></div>}
         {!api && <p role="alert" className="text-mac-warning">Starting a server requires the DevFusion desktop app. You can still build, import, export and try rules here.</p>}
@@ -162,7 +175,7 @@ export default function MockApiTool(): JSX.Element {
       </div>
       </div>
       <div id="mock-api-panel" role="tabpanel" aria-label={tab} aria-labelledby={`mock-api-tab-${tabs.indexOf(tab)}`} tabIndex={0} className="min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
-        {tab === 'YAML' && <div className="flex h-full min-h-[320px] flex-col gap-2"><p className="text-[13px] text-mac-label-secondary">Version 1 · first matching response wins · last response is the fallback. Ctrl/⌘ + Enter starts the server.</p><CodeEditor value={yaml} onChange={(value) => { importVersion.current++; setUndo(null); setYaml(value) }} language="yaml" label="Mock API YAML" issue={parsed.error ? { error: parsed.error } : null} onRun={() => { if (!status.running && config && ready) void run('start') }} /><button className="mac-btn-secondary self-start" onClick={() => { importVersion.current++; setUndo(null); setYaml(MOCK_EXAMPLE_YAML); setError('') }}>Load example configuration</button></div>}
+        {tab === 'YAML' && <div className="flex h-full min-h-[320px] flex-col gap-2"><p className="text-[13px] text-mac-label-secondary">Version 1 · first matching response wins · last response is the fallback. Ctrl/⌘ + Enter {status.running ? 'applies changes' : 'starts the server'}.</p><CodeEditor value={yaml} onChange={(value) => { importVersion.current++; setUndo(null); setYaml(value) }} language="yaml" label="Mock API YAML" issue={parsed.error ? { error: parsed.error } : null} onRun={() => { if (config && ready && !portChanged && (!status.running || hasPendingChanges)) void run(status.running ? 'apply' : 'start') }} /><button className="mac-btn-secondary self-start" onClick={() => { importVersion.current++; setUndo(null); setYaml(MOCK_EXAMPLE_YAML); setError('') }}>Load example configuration</button></div>}
         {tab === 'Endpoints' && config && <div className="space-y-5">
           <ServerSettings key={config.name + config.port + config.cors.enabled + config.cors.origins.join(',')} config={config} onSave={update} />
           <div className="grid min-w-0 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
@@ -307,7 +320,7 @@ function RuleTester({ config }: { config: MockConfig | null }): JSX.Element {
 }
 
 function Guide(): JSX.Element {
-  return <div className="max-w-3xl space-y-4 text-[14px] leading-relaxed"><h2 className="text-[16px] font-semibold">Connect your frontend while the backend is being built</h2><ol className="list-decimal space-y-2 pl-5"><li>Define endpoints in the form or YAML. Use named path parameters such as <code>/api/users/:id</code>.</li><li>Add response rules: missing authorization → 401, role filter → a filtered list, invalid JSON field → 422. Put specific rules before broader ones.</li><li>Use Try rules to verify headers, query and body conditions. The last response is the unconditional fallback.</li><li>Start the server and set your frontend API base URL to <code>http://127.0.0.1:PORT</code>. The example uses port 4010. Local development origins are allowed by default.</li><li>Stop before applying draft changes, then Start again. Export YAML to save or share your contract; import reloads it without starting a server.</li></ol>
+  return <div className="max-w-3xl space-y-4 text-[14px] leading-relaxed"><h2 className="text-[16px] font-semibold">Connect your frontend while the backend is being built</h2><ol className="list-decimal space-y-2 pl-5"><li>Define endpoints in the form or YAML. Use named path parameters such as <code>/api/users/:id</code>.</li><li>Add response rules: missing authorization → 401, role filter → a filtered list, invalid JSON field → 422. Put specific rules before broader ones.</li><li>Use Try rules to verify headers, query and body conditions. The last response is the unconditional fallback.</li><li>Start the server and set your frontend API base URL to <code>http://127.0.0.1:PORT</code>. The example uses port 4010. Local development origins are allowed by default.</li><li>Use Apply changes after editing a running server. Only port changes require Stop, then Start. Export YAML to save or share your contract; import reloads it without starting a server.</li></ol>
     <div className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4"><h3 className="mb-2 font-semibold">Condition behavior</h3><ul className="list-disc space-y-1 pl-4"><li>ALL must all pass; ANY requires at least one match. If both are present, both groups must pass.</li><li>Header names ignore case. Repeated query values match when any one value passes the operator.</li><li>Body conditions use JSON Pointer: <code>/user/role</code>, <code>/items/0/id</code>, and an empty key for the root. Null is present; missing is absent.</li><li>Body equals checks the value type. For gt/gte/lt/lte, choose Number. Date strings compare as text only.</li><li>Routes are checked in YAML order. Put fixed routes such as <code>/users/me</code> before <code>/users/:id</code>. HEAD falls back to GET and sends no body.</li><li>Response headers and JSON/text bodies are static values. Delays are capped at 10 seconds; request/response bodies at 1 MiB. Scripts, regular expressions and proxying are unavailable.</li></ul></div>
     <div className="rounded-mac-lg border border-mac-separator p-4"><h3 className="mb-2 font-semibold">Browser example</h3><pre className="selectable overflow-auto whitespace-pre-wrap break-all font-mono text-[13px]">{'fetch("http://127.0.0.1:4010/api/users?role=admin", {\n  headers: { Authorization: "Bearer example" }\n}).then(response => response.json())'}</pre><p className="mt-2 text-mac-label-secondary">Use fetch without credentials. Add an exact CORS origin for a non-local frontend; HTTPS pages may block HTTP mixed content. This server is for local development and exposes no LAN listener.</p></div>
     <p className="text-mac-label-secondary">No automatic disk save or request-content logging. Exported YAML is plaintext and includes any configured headers/body values. Use sample values when sharing it.</p>
