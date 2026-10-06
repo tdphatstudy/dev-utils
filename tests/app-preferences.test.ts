@@ -22,6 +22,16 @@ describe('app preference compatibility and privacy', () => {
     for (const invalid of [null, false, 'preferences', [], 42]) expect(readAppPreferences(invalid)).toEqual({})
   })
 
+  it('validates loading mode without upgrading legacy preferences to preload', () => {
+    expect(readAppPreferences({})).not.toHaveProperty('toolLoadingMode')
+    for (const mode of ['on-demand', 'preload']) {
+      expect(readAppPreferences({ toolLoadingMode: mode })).toEqual({ toolLoadingMode: mode })
+    }
+    for (const invalid of ['fast', 'lazy', null, true, {}, []]) {
+      expect(readAppPreferences({ toolLoadingMode: invalid })).toEqual({})
+    }
+  })
+
   it('deduplicates and caps tool lists while permitting future valid tool IDs', () => {
     const ids = Array.from({ length: 30 }, (_, index) => `text.fixture${index}`)
     const prefs = readAppPreferences({ favoriteToolIds: ids, recentToolIds: ids })
@@ -34,7 +44,22 @@ describe('favorite tool preferences', () => {
   beforeEach(() => {
     saved = ''
     useAppStore.persist.setOptions({ storage: createJSONStorage(() => storage) })
-    useAppStore.setState({ theme: 'dark', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', sshDir: null, sshConfigPath: null, commandOpen: false })
+    useAppStore.setState({ theme: 'dark', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', toolLoadingMode: 'on-demand', sshDir: null, sshConfigPath: null, commandOpen: false })
+  })
+
+  it('defaults to on demand and persists explicit preload across hydration', async () => {
+    expect(useAppStore.getState().toolLoadingMode).toBe('on-demand')
+    useAppStore.getState().setToolLoadingMode('preload')
+    expect(JSON.parse(saved).state.toolLoadingMode).toBe('preload')
+    await useAppStore.persist.rehydrate()
+    expect(useAppStore.getState().toolLoadingMode).toBe('preload')
+    useAppStore.getState().setToolLoadingMode('on-demand')
+    for (const legacy of [{ theme: 'light' }, { toolLoadingMode: 'fast', setToolLoadingMode: null }]) {
+      saved = JSON.stringify({ state: legacy, version: 0 })
+      await useAppStore.persist.rehydrate()
+      expect(useAppStore.getState().toolLoadingMode).toBe('on-demand')
+      expect(useAppStore.getState().setToolLoadingMode).toBeTypeOf('function')
+    }
   })
 
   it('persists only preference metadata and leaves transient state and actions out', () => {
@@ -42,7 +67,7 @@ describe('favorite tool preferences', () => {
     useAppStore.getState().setCommandOpen(true)
     const persisted = JSON.parse(saved).state
     expect(persisted.favoriteToolIds).toEqual(['text.ocr'])
-    expect(Object.keys(persisted).sort()).toEqual(['favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme'].sort())
+    expect(Object.keys(persisted).sort()).toEqual(['favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme', 'toolLoadingMode'].sort())
     expect(persisted).not.toHaveProperty('commandOpen')
   })
 

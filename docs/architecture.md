@@ -577,7 +577,9 @@ thao tác và các nguồn chính thức nằm trong [AI workflow](ai-workflow.m
 Tool UI và các engine tiếp tục đi qua dynamic import trong registry. Build tách
 React/ReactDOM/scheduler thành vendor riêng để runtime JSX của shell không kéo
 CodeMirror vào Home. Đây là trì hoãn tải/evaluate editor, không phải bảo đảm module
-đã dùng được unload khỏi RAM. Không prefetch cả danh mục hoặc OCR models.
+đã dùng được unload khỏi RAM. On demand là mặc định, không prefetch danh mục.
+Người dùng có thể chọn Preload trong Settings để chuẩn bị từng tool interface
+khi renderer visible và idle; hook không mount component hoặc tải OCR models.
 
 Dialog frame của command palette nằm trong shell để nhận focus và hiển thị trạng
 thái ngay; phần tìm kiếm cmdk chỉ import khi mở. Frame giữ nguyên trong lúc
@@ -614,3 +616,25 @@ drafts RAM cùng expression để khôi phục đúng preview, không thêm sche
 persistent settings. Các preset có một bước Undo trong RAM; export vẫn schema cũ.
 Global Ctrl+K và vault shortcuts tôn trọng dialog/alertdialog role đang mount,
 kể cả Radix modal không gắn aria-modal; không tạo focus scope phía sau confirmation.
+
+### Tool loading preferences (2026-10-06)
+
+Settings > Tool loading uses **On demand** (default) and **Preload**. The validated
+preference is stored as toolLoadingMode in the existing devutils-app metadata;
+older or malformed preferences retain On demand without a storage migration.
+
+The registry's createToolLoader shares one in-flight/successful import between
+React.lazy and explicit preload. Importing never mounts a tool. Preload queues
+one interface per idle callback and pauses when the document is hidden. Turning
+it off or unmounting cancels queued work and prevents follow-up imports; an
+in-flight import can still finish. Loaded modules stay cached until this renderer
+closes or reloads. This setting does not unload modules, cache input data, or
+promise immediate opens of every nested editor.
+
+Preparation progress is window-local RAM state with truthful ready/partial
+results. A failed import does not block preparation of other interfaces or turn
+into an automatic retry loop. Tools, workers, OCR/PDF processing, vault IO and
+network actions still initialize through their existing render/action paths.
+The mode does not change preload IPC contracts or vault storage.
+
+See [tool loading modes](tool-loading-modes.md) for resource tradeoffs and checks.

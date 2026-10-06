@@ -1,4 +1,5 @@
-import { useAppStore, type LaunchMode, type ThemeMode } from '@renderer/store/app-store'
+import { useToolPreloadStore } from '@renderer/store/tool-preload-store'
+import { useAppStore, type LaunchMode, type ThemeMode, type ToolLoadingMode } from '@renderer/store/app-store'
 import { useSessionStore } from '@renderer/store/session-store'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { useNavigate } from 'react-router-dom'
@@ -12,6 +13,9 @@ export function SettingsPage(): JSX.Element {
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
   const launchMode = useAppStore((s) => s.launchMode)
   const setLaunchMode = useAppStore((s) => s.setLaunchMode)
+  const toolLoadingMode = useAppStore((s) => s.toolLoadingMode)
+  const setToolLoadingMode = useAppStore((s) => s.setToolLoadingMode)
+  const preparation = useToolPreloadStore((s) => s.progress)
   const history = useSessionStore((s) => s.history)
   const clearHistory = useSessionStore((s) => s.clearHistory)
   const draftCount = useSessionStore((s) => Object.keys(s.drafts).length)
@@ -32,7 +36,7 @@ export function SettingsPage(): JSX.Element {
             Settings
           </h1>
           <p className="mt-1 text-[14px] text-mac-label-secondary">
-            Make DevFusion feel right for you. Appearance and launch preferences are saved on this device.
+            Make DevFusion feel right for you. Your preferences are saved on this device.
           </p>
         </div>
 
@@ -72,6 +76,42 @@ export function SettingsPage(): JSX.Element {
               {sidebarCollapsed ? 'Expand' : 'Collapse'}
             </button>
           </div>
+        </section>
+
+        <section aria-labelledby="tool-loading-heading" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="tool-loading-heading" className="text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
+              Tool loading
+            </h2>
+            <SegmentedControl
+              value={toolLoadingMode}
+              label="Tool loading"
+              onChange={(value) => setToolLoadingMode(value as ToolLoadingMode)}
+              options={[
+                { value: 'on-demand', label: 'On demand' },
+                { value: 'preload', label: 'Preload' }
+              ]}
+            />
+          </div>
+          <p className="mt-3 text-[14px] leading-relaxed text-mac-label-secondary">
+            {toolLoadingMode === 'on-demand'
+              ? 'Default · Loads each tool when you open it, reducing startup memory and CPU use.'
+              : 'Prepares tool interfaces while this window is visible and idle. Uses more memory and background CPU to reduce first-open waits.'}
+          </p>
+          {toolLoadingMode === 'preload' && (
+            <p role="status" aria-live={preparation.phase === 'ready' || preparation.phase === 'partial' ? 'polite' : 'off'} aria-atomic="true" className="mt-2 text-[13px] text-mac-label-secondary">
+              {preparation.phase === 'ready'
+                ? `${preparation.prepared} tool interfaces prepared.`
+                : preparation.phase === 'partial'
+                  ? `${preparation.prepared} of ${preparation.total} tool interfaces prepared. ${preparation.failed} could not be prepared; other tools remain available.`
+                  : preparation.phase === 'paused'
+                    ? `Preparation paused while this window is hidden · ${preparation.prepared} of ${preparation.total}.`
+                    : `Preparing tool interfaces · ${preparation.prepared} of ${preparation.total}.`}
+            </p>
+          )}
+          <p className="mt-2 text-[12px] leading-relaxed text-mac-label-tertiary">
+            OCR processing and system or network actions still run only when requested. Switching to On demand stops further preparation; loaded tools stay cached until this window closes or reloads.
+          </p>
         </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">

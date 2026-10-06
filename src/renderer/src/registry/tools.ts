@@ -1,4 +1,5 @@
-import { lazy, type LazyExoticComponent, type ComponentType } from 'react'
+import type { LazyExoticComponent, ComponentType } from 'react'
+import { createToolLoader } from './tool-loader'
 import {
   Braces,
   FileCode2,
@@ -65,6 +66,8 @@ export interface ToolDefinition {
   keywords: string[]
   icon: LucideIcon
   component: LazyExoticComponent<ComponentType>
+  preload: () => Promise<void>
+  isLoaded: () => boolean
 }
 
 export const toolGroups: ToolGroup[] = [
@@ -90,35 +93,35 @@ export const tools: ToolDefinition[] = [
     description: 'Generate placeholder words, sentences and paragraphs for layouts',
     keywords: ['lorem', 'ipsum', 'placeholder', 'dummy', 'text', 'paragraph', 'sentence'],
     icon: WrapText,
-    component: lazy(() => import('@renderer/features/tools/text/LoremTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/text/LoremTool'))
   },
   {
     id: 'time.timestamp', group: 'time', name: 'Timestamp Converter',
     description: 'Convert Unix seconds or milliseconds and ISO dates with timezone output',
     keywords: ['timestamp', 'unix', 'epoch', 'seconds', 'milliseconds', 'iso', 'timezone', 'utc', 'date'],
     icon: CalendarClock,
-    component: lazy(() => import('@renderer/features/tools/time/TimestampTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/time/TimestampTool'))
   },
   {
     id: 'time.date', group: 'time', name: 'Date Calculator',
     description: 'Add calendar dates or durations and calculate date/time differences',
     keywords: ['date', 'time', 'duration', 'difference', 'days', 'months', 'years', 'calculate'],
     icon: CalendarClock,
-    component: lazy(() => import('@renderer/features/tools/time/DateTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/time/DateTool'))
   },
   {
     id: 'network.mock-api', group: 'network', name: 'Mock API',
     description: 'Serve local endpoints with conditional responses and portable YAML configs',
     keywords: ['mock', 'api', 'server', 'endpoint', 'frontend', 'backend', 'response', 'header', 'filter', 'yaml', 'cors'],
     icon: Server,
-    component: lazy(() => import('@renderer/features/tools/network/MockApiTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/MockApiTool'))
   },
   {
     id: 'design.color', group: 'design', name: 'Color Picker',
     description: 'Pick desktop colors with a Copy / Repick popup: HEX, RGB, HSL and HSV',
     keywords: ['color', 'colour', 'picker', 'eyedropper', 'hex', 'rgb', 'hsl', 'hsv', 'palette', 'screen', 'desktop', 'repick'],
     icon: Pipette,
-    component: lazy(() => import('@renderer/features/tools/design/ColorPicker'))
+    ...createToolLoader(() => import('@renderer/features/tools/design/ColorPicker'))
   },
   {
     id: 'json.studio',
@@ -127,7 +130,7 @@ export const tools: ToolDefinition[] = [
     description: 'Format, validate, and explore JSON as a tree',
     keywords: ['json', 'format', 'beautify', 'minify', 'validate', 'tree', 'pretty'],
     icon: Braces,
-    component: lazy(() => import('@renderer/features/tools/json/JsonStudio'))
+    ...createToolLoader(() => import('@renderer/features/tools/json/JsonStudio'))
   },
   {
     id: 'json.diff',
@@ -136,7 +139,7 @@ export const tools: ToolDefinition[] = [
     description: 'Line highlight and structural JSON compare',
     keywords: ['json', 'diff', 'compare', 'delta', 'lines', 'tree'],
     icon: GitCompare,
-    component: lazy(() => import('@renderer/features/tools/json/JsonDiff'))
+    ...createToolLoader(() => import('@renderer/features/tools/json/JsonDiff'))
   },
   {
     id: 'json.path',
@@ -145,7 +148,7 @@ export const tools: ToolDefinition[] = [
     description: 'Query JSON with a JSONPath subset',
     keywords: ['json', 'jsonpath', 'query', 'path', 'filter'],
     icon: Search,
-    component: lazy(() => import('@renderer/features/tools/json/JsonPathTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/json/JsonPathTool'))
   },
   {
     id: 'yaml.studio',
@@ -154,7 +157,7 @@ export const tools: ToolDefinition[] = [
     description: 'Format, validate YAML and convert to JSON',
     keywords: ['yaml', 'yml', 'format', 'validate', 'convert', 'tree'],
     icon: FileCode2,
-    component: lazy(() => import('@renderer/features/tools/yaml/YamlStudio'))
+    ...createToolLoader(() => import('@renderer/features/tools/yaml/YamlStudio'))
   },
   {
     id: 'yaml.diff',
@@ -163,7 +166,7 @@ export const tools: ToolDefinition[] = [
     description: 'Line highlight and structural YAML compare',
     keywords: ['yaml', 'diff', 'compare', 'lines', 'tree'],
     icon: GitCompare,
-    component: lazy(() => import('@renderer/features/tools/yaml/YamlDiff'))
+    ...createToolLoader(() => import('@renderer/features/tools/yaml/YamlDiff'))
   },
   {
     id: 'markup.html',
@@ -172,7 +175,7 @@ export const tools: ToolDefinition[] = [
     description: 'Format, minify, and structurally check HTML',
     keywords: ['html', 'format', 'beautify', 'minify', 'validate', 'markup'],
     icon: Code2,
-    component: lazy(() => import('@renderer/features/tools/markup/HtmlStudio'))
+    ...createToolLoader(() => import('@renderer/features/tools/markup/HtmlStudio'))
   },
   {
     id: 'markup.xml',
@@ -181,7 +184,7 @@ export const tools: ToolDefinition[] = [
     description: 'Format, minify, and validate well-formed XML',
     keywords: ['xml', 'format', 'beautify', 'minify', 'validate', 'well-formed'],
     icon: FileType2,
-    component: lazy(() => import('@renderer/features/tools/markup/XmlStudio'))
+    ...createToolLoader(() => import('@renderer/features/tools/markup/XmlStudio'))
   },
   {
     id: 'sql.studio',
@@ -204,7 +207,7 @@ export const tools: ToolDefinition[] = [
       'bigquery'
     ],
     icon: Database,
-    component: lazy(() => import('@renderer/features/tools/sql/SqlStudio'))
+    ...createToolLoader(() => import('@renderer/features/tools/sql/SqlStudio'))
   },
   {
     id: 'convert.file-ext',
@@ -222,7 +225,7 @@ export const tools: ToolDefinition[] = [
       'to'
     ],
     icon: ArrowLeftRight,
-    component: lazy(() => import('@renderer/features/tools/convert/ConvertFileExt'))
+    ...createToolLoader(() => import('@renderer/features/tools/convert/ConvertFileExt'))
   },
   {
     id: 'convert.image',
@@ -242,7 +245,7 @@ export const tools: ToolDefinition[] = [
       'picture'
     ],
     icon: ImageIcon,
-    component: lazy(() => import('@renderer/features/tools/convert/ImageConvert'))
+    ...createToolLoader(() => import('@renderer/features/tools/convert/ImageConvert'))
   },
   {
     id: 'base64.codec',
@@ -251,7 +254,7 @@ export const tools: ToolDefinition[] = [
     description: 'Encode and decode Base64 text (std & URL-safe)',
     keywords: ['base64', 'encode', 'decode', 'url-safe'],
     icon: Binary,
-    component: lazy(() => import('@renderer/features/tools/base64/Base64Codec'))
+    ...createToolLoader(() => import('@renderer/features/tools/base64/Base64Codec'))
   },
   {
     id: 'base64.image',
@@ -260,7 +263,7 @@ export const tools: ToolDefinition[] = [
     description: 'Image ↔ Base64 with live preview',
     keywords: ['base64', 'image', 'png', 'jpeg', 'dataurl'],
     icon: ImageIcon,
-    component: lazy(() => import('@renderer/features/tools/base64/Base64Image'))
+    ...createToolLoader(() => import('@renderer/features/tools/base64/Base64Image'))
   },
   {
     id: 'security.random',
@@ -269,7 +272,7 @@ export const tools: ToolDefinition[] = [
     description: 'CSPRNG random bytes, passwords, and UUIDs',
     keywords: ['random', 'password', 'uuid', 'csprng', 'secure', 'token'],
     icon: Shield,
-    component: lazy(() => import('@renderer/features/tools/security/SecureRandom'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/SecureRandom'))
   },
   {
     id: 'security.keygen',
@@ -291,7 +294,7 @@ export const tools: ToolDefinition[] = [
       'openssl'
     ],
     icon: KeyRound,
-    component: lazy(() => import('@renderer/features/tools/security/KeygenTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/KeygenTool'))
   },
   {
     id: 'security.hash',
@@ -300,7 +303,7 @@ export const tools: ToolDefinition[] = [
     description: 'MD5, SHA-1, SHA-256, SHA-512 for text',
     keywords: ['hash', 'md5', 'sha', 'sha256', 'checksum'],
     icon: Fingerprint,
-    component: lazy(() => import('@renderer/features/tools/security/HashTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/HashTool'))
   },
   {
     id: 'security.hmac',
@@ -309,7 +312,7 @@ export const tools: ToolDefinition[] = [
     description: 'HMAC-SHA with Web Crypto',
     keywords: ['hmac', 'mac', 'sha256', 'sign'],
     icon: KeyRound,
-    component: lazy(() => import('@renderer/features/tools/security/HmacTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/HmacTool'))
   },
   {
     id: 'security.jwt',
@@ -329,7 +332,7 @@ export const tools: ToolDefinition[] = [
       'auth'
     ],
     icon: KeyRound,
-    component: lazy(() => import('@renderer/features/tools/security/JwtTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/JwtTool'))
   },
   {
     id: 'security.aes',
@@ -338,7 +341,7 @@ export const tools: ToolDefinition[] = [
     description: 'Encrypt / decrypt with PBKDF2 + AES-256-GCM',
     keywords: ['aes', 'gcm', 'encrypt', 'decrypt', 'password'],
     icon: Lock,
-    component: lazy(() => import('@renderer/features/tools/security/AesTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/security/AesTool'))
   },
   {
     id: 'network.url',
@@ -347,7 +350,7 @@ export const tools: ToolDefinition[] = [
     description: 'Parse, encode, and decode URLs',
     keywords: ['url', 'encode', 'decode', 'query', 'parse'],
     icon: Network,
-    component: lazy(() => import('@renderer/features/tools/network/UrlTools'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/UrlTools'))
   },
   {
     id: 'network.ip',
@@ -356,7 +359,7 @@ export const tools: ToolDefinition[] = [
     description: 'IPv4/IPv6 info and CIDR basics',
     keywords: ['ip', 'ipv4', 'ipv6', 'cidr', 'private'],
     icon: Globe,
-    component: lazy(() => import('@renderer/features/tools/network/IpTools'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/IpTools'))
   },
   {
     id: 'network.dns',
@@ -365,7 +368,7 @@ export const tools: ToolDefinition[] = [
     description: 'DNS records, address TTL and reverse IP lookup',
     keywords: ['dns', 'resolve', 'a', 'aaaa', 'mx', 'txt', 'srv', 'soa', 'ptr', 'ttl', 'reverse', 'lookup'],
     icon: Server,
-    component: lazy(() => import('@renderer/features/tools/network/DnsLookup'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/DnsLookup'))
   },
   {
     id: 'network.http',
@@ -385,7 +388,7 @@ export const tools: ToolDefinition[] = [
       'axios'
     ],
     icon: Globe,
-    component: lazy(() => import('@renderer/features/tools/network/HttpClient'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/HttpClient'))
   },
   {
     id: 'network.ports',
@@ -406,7 +409,7 @@ export const tools: ToolDefinition[] = [
       'eaddrinuse'
     ],
     icon: Radio,
-    component: lazy(() => import('@renderer/features/tools/network/PortManager'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/PortManager'))
   },
   {
     id: 'network.ssh',
@@ -426,7 +429,7 @@ export const tools: ToolDefinition[] = [
       'key'
     ],
     icon: Terminal,
-    component: lazy(() => import('@renderer/features/tools/network/SshManager'))
+    ...createToolLoader(() => import('@renderer/features/tools/network/SshManager'))
   },
   {
     id: 'file.hash',
@@ -435,7 +438,7 @@ export const tools: ToolDefinition[] = [
     description: 'Compute file checksums locally via OS',
     keywords: ['file', 'hash', 'sha256', 'checksum', 'md5'],
     icon: File,
-    component: lazy(() => import('@renderer/features/tools/file/FileHash'))
+    ...createToolLoader(() => import('@renderer/features/tools/file/FileHash'))
   },
   {
     id: 'file.lineendings',
@@ -444,7 +447,7 @@ export const tools: ToolDefinition[] = [
     description: 'Detect and convert LF / CRLF / CR',
     keywords: ['crlf', 'lf', 'newline', 'line ending', 'dos', 'unix'],
     icon: WrapText,
-    component: lazy(() => import('@renderer/features/tools/file/LineEndings'))
+    ...createToolLoader(() => import('@renderer/features/tools/file/LineEndings'))
   },
   {
     id: 'text.regex',
@@ -464,7 +467,7 @@ export const tools: ToolDefinition[] = [
       'test'
     ],
     icon: Regex,
-    component: lazy(() => import('@renderer/features/tools/text/RegexTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/text/RegexTool'))
   },
   {
     id: 'text.cron',
@@ -483,7 +486,7 @@ export const tools: ToolDefinition[] = [
       'scheduler'
     ],
     icon: CalendarClock,
-    component: lazy(() => import('@renderer/features/tools/text/CronTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/text/CronTool'))
   },
   {
     id: 'text.ocr',
@@ -492,7 +495,7 @@ export const tools: ToolDefinition[] = [
     description: 'Extract English and Vietnamese text from images, PDFs or a screen region — offline',
     keywords: ['ocr', 'scan', 'text', 'image', 'pdf', 'screenshot', 'capture', 'vietnamese', 'extract'],
     icon: ScanText,
-    component: lazy(() => import('@renderer/features/tools/text/OcrTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/text/OcrTool'))
   },
   {
     id: 'text.qr',
@@ -511,7 +514,7 @@ export const tools: ToolDefinition[] = [
       'wifi'
     ],
     icon: QrCode,
-    component: lazy(() => import('@renderer/features/tools/text/QrTool'))
+    ...createToolLoader(() => import('@renderer/features/tools/text/QrTool'))
   },
   {
     id: 'privatebox.home',
@@ -529,7 +532,7 @@ export const tools: ToolDefinition[] = [
       'finder'
     ],
     icon: Vault,
-    component: lazy(() => import('@renderer/features/privatebox/PrivateBoxApp'))
+    ...createToolLoader(() => import('@renderer/features/privatebox/PrivateBoxApp'))
   },
   {
     id: 'privatebox.keep',
@@ -547,16 +550,16 @@ export const tools: ToolDefinition[] = [
       'pin'
     ],
     icon: StickyNote,
-    component: lazy(() => import('@renderer/features/keep/KeepApp'))
+    ...createToolLoader(() => import('@renderer/features/keep/KeepApp'))
   },
   {
     id: 'app.settings',
     group: 'app',
     name: 'Settings',
     description: 'Theme, session history, shortcuts',
-    keywords: ['settings', 'preferences', 'theme', 'history'],
+    keywords: ['settings', 'preferences', 'theme', 'history', 'loading', 'performance', 'on demand', 'preload'],
     icon: Settings,
-    component: lazy(() =>
+    ...createToolLoader(() =>
       import('@renderer/pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
     )
   },
@@ -567,7 +570,7 @@ export const tools: ToolDefinition[] = [
     description: 'Local processing notes and shortcuts',
     keywords: ['about', 'privacy', 'shortcuts', 'help'],
     icon: Info,
-    component: lazy(() =>
+    ...createToolLoader(() =>
       import('@renderer/pages/AboutPage').then((m) => ({ default: m.AboutPage }))
     )
   }

@@ -6,6 +6,11 @@ default inputs, an isolated Edge profile, and loopback HTTP assets. It never
 opens a real vault, sends an HTTP/DNS request, starts a Mock server, captures the
 screen, or performs OCR.
 
+On 2026-10-06, Settings added an explicit **Preload** option. **On demand** remains
+the default and preserves the graph measured below. These measurements do not
+compare preload RAM or startup cost; see [tool loading modes](tool-loading-modes.md)
+for the separate opt-in behavior and its verification.
+
 ## Findings and changes
 
 ### P2: the editor engine loaded on Home despite lazy tool components

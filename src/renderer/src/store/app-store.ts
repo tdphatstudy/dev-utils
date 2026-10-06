@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences } from './app-preferences'
+import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences, type ToolLoadingMode } from './app-preferences'
+
+export type { ToolLoadingMode } from './app-preferences'
 
 export type ThemeMode = 'dark' | 'light' | 'system'
 
@@ -23,6 +25,7 @@ interface AppState {
    * - `last` — jump straight to last tool
    */
   launchMode: LaunchMode
+  toolLoadingMode: ToolLoadingMode
   /**
    * Custom SSH directory (keys). null = platform default (`$HOME/.ssh`).
    */
@@ -35,6 +38,7 @@ interface AppState {
   setSidebarCollapsed: (v: boolean) => void
   setLastToolId: (id: string) => void
   setLaunchMode: (mode: LaunchMode) => void
+  setToolLoadingMode: (mode: ToolLoadingMode) => void
   setSshDir: (path: string | null) => void
   setSshConfigPath: (path: string | null) => void
   commandOpen: boolean
@@ -50,6 +54,7 @@ export const useAppStore = create<AppState>()(
       recentToolIds: [],
       favoriteToolIds: [],
       launchMode: 'home',
+      toolLoadingMode: 'on-demand',
       sshDir: null,
       sshConfigPath: null,
       commandOpen: false,
@@ -75,6 +80,7 @@ export const useAppStore = create<AppState>()(
         }))
       },
       setLaunchMode: (launchMode) => set({ launchMode }),
+      setToolLoadingMode: (toolLoadingMode) => set({ toolLoadingMode }),
       setSshDir: (sshDir) => set({ sshDir }),
       setSshConfigPath: (sshConfigPath) => set({ sshConfigPath }),
       setCommandOpen: (commandOpen) => set({ commandOpen })
@@ -89,6 +95,7 @@ export const useAppStore = create<AppState>()(
         recentToolIds: s.recentToolIds,
         favoriteToolIds: s.favoriteToolIds,
         launchMode: s.launchMode,
+        toolLoadingMode: s.toolLoadingMode,
         sshDir: s.sshDir,
         sshConfigPath: s.sshConfigPath
       })

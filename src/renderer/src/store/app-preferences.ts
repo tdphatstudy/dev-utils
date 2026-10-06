@@ -1,3 +1,5 @@
+export type ToolLoadingMode = 'on-demand' | 'preload'
+
 export const MAX_RECENT_TOOLS = 10
 export const MAX_FAVORITE_TOOLS = 12
 
@@ -8,6 +10,7 @@ export interface AppPreferences {
   recentToolIds: string[]
   favoriteToolIds: string[]
   launchMode: 'home' | 'last'
+  toolLoadingMode: ToolLoadingMode
   sshDir: string | null
   sshConfigPath: string | null
 }
@@ -39,6 +42,7 @@ export function readAppPreferences(value: unknown): Partial<AppPreferences> {
   const favorites = toolIds(raw.favoriteToolIds, MAX_FAVORITE_TOOLS)
   if (favorites) result.favoriteToolIds = favorites
   if (raw.launchMode === 'home' || raw.launchMode === 'last') result.launchMode = raw.launchMode
+  if (raw.toolLoadingMode === 'on-demand' || raw.toolLoadingMode === 'preload') result.toolLoadingMode = raw.toolLoadingMode
   if (isPreferencePath(raw.sshDir)) result.sshDir = raw.sshDir
   if (isPreferencePath(raw.sshConfigPath)) result.sshConfigPath = raw.sshConfigPath
   return result

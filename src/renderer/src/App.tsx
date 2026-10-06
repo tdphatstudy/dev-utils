@@ -1,3 +1,4 @@
+import { useToolPreloading } from './hooks/useToolPreloading'
 import { useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useAppStore } from './store/app-store'
@@ -54,6 +55,7 @@ function useGlobalErrorGuard(): [boolean, () => void] {
 
 export default function App(): JSX.Element {
   useThemeEffect()
+  useToolPreloading()
   useGlobalHotkeys()
   const [failed, dismissError] = useGlobalErrorGuard()
   const navigate = useNavigate()
