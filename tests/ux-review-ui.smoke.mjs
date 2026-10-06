@@ -33,7 +33,7 @@ const screenshot = async (name) => {
   await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, name + '.png'), animations: 'disabled' })
 }
 const settle = async () => {
-  await page.locator('.mac-spinner').waitFor({ state: 'hidden' })
+  await page.locator('[data-loading-state]').waitFor({ state: 'hidden' })
   await page.waitForTimeout(60)
 }
 const luminance = (rgb) => rgb.map((value) => value / 255).map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0)

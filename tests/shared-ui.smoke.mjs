@@ -72,6 +72,7 @@ try {
   assert.equal(await input.getAttribute('aria-invalid'), null)
   console.log('PASS pending clipboard control, stale-result guard, retry and linked editor diagnostics')
 
+  await page.locator('summary').filter({ hasText: /^Input actions$/ }).click()
   await page.getByLabel('Open text file', { exact: true }).setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from([0xc3, 0x28]) })
   await page.getByRole('alert').filter({ hasText: 'UTF-8' }).waitFor()
   assert.equal(await input.innerText(), '{"fixture":"fresh result"}', 'Invalid file replaced input')
@@ -79,7 +80,7 @@ try {
   assert.equal(await page.getByRole('alert').filter({ hasText: 'UTF-8' }).count(), 0, 'Old file error remained after recovery')
   for (const width of [720, 900, 1200]) {
     await page.setViewportSize({ width, height: 500 })
-    const pane = page.locator('.mac-split-pane')
+    const pane = page.locator('[data-split-pane]')
     const box = await pane.boundingBox()
     assert.ok(box)
     const columns = await pane.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)
@@ -94,6 +95,10 @@ try {
   const dialog = page.getByRole('dialog', { name: 'Endpoint', exact: true })
   await dialog.waitFor()
   assert.equal(await dialog.getByLabel('Endpoint name').evaluate(element => element === document.activeElement), true, 'Close icon stole initial input focus')
+  await page.keyboard.press('Control+k')
+  assert.equal(await page.getByRole('dialog', { name: 'Search tools', exact: true }).count(), 0, 'Ctrl+K created overlapping modal focus scopes')
+  assert.equal(await dialog.isVisible(), true, 'Ctrl+K obscured the endpoint modal')
+  assert.equal(await dialog.getByLabel('Endpoint name').evaluate(element => element === document.activeElement), true, 'Ctrl+K moved focus out of endpoint modal')
   for (let index = 0; index < 10; index++) {
     await page.keyboard.press('Tab')
     assert.equal(await page.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), true)

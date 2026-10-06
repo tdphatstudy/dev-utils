@@ -1,221 +1,214 @@
-import { useMemo, useState } from 'react'
-import {
-  CRON_PRESETS,
-  cronToJson,
-  formatCronDate,
-  nextRuns,
-  parseCron
-} from '@shared/cron'
+import { useId, useMemo, useState } from 'react'
+import { ChevronDown, Undo2 } from 'lucide-react'
+import { CRON_PRESETS, cronToJson, formatCronDate, nextRuns, parseCron } from '@shared/cron'
+import { parseCronStart } from '@shared/cron/start-time'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
-import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
+import { SplitPane } from '@renderer/components/ui/SplitPane'
+import { TextInputActions } from '@renderer/components/ui/TextInputActions'
+import { ToolOptions, ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn } from '@renderer/lib/utils'
-import { parseCronStart } from '@shared/cron/start-time'
 
 export default function CronTool(): JSX.Element {
   const [expr, setExpr] = useState('*/5 9-17 * * 1-5')
-  const [count, setCount] = useState(10)
+  const [countInput, setCountInput] = useState('10')
   const [timezone, setTimezone] = useState<'local' | 'UTC'>('local')
   const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 19) + 'Z')
+  const [activePane, setActivePane] = useState<0 | 1>(0)
+  const [undo, setUndo] = useState<string | null>(null)
+  const id = useId()
+  const expressionId = `${id}-expression`
+  const expressionHintId = `${id}-expression-hint`
+  const expressionErrorId = `${id}-expression-error`
+  const startId = `${id}-start`
+  const startHintId = `${id}-start-hint`
+  const startErrorId = `${id}-start-error`
+  const countId = `${id}-count`
+  const countErrorId = `${id}-count-error`
+  const zoneId = `${id}-zone`
+
+  useToolDraft('text.cron', expr, setExpr, { label: 'Cron', historyOnUnmount: true })
+  useToolDraft('text.cron.timezone', timezone, (value) => { if (value === 'local' || value === 'UTC') setTimezone(value) })
+  useToolDraft('text.cron.from', from, setFrom)
+  useToolDraft('text.cron.count', countInput, setCountInput)
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const zoneLabel = timezone === 'UTC' ? 'UTC' : tz
   const start = useMemo(() => parseCronStart(from), [from])
   const fromDate = start.ok ? start.date : null
-  const fromValid = start.ok
-  const countValid = Number.isInteger(count) && count >= 1 && count <= 50
-  useToolDraft('text.cron', expr, setExpr, { label: 'Cron', historyOnUnmount: true })
-
+  const count = Number(countInput)
+  const countValid = countInput.trim() !== '' && Number.isInteger(count) && count >= 1 && count <= 50
   const parsed = useMemo(() => parseCron(expr), [expr])
   const runs = useMemo(() => {
     if (!parsed.ok || !fromDate || !countValid) return []
     return nextRuns(parsed, fromDate, count, { timezone })
-  }, [parsed, count, fromDate, fromValid, countValid, timezone])
-
+  }, [parsed, count, fromDate, countValid, timezone])
   const jsonOut = useMemo(() => {
     if (!parsed.ok || !fromDate || !countValid) return ''
-    return JSON.stringify({ ...JSON.parse(cronToJson(parsed, runs)), timezone: timezone === 'UTC' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone, from: fromDate.toISOString(), searchHorizonYears: 8 }, null, 2)
-  }, [parsed, runs, fromDate, fromValid, countValid, timezone])
-  const error = !parsed.ok ? `${parsed.error}${parsed.column ? ` · column ${parsed.column}` : ''}` : !start.ok ? start.error : !countValid ? 'Next run count must be an integer from 1 to 50.' : null
-
-  const tz =
-    typeof Intl !== 'undefined'
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-      : 'local'
+    return JSON.stringify({
+      ...JSON.parse(cronToJson(parsed, runs)),
+      timezone: zoneLabel,
+      from: fromDate.toISOString(),
+      searchHorizonYears: 8
+    }, null, 2)
+  }, [parsed, runs, fromDate, countValid, zoneLabel])
+  const expressionError = !parsed.ok ? `${parsed.error}${parsed.column ? ` · column ${parsed.column}` : ''}` : null
+  const countError = !countValid ? 'Enter a whole number from 1 to 50.' : null
+  const error = expressionError ?? (!start.ok ? start.error : countError)
+  const errorField = !parsed.ok ? expressionId : !start.ok ? startId : countId
+  const focusError = (): void => {
+    setActivePane(0)
+    requestAnimationFrame(() => document.getElementById(errorField)?.focus())
+  }
+  const applyPreset = (expression: string): void => {
+    if (expression === expr) return
+    setUndo(expr)
+    setExpr(expression)
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ToolToolbar>
-        <span className="text-[12px] text-mac-label-tertiary">
-          5-field cron or 6-field with seconds · {timezone === 'UTC' ? 'UTC' : tz}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-            Next
-            <input
-              type="number"
-              aria-invalid={!countValid}
-              min={1}
-              max={50}
-              className="mac-input !w-16 !py-1 text-center font-mono"
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-            />
-          </label>
-          <SaveToBoxButton type="json" content={jsonOut} disabled={!jsonOut} />
-          <CopyButton text={parsed.ok ? expr : ''} label="Copy expr" />
-          <CopyButton text={jsonOut} label="Copy JSON" />
-        </div>
-      </ToolToolbar>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-4 py-2">
-        <label className="text-[12px]" htmlFor="cron-zone">Timezone</label>
-        <select id="cron-zone" className="mac-input !w-auto" value={timezone} onChange={(event) => setTimezone(event.target.value as 'local' | 'UTC')}><option value="local">Local ({tz})</option><option value="UTC">UTC</option></select>
-        <label className="text-[12px]" htmlFor="cron-from">After</label>
-        <input id="cron-from" aria-invalid={!fromValid} aria-describedby={!start.ok ? 'cron-start-error' : undefined} className="mac-input min-w-[240px] flex-1 font-mono text-[12px]" value={from} onChange={(event) => setFrom(event.target.value)} spellCheck={false} />
-        <button type="button" className="mac-btn-secondary" onClick={() => setFrom(new Date().toISOString().slice(0, 19) + 'Z')}>Now</button>
-        {!start.ok && <p id="cron-start-error" role="alert" className="w-full text-[12px] text-mac-danger">{start.error}</p>}
-      </div>
-
-      <div className="grid min-h-0 flex-1 auto-rows-[minmax(300px,1fr)] grid-cols-1 gap-0 overflow-auto lg:grid-cols-[1fr_1fr] lg:grid-rows-1">
-        {/* Left: editor + presets */}
-        <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
-          <div className="space-y-3 p-4">
-            <label htmlFor="cron-expression" className="block text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-              Expression
-            </label>
-            <input
-              id="cron-expression"
-              aria-invalid={!parsed.ok}
-              className="mac-input font-mono text-[16px] tracking-wide"
-              value={expr}
-              onChange={(e) => setExpr(e.target.value)}
-              spellCheck={false}
-              placeholder="* * * * *"
-            />
-            {parsed.ok ? (
-              <p className="text-[13px] leading-relaxed text-mac-label">{parsed.human}</p>
-            ) : (
-              <p className="text-[13px] text-mac-danger" role="alert">{error}</p>
-            )}
-
-            {/* Field legend */}
-            <div className="flex flex-wrap gap-1.5 font-mono text-[11px] text-mac-label-tertiary">
-              {(parsed.ok && parsed.hasSeconds
-                ? ['sec', 'min', 'hour', 'dom', 'mon', 'dow']
-                : ['min', 'hour', 'dom', 'mon', 'dow']
-              ).map((f) => (
-                <span
-                  key={f}
-                  className="rounded-mac bg-mac-control px-2 py-0.5 text-mac-label-secondary"
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-auto border-t border-mac-separator p-4">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-              Presets
-            </div>
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {CRON_PRESETS.map((p) => (
-                <button
-                  key={p.expr + p.label}
-                  type="button"
-                  onClick={() => setExpr(p.expr)}
-                  className={cn(
-                    'rounded-mac border border-mac-separator px-3 py-2 text-left transition-colors hover:bg-mac-control/60',
-                    expr === p.expr && 'border-mac-accent/40 bg-mac-accent-soft'
-                  )}
-                >
-                  <div className="text-[12px] font-medium text-mac-label">{p.label}</div>
-                  <div className="mt-0.5 font-mono text-[11px] text-mac-accent">{p.expr}</div>
-                  <div className="mt-0.5 text-[10px] text-mac-label-tertiary">{p.hint}</div>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-mac border border-mac-separator bg-mac-control/30 p-3 text-[11px] leading-relaxed text-mac-label-secondary">
-              <div className="mb-1 font-semibold text-mac-label">Syntax</div>
-              <ul className="list-inside list-disc space-y-0.5">
-                <li>
-                  <code className="font-mono text-mac-label">*</code> any ·{' '}
-                  <code className="font-mono">*/n</code> step ·{' '}
-                  <code className="font-mono">a-b</code> range ·{' '}
-                  <code className="font-mono">a,b</code> list
-                </li>
-                <li>
-                  Months: <code className="font-mono">JAN</code>–
-                  <code className="font-mono">DEC</code> · DOW:{' '}
-                  <code className="font-mono">SUN</code>–
-                  <code className="font-mono">SAT</code> (0 or 7 = Sun)
-                </li>
-                <li>
-                  DOM + DOW both set → match if <strong>either</strong> matches (classic cron)
-                </li>
-                <li>
-                  <code className="font-mono">?</code> allowed on DOM/DOW (same as *)
-                </li>
-                <li>Supported subset: no Quartz L/W/#, year, command or @macros. DST previews follow wall time: missing times are skipped and repeated times appear twice. Check your scheduler’s own DST policy.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: fields + next runs */}
-        <div className="flex min-h-0 flex-col overflow-auto p-4">
-          {parsed.ok && (
-            <>
-              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-                Field breakdown
-              </div>
-              <div className="mb-5 space-y-2">
-                {parsed.fields.map((f) => (
-                  <div
-                    key={f.name}
-                    className="grid grid-cols-[120px_64px_1fr] items-start gap-2 rounded-mac border border-mac-separator bg-mac-surface px-3 py-2 text-[12px]"
-                  >
-                    <span className="font-medium text-mac-label">{f.label}</span>
-                    <code className="font-mono text-mac-accent">{f.raw}</code>
-                    <span className="text-mac-label-secondary">{f.description}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-                  Next {runs.length} runs ({timezone === 'UTC' ? 'UTC' : tz})
-                </div>
-              </div>
-              {error ? <p role="alert" className="text-[13px] text-mac-danger">{error}</p> : runs.length === 0 ? (
-                <p className="text-[13px] text-mac-warning">
-                  No runs found within 8 years after the start time. The syntax is valid, but the date combination may be impossible.
+    <div className="flex h-full min-h-0 flex-col overflow-auto" data-cron-workspace>
+      <div className="flex min-h-[240px] flex-1 flex-col">
+        <SplitPane labels={['Schedule', 'Upcoming runs']} activePane={activePane} onPaneChange={setActivePane}>
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface" aria-label="Cron schedule settings">
+            <ToolToolbar label="Cron expression actions" className="max-h-[40%] overflow-y-auto !px-3 !py-2">
+              <CopyButton text={parsed.ok ? parsed.expression : ''} label="Copy expression" />
+              {undo !== null && <button type="button" className="mac-btn-secondary" onClick={() => { setExpr(undo); setUndo(null) }} title="Restore the expression before choosing a preset"><Undo2 className="h-3.5 w-3.5" aria-hidden />Undo preset</button>}
+              <span className="text-[12px] text-mac-label-secondary">{parsed.ok ? `${parsed.hasSeconds ? '6 fields · seconds enabled' : '5 fields · minute precision'}` : '5 or 6 fields'}</span>
+            </ToolToolbar>
+            <div className="min-h-0 flex-1 space-y-4 overflow-auto p-3" tabIndex={0} aria-label="Schedule settings">
+              <div className="space-y-2">
+                <label htmlFor={expressionId} className="block text-[13px] font-semibold text-mac-label">Expression</label>
+                <input
+                  id={expressionId}
+                  aria-invalid={!parsed.ok}
+                  aria-describedby={`${expressionHintId}${expressionError ? ` ${expressionErrorId}` : ''}`}
+                  className="mac-input font-mono text-[16px]"
+                  value={expr}
+                  maxLength={4096}
+                  onChange={(event) => { setUndo(null); setExpr(event.target.value) }}
+                  spellCheck={false}
+                  placeholder="* * * * *"
+                />
+                <p id={expressionHintId} className="text-[12px] leading-relaxed text-mac-label-secondary">
+                  {expr.trim().split(/\s+/).length === 6 ? 'second · minute · hour · day of month · month · day of week' : 'minute · hour · day of month · month · day of week'}
                 </p>
-              ) : (
-                <ol className="space-y-1">
-                  {runs.map((d, i) => (
-                    <li
-                      key={d.toISOString() + i}
-                      className="flex flex-wrap items-center gap-2 rounded-mac px-2 py-1.5 font-mono text-[12px] hover:bg-mac-control/50"
-                    >
-                      <span className="w-6 text-mac-label-tertiary">{i + 1}.</span>
-                      <span className="text-mac-label">{formatCronDate(d, timezone)}</span>
-                      <span className="ml-auto text-[10px] text-mac-label-tertiary">
-                        {d.toISOString()}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+                {expressionError && <p id={expressionErrorId} role="alert" className="text-[13px] leading-relaxed text-mac-danger">{expressionError}</p>}
+              </div>
 
+              <fieldset className="space-y-3 border-t border-mac-separator pt-3">
+                <legend className="px-1 text-[13px] font-semibold text-mac-label">Preview settings</legend>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <label htmlFor={zoneId} className="block text-[13px] text-mac-label-secondary">Schedule timezone</label>
+                    <select id={zoneId} className="mac-input" value={timezone} onChange={(event) => setTimezone(event.target.value as 'local' | 'UTC')}>
+                      <option value="local">Local ({tz})</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                  </div>
+                  <div className="w-24 shrink-0 space-y-1.5">
+                    <label htmlFor={countId} className="block text-[13px] text-mac-label-secondary">Run count</label>
+                    <input id={countId} type="number" min={1} max={50} step={1} aria-invalid={!countValid} aria-describedby={countError ? countErrorId : undefined} className="mac-input font-mono" value={countInput} onChange={(event) => setCountInput(event.target.value)} />
+                  </div>
+                  {countError && <p id={countErrorId} role="alert" className="w-full text-[13px] text-mac-danger">{countError}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={startId} className="block text-[13px] text-mac-label-secondary">Preview after · ISO date and time</label>
+                  <div className="flex min-w-0 gap-2">
+                    <input id={startId} aria-invalid={!start.ok} aria-describedby={`${startHintId}${!start.ok ? ` ${startErrorId}` : ''}`} className="mac-input min-w-0 flex-1 font-mono text-[13px]" value={from} maxLength={128} onChange={(event) => setFrom(event.target.value)} spellCheck={false} />
+                    <button type="button" className="mac-btn-secondary shrink-0" onClick={() => setFrom(new Date().toISOString().slice(0, 19) + 'Z')} title="Set the preview start to the current instant">Now</button>
+                  </div>
+                  <p id={startHintId} className="text-[12px] leading-relaxed text-mac-label-secondary">Use Z or a UTC offset, e.g. 2026-10-05T09:00:00+07:00. Only runs strictly after this instant are shown. Changing the schedule timezone keeps this instant.</p>
+                  {!start.ok && <p id={startErrorId} role="alert" className="text-[13px] leading-relaxed text-mac-danger">{start.error}</p>}
+                </div>
+              </fieldset>
+
+              <details className="group border-t border-mac-separator pt-2">
+                <summary className="mac-btn-ghost cursor-pointer list-none [&::-webkit-details-marker]:hidden">Preset schedules<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary>
+                <p className="mb-2 mt-1 text-[12px] leading-relaxed text-mac-label-secondary">Choose a starting point. It replaces the expression; Undo preset restores your previous text.</p>
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' }}>
+                  {CRON_PRESETS.map((preset) => (
+                    <button key={preset.expr + preset.label} type="button" onClick={() => applyPreset(preset.expr)} aria-pressed={expr === preset.expr} className={cn('min-w-0 rounded-mac border border-mac-separator px-3 py-2 text-left transition-colors hover:bg-mac-control/60', expr === preset.expr && 'border-mac-accent/40 bg-mac-accent-soft')}>
+                      <span className="block text-[13px] font-medium text-mac-label">{preset.label}</span>
+                      <code className="mt-1 block break-words text-[12px] text-mac-accent">{preset.expr}</code>
+                      <span className="mt-1 block text-[12px] leading-relaxed text-mac-label-secondary">{preset.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+
+              <details className="group border-t border-mac-separator pt-2">
+                <summary className="mac-btn-ghost cursor-pointer list-none [&::-webkit-details-marker]:hidden">Syntax and compatibility<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary>
+                <div className="space-y-2 py-2 text-[13px] leading-relaxed text-mac-label-secondary">
+                  <p><code className="font-mono text-mac-label">*</code> any value · <code className="font-mono text-mac-label">*/n</code> step · <code className="font-mono text-mac-label">a-b</code> range · <code className="font-mono text-mac-label">a,b</code> list. Steps repeat within each field, rather than measuring elapsed time.</p>
+                  <p>Months: JAN–DEC. Weekdays: SUN–SAT (0 or 7 = Sunday). In this preview, ? on either day field means *.</p>
+                  <p>When neither day field begins with * or ?, a date matches either day rule. Otherwise both day rules must match.</p>
+                  <p>This tool previews a 5-field schedule or an optional leading seconds field. It does not support Quartz L/W/#, a year field, commands or @macros, and does not create a scheduled job.</p>
+                  <p>Local previews skip missing DST times and include both repeated times. The UTC timestamps distinguish repeated local times. Confirm the syntax and DST policy of your actual scheduler.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface" aria-label="Cron upcoming runs">
+            <ToolToolbar label="Cron preview export" className="max-h-[40%] overflow-y-auto !px-3 !py-2">
+              <CopyButton text={jsonOut} label="Copy JSON" />
+              <ToolOptions label="Export">
+                <TextInputActions value={expr} onChange={setExpr} output={jsonOut} fileName="cron-preview.json" accept=".json,application/json" actions={['download']} />
+                <SaveToBoxButton type="json" content={jsonOut} defaultName="cron-preview.json" disabled={!jsonOut} />
+              </ToolOptions>
+            </ToolToolbar>
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3" tabIndex={0} aria-label="Upcoming run preview">
+              {error ? (
+                <div className="space-y-3 rounded-mac border border-mac-danger/30 bg-mac-danger/10 p-3">
+                  <h2 className="text-[14px] font-semibold text-mac-label">Preview unavailable</h2>
+                  <p className="text-[13px] leading-relaxed text-mac-danger">{error}</p>
+                  <button type="button" className="mac-btn-secondary" onClick={focusError}>Fix {expressionError ? 'expression' : !start.ok ? 'start time' : 'run count'}</button>
+                </div>
+              ) : parsed.ok && (
+                <>
+                  <div className="space-y-2 border-b border-mac-separator pb-3">
+                    <h2 className="text-[14px] font-semibold text-mac-label">{runs.length ? `Next ${runs.length} runs` : 'No upcoming runs'} · {zoneLabel}</h2>
+                    <code className="block break-words font-mono text-[13px] text-mac-accent">{parsed.expression}</code>
+                    <p className="text-[13px] leading-relaxed text-mac-label">{parsed.human}</p>
+                    <p className="text-[12px] leading-relaxed text-mac-label-secondary">After <time dateTime={fromDate?.toISOString()} className="font-mono [overflow-wrap:anywhere]">{fromDate?.toISOString()}</time></p>
+                  </div>
+                  {runs.length === 0 ? (
+                    <p className="text-[13px] leading-relaxed text-mac-warning">No matching dates were found within 8 years of the start. The expression is valid, but its day and month combination may be impossible. Check the day fields or try another preset.</p>
+                  ) : (
+                    <ol data-cron-runs className="space-y-2" aria-label="Upcoming run times">
+                      {runs.map((date, index) => (
+                        <li key={date.toISOString()} className="flex items-start gap-2 rounded-mac border border-mac-separator px-3 py-2">
+                          <span className="w-6 shrink-0 text-[12px] leading-relaxed text-mac-label-secondary">{index + 1}.</span>
+                          <div className="min-w-0 space-y-1">
+                            <time dateTime={date.toISOString()} className="block font-mono text-[13px] leading-relaxed text-mac-label [overflow-wrap:anywhere]">{formatCronDate(date, timezone)}</time>
+                            {timezone !== 'UTC' && <span className="block font-mono text-[12px] leading-relaxed text-mac-label-secondary [overflow-wrap:anywhere]">{date.toISOString()} · UTC</span>}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <details className="group border-t border-mac-separator pt-2">
+                    <summary className="mac-btn-ghost cursor-pointer list-none [&::-webkit-details-marker]:hidden">Field breakdown<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary>
+                    <dl className="mt-2 space-y-2">
+                      {parsed.fields.map((field) => (
+                        <div key={field.name} className="min-w-0 rounded-mac border border-mac-separator px-3 py-2">
+                          <dt className="text-[13px] font-medium text-mac-label">{field.label}</dt>
+                          <dd className="mt-1 space-y-1 text-[13px] leading-relaxed"><code className="block font-mono text-mac-accent [overflow-wrap:anywhere]">{field.raw}</code><span className="block text-mac-label-secondary [overflow-wrap:anywhere]">{field.description}</span></dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                </>
+              )}
+            </div>
+          </section>
+        </SplitPane>
+      </div>
       <footer className="flex shrink-0 items-center border-t border-mac-separator px-4 py-2">
-        <ToolStatus tone={error ? 'danger' : runs.length ? 'success' : 'neutral'}>
-          {!error && parsed.ok
-            ? `${parsed.hasSeconds ? '6-field' : '5-field'} · ${runs.length} upcoming`
-            : error}
+        <ToolStatus tone={error ? 'danger' : runs.length ? 'success' : 'warning'}>
+          {error ? `Fix ${expressionError ? 'the expression' : !start.ok ? 'the start time' : 'the run count'} to preview` : `${parsed.ok && parsed.hasSeconds ? '6-field' : '5-field'} · ${runs.length} upcoming · ${zoneLabel} · preview only`}
         </ToolStatus>
       </footer>
     </div>

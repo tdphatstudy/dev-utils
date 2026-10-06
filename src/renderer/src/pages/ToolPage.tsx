@@ -56,8 +56,11 @@ export function ToolPage(): JSX.Element {
         <button type="button" className="mac-btn-ghost h-9 w-9 shrink-0 !p-0" aria-pressed={pinned} aria-label={`${pinned ? 'Unpin' : 'Pin'} ${tool.name}`} title={full ? `You can pin ${MAX_FAVORITE_TOOLS} tools. Unpin one to add another.` : `${pinned ? 'Remove from' : 'Add to'} Favorites`} disabled={full} onClick={() => toggleFavorite(tool.id)}><Star className={`h-4 w-4 ${pinned ? 'fill-mac-accent text-mac-accent' : ''}`} aria-hidden="true" /></button>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <Suspense fallback={<LoadingState label={`Loading ${tool.name}…`} />}>
-          <Component />
+        <Suspense key={tool.id} fallback={<LoadingState label={`Opening ${tool.name}…`} slowDetail="This is taking longer than usual. You can choose another tool while it opens." action={<Link to="/" className="mac-btn-secondary">Back to all tools</Link>} />}>
+          <div className="h-full min-h-0" data-tool-ready={tool.id}>
+            <div role="status" aria-live="polite" className="sr-only">{tool.name} ready</div>
+            <Component />
+          </div>
         </Suspense>
       </div>
     </div>

@@ -195,6 +195,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const listVersion = useRef(0)
   const openVersion = useRef(0)
   const saving = useRef(false)
+  const desktopRef = useRef<HTMLDivElement>(null)
   const activeName = status.vaults.find((v) => v.id === status.activeId)?.name ?? 'Private Box'
   const [cwd, setCwd] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
@@ -209,7 +210,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [namePrompt, setNamePrompt] = useState<NamePrompt | null>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; target: DirEntry | null } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; target: DirEntry | null; opener: HTMLElement } | null>(null)
 
   const crumbs = useMemo(() => (cwd ? cwd.split('/').filter(Boolean) : []), [cwd])
   const selected = entries.find((e) => e.id === selectedId) ?? null
@@ -406,8 +407,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   // Global shortcuts while desktop is focused
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (namePrompt) return
+      if (e.defaultPrevented || namePrompt || menu || busy || saving.current || document.querySelector('[role="dialog"], [role="alertdialog"]')) return
       const t = e.target as HTMLElement | null
+      if (t && !desktopRef.current?.contains(t)) return
       const typing =
         t &&
         (t.tagName === 'INPUT' ||
@@ -466,7 +468,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, dirty, selected, namePrompt, draft, cwd])
+  }, [doc, dirty, selected, namePrompt, menu, busy, draft, cwd])
 
   const emptyMenuItems: ContextMenuItem[] = [
     { id: 'new-text', label: 'New Text File', shortcut: '⌘N' },
@@ -529,7 +531,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-mac-bg">
+    <div ref={desktopRef} className="relative flex h-full min-h-0 flex-col overflow-hidden bg-mac-bg">
       <NameDialog
         open={!!namePrompt}
         title={
@@ -551,6 +553,8 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
         <ContextMenu
           x={menu.x}
           y={menu.y}
+          opener={menu.opener}
+          label={menu.target ? `Actions for ${menu.target.name}` : 'Folder actions'}
           items={menu.target ? itemMenuItems(menu.target) : emptyMenuItems}
           onSelect={onMenuSelect}
           onClose={() => setMenu(null)}
@@ -611,13 +615,24 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
       {/* Icon desktop */}
       <div
         className="relative min-h-0 flex-1 overflow-auto bg-gradient-to-b from-mac-bg via-mac-bg to-mac-surface/40 p-5"
+        role="group"
+        aria-label="Private Box files"
+        tabIndex={0}
         onClick={() => {
           setSelectedId(null)
           setMenu(null)
         }}
         onContextMenu={(e) => {
           e.preventDefault()
-          setMenu({ x: e.clientX, y: e.clientY, target: null })
+          e.currentTarget.focus({ preventScroll: true })
+          setMenu({ x: e.clientX, y: e.clientY, target: null, opener: e.currentTarget })
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return
+          e.preventDefault()
+          e.stopPropagation()
+          const bounds = e.currentTarget.getBoundingClientRect()
+          setMenu({ x: bounds.left + 16, y: bounds.top + 16, target: null, opener: e.currentTarget })
         }}
       >
         {entries.length === 0 ? (
@@ -636,6 +651,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 <button
                   key={entry.id}
                   type="button"
+                  aria-label={entry.name}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-mac-xl px-2 py-3 text-center transition-all',
                     isSel
@@ -655,7 +671,16 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                     e.preventDefault()
                     e.stopPropagation()
                     setSelectedId(entry.id)
-                    setMenu({ x: e.clientX, y: e.clientY, target: entry })
+                    e.currentTarget.focus({ preventScroll: true })
+                    setMenu({ x: e.clientX, y: e.clientY, target: entry, opener: e.currentTarget })
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setSelectedId(entry.id)
+                    const bounds = e.currentTarget.getBoundingClientRect()
+                    setMenu({ x: bounds.left, y: bounds.bottom, target: entry, opener: e.currentTarget })
                   }}
                 >
                   <FileGlyph entry={entry} />

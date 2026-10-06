@@ -23,11 +23,19 @@ import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
 import { Modal } from '@renderer/components/ui/Modal'
 import { useUnsavedChanges } from '@renderer/hooks/useUnsavedChanges'
+import './KeepApp.css'
 
 interface NoteCard {
   entry: DirEntry
   doc: DocContent
   note: KeepNote
+}
+
+interface DeleteTarget {
+  card: NoteCard
+  boxId: string | undefined
+  sessionId: string
+  inventoryVersion: number
 }
 
 function cardFor(doc: DocContent): NoteCard {
@@ -44,6 +52,9 @@ function isNeedsAccess(e: unknown): boolean {
 export default function KeepApp(): JSX.Element {
   const desktop = !!window.devutils?.privateBox
   const inventoryVersion = useRef(0)
+  const mounted = useRef(false)
+  const addNoteButton = useRef<HTMLButtonElement>(null)
+  const focusAfterDelete = useRef<DeleteTarget | null>(null)
   const defaultBoxId = useRef<string>()
   const sessionId = useRef('')
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -58,11 +69,15 @@ export default function KeepApp(): JSX.Element {
   const [cards, setCards] = useState<NoteCard[]>([])
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<NoteCard | null>(null)
+  const editingIdentity = useRef<NoteCard | null>(null)
+  editingIdentity.current = editing
   const [draft, setDraft] = useState<KeepNote>(emptyKeepNote())
   const [creating, setCreating] = useState(false)
   const [composer, setComposer] = useState<KeepNote>(emptyKeepNote())
   const [showPalette, setShowPalette] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const editorDirty = !!editing && (draft.title !== editing.note.title || draft.body !== editing.note.body || draft.color !== editing.note.color || draft.pinned !== editing.note.pinned)
   const composerDirty = creating && Boolean(composer.title || composer.body)
   const { requestLeave, dialog: leaveDialog } = useUnsavedChanges({
@@ -98,6 +113,7 @@ export default function KeepApp(): JSX.Element {
       setHasAccess(false)
       setCards([]); setUnreadable([]); setEditing(null); setDraft(emptyKeepNote())
       setCreating(false); setComposer(emptyKeepNote()); setKeyB('')
+      setDeleteTarget(null); setDeleteError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not sign out. Try again.')
       throw e
@@ -178,9 +194,12 @@ export default function KeepApp(): JSX.Element {
   }, [hasAccess])
 
   useEffect(() => {
+    mounted.current = true
     void bootstrap()
     return () => {
+      mounted.current = false
       inventoryVersion.current++
+      sessionId.current = ''
       void window.devutils?.privateBox?.clearAccess()
     }
   }, [bootstrap])
@@ -188,6 +207,20 @@ export default function KeepApp(): JSX.Element {
   useEffect(() => {
     if (hasAccess) void loadNotes()
   }, [hasAccess, loadNotes])
+
+  useEffect(() => {
+    if (deleteTarget || !focusAfterDelete.current) return
+    const target = focusAfterDelete.current
+    focusAfterDelete.current = null
+    const frame = requestAnimationFrame(() => {
+      if (mounted.current && sessionId.current === target.sessionId &&
+          defaultBoxId.current === target.boxId && inventoryVersion.current === target.inventoryVersion &&
+          !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        addNoteButton.current?.focus()
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [deleteTarget])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -251,21 +284,57 @@ export default function KeepApp(): JSX.Element {
     }
   }
 
-  const deleteCard = async (card: NoteCard): Promise<void> => {
-    if (mutating.current || !window.confirm('Permanently delete this note? This cannot be undone.')) return
-    mutating.current = true; setSaving(true); setError(null)
+  const requestDelete = (card: NoteCard): void => {
+    if (mutating.current) return
+    setShowPalette(false)
+    setDeleteError(null)
+    setDeleteTarget({ card, boxId: defaultBoxId.current, sessionId: sessionId.current, inventoryVersion: inventoryVersion.current })
+  }
+
+  const cancelDelete = (): void => {
+    if (mutating.current) return
+    setDeleteTarget(null)
+    setDeleteError(null)
+  }
+
+  const deleteCard = async (): Promise<void> => {
+    const target = deleteTarget
+    if (!target || mutating.current) return
+    const isCurrent = (): boolean => mounted.current && sessionId.current === target.sessionId &&
+      defaultBoxId.current === target.boxId && inventoryVersion.current === target.inventoryVersion
+    const matches = (card: NoteCard): boolean => card.doc.id === target.card.doc.id &&
+      card.doc.relativePath === target.card.doc.relativePath && card.doc.sessionId === target.sessionId
+    if (!isCurrent() || target.card.doc.sessionId !== target.sessionId || !cards.some(matches)) {
+      setDeleteError('This note or box session changed. Cancel and reopen the note before deleting.')
+      return
+    }
+    mutating.current = true
+    setSaving(true)
+    setDeleteError(null)
     try {
-      await window.devutils.privateBox.remove(card.doc.relativePath, card.doc.sessionId)
-      setEditing(null)
-      setCards((previous) => previous.filter((item) => item.doc.id !== card.doc.id))
+      // The bridge and main service also validate the captured session around IO.
+      await window.devutils.privateBox.remove(target.card.doc.relativePath, target.sessionId)
+      if (!isCurrent()) return
+      setCards(previous => previous.filter(card => !matches(card)))
+      if (editingIdentity.current && matches(editingIdentity.current)) {
+        setEditing(null)
+        setDraft(emptyKeepNote())
+      }
+      focusAfterDelete.current = target
+      setDeleteTarget(null)
+      setDeleteError(null)
+      setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed')
-    } finally { mutating.current = false; setSaving(false) }
+      if (isCurrent()) setDeleteError(`${e instanceof Error ? e.message : 'Could not delete note'}. Deletion could not be confirmed. Your draft is still here. Try again or cancel.`)
+    } finally {
+      mutating.current = false
+      if (mounted.current) setSaving(false)
+    }
   }
 
   if (!ready) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#202124] text-[13px] text-white/50">
+      <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-mac-bg text-[13px] text-mac-label-secondary">
         Loading Keep…
       </div>
     )
@@ -273,18 +342,18 @@ export default function KeepApp(): JSX.Element {
 
   if (!hasAccess) {
     return (
-      <div className="flex h-full flex-col items-center justify-center overflow-auto bg-[#202124] px-6">
-        <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#2d2e30] p-6 shadow-2xl">
+      <div className="flex h-full flex-col items-center overflow-auto bg-mac-bg px-6 py-6">
+        <div className="my-auto w-full max-w-sm shrink-0 rounded-2xl border border-mac-separator bg-mac-surface p-6 shadow-mac-lg">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#fbbc04]/20 text-[#fbbc04]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-mac-accent-soft text-mac-accent">
               <StickyNote className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-[18px] font-semibold text-white">Keep</h1>
-              <p className="text-[12px] text-white/50">Encrypted notes · Default Secret Box</p>
+              <h1 className="text-[18px] font-semibold text-mac-label">Keep</h1>
+              <p className="text-[12px] text-mac-label-secondary">Encrypted notes · Default Secret Box</p>
             </div>
           </div>
-          <p className="mb-3 text-[12px] leading-relaxed text-white/60">
+          <p className="mb-3 text-[12px] leading-relaxed text-mac-label-secondary">
             Notes are sealed in your local Default Secret Box. Device key is automatic; enter your
             password (key B) to open.
           </p>
@@ -292,7 +361,7 @@ export default function KeepApp(): JSX.Element {
             type="password"
             aria-label="Keep password"
             disabled={!desktop || busy}
-            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 font-mono text-[13px] text-white outline-none placeholder:text-white/30 focus:border-[#fbbc04]/50"
+            className="mac-input w-full font-mono"
             placeholder="Password (key B)"
             value={keyB}
             onChange={(e) => setKeyB(e.target.value)}
@@ -302,11 +371,11 @@ export default function KeepApp(): JSX.Element {
             autoFocus
             autoComplete="off"
           />
-          {error && <p role="alert" className="mt-2 break-words text-[12px] text-red-400">{error}</p>}
+          {error && <p role="alert" className="mt-2 break-words text-[12px] text-mac-danger">{error}</p>}
           <button
             type="button"
             disabled={!desktop || busy || !keyB.trim()}
-            className="mt-4 w-full rounded-lg bg-[#fbbc04] py-2.5 text-[13px] font-semibold text-[#202124] disabled:opacity-40"
+            className="mac-btn-primary mt-4 w-full"
             onClick={() => void unlock(keyB)}
           >
             {busy ? 'Unlocking…' : 'Open Keep'}
@@ -317,14 +386,14 @@ export default function KeepApp(): JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#202124] text-[#e8eaed]">
-      <header className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
-        <StickyNote className="h-5 w-5 text-[#fbbc04]" />
+    <div className="keep-app flex h-full min-h-0 flex-col bg-mac-bg text-mac-label">
+      <header className="flex shrink-0 items-center gap-3 border-b border-mac-separator px-4 py-3">
+        <StickyNote className="h-5 w-5 text-mac-accent" />
         <span className="text-[16px] font-medium">Keep</span>
-        <div className="relative ml-4 max-w-md flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+        <div className="relative min-w-0 max-w-md flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mac-label-tertiary" />
           <input
-            className="w-full rounded-lg border border-transparent bg-[#525355]/40 py-2 pl-9 pr-3 text-[13px] outline-none placeholder:text-white/40 focus:border-white/10 focus:bg-[#525355]/60"
+            className="mac-input w-full !pl-9"
             placeholder="Search notes"
             aria-label="Search notes by title or body"
             value={query}
@@ -333,7 +402,7 @@ export default function KeepApp(): JSX.Element {
         </div>
         <button
           type="button"
-          className="rounded-lg px-2 py-1.5 text-[12px] text-white/60 hover:bg-white/10 hover:text-white"
+          className="mac-btn-ghost !h-9 !w-9 !p-0"
           title="Sign out of box"
           aria-label="Sign out of box"
           disabled={busy || saving || signingOut}
@@ -343,15 +412,17 @@ export default function KeepApp(): JSX.Element {
         </button>
       </header>
 
-      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-6">
+      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-4">
         {!creating ? (
           <button
+            ref={addNoteButton}
             type="button"
             onClick={() => {
               setCreating(true)
               setComposer(emptyKeepNote())
             }}
-            className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-[#2d2e30] px-4 py-3 text-left text-[14px] text-white/50 shadow-lg hover:bg-[#35363a]"
+            className="flex min-h-12 w-full items-center gap-2 rounded-lg border border-mac-separator bg-mac-surface px-4 py-3 text-left text-[14px] text-mac-label-secondary shadow-mac hover:bg-mac-control-hover"
           >
             <Plus className="h-4 w-4" />
             Take a note…
@@ -372,19 +443,19 @@ export default function KeepApp(): JSX.Element {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-6">
+      <div className="px-4 py-6">
         {error && (
-          <p role="alert" className="mx-auto mb-4 max-w-3xl text-center text-[12px] text-red-400">{error}</p>
+          <p role="alert" className="mx-auto mb-4 max-w-3xl text-center text-[12px] text-mac-danger">{error}</p>
         )}
         {busy && cards.length === 0 && (
-          <p className="text-center text-[13px] text-white/40">Loading…</p>
+          <p role="status" aria-live="polite" className="text-center text-[13px] text-mac-label-secondary">Loading notes…</p>
         )}
-        {unreadable.length > 0 && <details className="mx-auto mb-4 max-w-3xl rounded-lg border border-red-400/30 p-3 text-[12px] text-red-300">
+        {unreadable.length > 0 && <details className="mx-auto mb-4 max-w-3xl rounded-lg border border-mac-danger/40 p-3 text-[12px] text-mac-danger">
           <summary>{unreadable.length} note(s) could not be read. Files were kept.</summary>
           <ul className="mt-2 space-y-1">{unreadable.map((issue) => <li key={issue} className="break-words">{issue}</li>)}</ul>
         </details>}
         {!busy && !error && !unreadable.length && filtered.length === 0 && (
-          <p className="text-center text-[13px] text-white/40">
+          <p className="text-center text-[13px] text-mac-label-tertiary">
             {query ? 'No matching notes' : 'No notes yet — take one above'}
           </p>
         )}
@@ -417,14 +488,16 @@ export default function KeepApp(): JSX.Element {
           </Section>
         )}
         {nextCursor && <div className="mx-auto max-w-3xl text-center">
-          <p role="status" className="mb-2 text-[12px] text-white/50">{cards.length} notes loaded. Load more to search the remaining notes.</p>
-          <button type="button" disabled={busy || saving} className="rounded-lg border border-white/20 px-4 py-2 text-[13px] disabled:opacity-40" onClick={() => void loadNotes(nextCursor)}>{busy ? 'Loading…' : 'Load more notes'}</button>
+          <p role="status" className="mb-2 text-[12px] text-mac-label-secondary">{cards.length} notes loaded. Load more to search the remaining notes.</p>
+          <button type="button" disabled={busy || saving} className="rounded-lg border border-mac-separator px-4 py-2 text-[13px] disabled:opacity-40" onClick={() => void loadNotes(nextCursor)}>{busy ? 'Loading…' : 'Load more notes'}</button>
         </div>}
+      </div>
+
       </div>
 
       {editing && (
         <Modal open title="Edit note" description="Changes are saved only when you choose Save changes." onClose={closeEditor} busy={saving}>
-            {error && <p role="alert" className="mb-3 rounded-lg bg-[#2d2e30] p-3 text-[12px] text-red-300">{error}</p>}
+            {error && <p role="alert" className="mb-3 rounded-lg bg-mac-surface p-3 text-[12px] text-mac-danger">{error}</p>}
             <NoteEditor
               note={draft}
               onChange={setDraft}
@@ -433,13 +506,25 @@ export default function KeepApp(): JSX.Element {
                   if (await saveCard(editing, draft)) setEditing(null)
                 })()
               }}
-              onDelete={() => void deleteCard(editing)}
+              onDelete={() => requestDelete(editing)}
               submitLabel="Save changes"
               onCancel={closeEditor}
               busy={saving}
               showPalette={showPalette}
               setShowPalette={setShowPalette}
             />
+        </Modal>
+      )}
+      {deleteTarget && (
+        <Modal open title="Delete note?" description="This permanently deletes the saved note and discards its unsaved changes. This cannot be undone." onClose={cancelDelete} busy={saving}>
+          <p className="mb-4 break-words rounded-lg border border-mac-separator bg-mac-control p-3 text-[14px] font-medium text-mac-label">
+            {deleteTarget.card.note.title.trim().slice(0, 120) || 'Untitled note'}{deleteTarget.card.note.title.trim().length > 120 ? '…' : ''}
+          </p>
+          {deleteError && <p role="alert" className="mb-4 text-[13px] leading-relaxed text-mac-danger">{deleteError}</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="mac-btn-secondary" disabled={saving} onClick={cancelDelete}>Cancel</button>
+            <button type="button" className="mac-btn-primary" style={{ backgroundColor: 'var(--mac-danger-fill)' }} disabled={saving} onClick={() => void deleteCard()}>{saving ? 'Deleting…' : 'Delete note'}</button>
+          </div>
         </Modal>
       )}
       {leaveDialog}
@@ -457,7 +542,7 @@ function Section({
   return (
     <section className="mx-auto mb-8 max-w-6xl">
       {title && (
-        <h2 className="mb-3 px-1 text-[11px] font-medium uppercase tracking-wider text-white/40">
+        <h2 className="mb-3 px-1 text-[12px] font-medium uppercase tracking-wider text-mac-label-secondary">
           {title}
         </h2>
       )}
@@ -473,22 +558,22 @@ function KeepCard({ card, onOpen }: { card: NoteCard; onOpen: () => void }): JSX
       type="button"
       onClick={onOpen}
       className={cn(
-        'mb-3 w-full break-inside-avoid rounded-xl border border-white/10 p-3.5 text-left transition hover:border-white/25',
+        'mb-3 w-full break-inside-avoid rounded-xl border border-mac-separator p-3.5 text-left transition hover:border-mac-accent/40',
         bg
       )}
     >
       <div className="flex items-start gap-2">
         {card.note.title && (
-          <div className="min-w-0 flex-1 text-[14px] font-medium leading-snug text-white">
+          <div className="min-w-0 flex-1 text-[14px] font-medium leading-snug text-mac-label break-words">
             {card.note.title}
           </div>
         )}
-        {card.note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-white/50" />}
+        {card.note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-mac-label-secondary" />}
       </div>
       {card.note.body && (
         <p
           className={cn(
-            'whitespace-pre-wrap text-[13px] leading-relaxed text-white/80',
+            'whitespace-pre-wrap break-words text-[13px] leading-relaxed text-mac-label-secondary',
             card.note.title && 'mt-1.5'
           )}
         >
@@ -496,7 +581,7 @@ function KeepCard({ card, onOpen }: { card: NoteCard; onOpen: () => void }): JSX
         </p>
       )}
       {!card.note.title && !card.note.body && (
-        <p className="text-[13px] italic text-white/35">Empty note</p>
+        <p className="text-[13px] italic text-mac-label-tertiary">Empty note</p>
       )}
     </button>
   )
@@ -525,9 +610,9 @@ function NoteEditor({
 }): JSX.Element {
   const bg = colorBg(note.color)
   return (
-    <div className={cn('rounded-xl border border-white/15 shadow-2xl', bg)}>
+    <div className={cn('keep-editor rounded-xl border border-mac-separator shadow-mac', bg)}>
       <input
-        className="w-full bg-transparent px-4 pt-3 text-[16px] font-medium text-white outline-none placeholder:text-white/35"
+        className="w-full bg-transparent px-4 pt-3 text-[16px] font-medium text-mac-label outline-none placeholder:text-mac-label-tertiary"
         placeholder="Title"
         aria-label="Note title"
         disabled={busy}
@@ -535,7 +620,7 @@ function NoteEditor({
         onChange={(e) => onChange({ ...note, title: e.target.value })}
       />
       <textarea
-        className="min-h-[120px] w-full resize-none bg-transparent px-4 py-2 text-[14px] leading-relaxed text-white/90 outline-none placeholder:text-white/35"
+        className="min-h-[120px] w-full resize-none bg-transparent px-4 py-2 text-[14px] leading-relaxed text-mac-label outline-none placeholder:text-mac-label-tertiary"
         placeholder="Take a note…"
         aria-label="Note body"
         disabled={busy}
@@ -543,21 +628,21 @@ function NoteEditor({
         onChange={(e) => onChange({ ...note, body: e.target.value })}
         autoFocus
       />
-      <div className="relative flex items-center gap-1 border-t border-white/10 px-2 py-2">
+      <div className="relative flex flex-wrap items-center gap-1 border-t border-mac-separator px-2 py-2">
         <button
           type="button"
-          className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
+          className="mac-btn-ghost !h-9 !w-9 !p-0"
           title="Pin"
           aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
           disabled={busy}
           aria-pressed={note.pinned}
           onClick={() => onChange({ ...note, pinned: !note.pinned })}
         >
-          <Pin className={cn('h-4 w-4', note.pinned && 'fill-current text-[#fbbc04]')} />
+          <Pin className={cn('h-4 w-4', note.pinned && 'fill-current text-mac-accent')} />
         </button>
         <button
           type="button"
-          className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
+          className="mac-btn-ghost !h-9 !w-9 !p-0"
           title="Background"
           aria-label="Choose note background"
           aria-expanded={showPalette}
@@ -569,7 +654,7 @@ function NoteEditor({
         {onDelete && (
           <button
             type="button"
-            className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-red-300"
+            className="mac-btn-ghost !h-9 !w-9 !p-0 hover:!text-mac-danger"
             title="Delete"
             aria-label="Permanently delete note"
             disabled={busy}
@@ -578,10 +663,10 @@ function NoteEditor({
             <Trash2 className="h-4 w-4" />
           </button>
         )}
-        <button type="button" className="ml-auto rounded-lg px-3 py-1.5 text-[13px] text-white/70 hover:bg-white/10" disabled={busy} onClick={onCancel}>Close</button>
+        <button type="button" className="mac-btn-secondary ml-auto" disabled={busy} onClick={onCancel}>Close</button>
         <button
           type="button"
-          className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-white/80 hover:bg-white/10"
+          className="mac-btn-primary"
           onClick={onClose}
           disabled={busy}
         >
@@ -589,7 +674,7 @@ function NoteEditor({
         </button>
 
         {showPalette && (
-          <div className="absolute bottom-12 left-2 flex flex-wrap gap-1.5 rounded-xl border border-white/15 bg-[#2d2e30] p-2 shadow-xl">
+          <div className="absolute bottom-12 left-2 right-2 flex flex-wrap gap-1.5 rounded-xl border border-mac-separator bg-mac-raised p-2 shadow-mac-lg">
             {KEEP_COLORS.map((c) => (
               <button
                 key={c.id}
@@ -599,10 +684,10 @@ function NoteEditor({
                 aria-pressed={note.color === c.id}
                 disabled={busy}
                 className={cn(
-                  'h-7 w-7 rounded-full border-2',
-                  note.color === c.id ? 'border-white' : 'border-transparent'
+                  'h-8 w-8 rounded-full border-2', colorBg(c.id),
+                  note.color === c.id ? 'border-mac-label ring-2 ring-mac-accent' : 'border-mac-separator'
                 )}
-                style={{ background: c.swatch }}
+                data-note-color={c.id}
                 onClick={() => {
                   onChange({ ...note, color: c.id })
                   setShowPalette(false)
@@ -617,17 +702,5 @@ function NoteEditor({
 }
 
 function colorBg(color: KeepColor): string {
-  const map: Record<KeepColor, string> = {
-    default: 'bg-[#2d2e30]',
-    coral: 'bg-[#77172e]',
-    peach: 'bg-[#692b17]',
-    sand: 'bg-[#7c4a03]',
-    mint: 'bg-[#0c625d]',
-    sage: 'bg-[#256141]',
-    fog: 'bg-[#284255]',
-    dusk: 'bg-[#472e5b]',
-    blossom: 'bg-[#6c394f]',
-    clay: 'bg-[#4b443a]'
-  }
-  return map[color] ?? map.default
+  return `keep-note-${color}`
 }

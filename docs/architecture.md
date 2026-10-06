@@ -542,7 +542,8 @@ Cron previews support a documented 5/6-field subset with local or UTC time,
 an explicit start instant and an eight-year horizon. parseCronStart validates
 calendar fields before constructing Date, refusing normalized impossible days,
 24:00, leap seconds, missing offsets and precision beyond milliseconds. The UI
-shows a specific error beside After and disables schedule export on invalid input.
+links expression/start/count errors to their fields and provides a Fix action.
+The start label is Preview after · ISO date and time; invalid input disables export.
 Search skips nonmatching
 days and checks actual elapsed minutes to preserve DST folds. Seconds are
 enumerated inside eligible minutes. Scheduler-specific extensions and DST
@@ -570,3 +571,46 @@ Xem [Mock API schema, limits và verification](mock-api.md).
 
 Chuẩn AI gồm Markdown + Mermaid trong Git. Không cần package runtime. Hướng dẫn
 thao tác và các nguồn chính thức nằm trong [AI workflow](ai-workflow.md).
+
+### Tool readiness và tương tác desktop (2026-10-05)
+
+Tool UI và các engine tiếp tục đi qua dynamic import trong registry. Build tách
+React/ReactDOM/scheduler thành vendor riêng để runtime JSX của shell không kéo
+CodeMirror vào Home. Đây là trì hoãn tải/evaluate editor, không phải bảo đảm module
+đã dùng được unload khỏi RAM. Không prefetch cả danh mục hoặc OCR models.
+
+Dialog frame của command palette nằm trong shell để nhận focus và hiển thị trạng
+thái ngay; phần tìm kiếm cmdk chỉ import khi mở. Frame giữ nguyên trong lúc
+Suspense resolve, Escape/Close trả focus về nơi mở. Search row dùng focus inset,
+không bỏ keyboard focus toàn cục. Tool loading dùng logo SVG sẵn có và CSS motion
+hữu hạn dưới 5 giây; reduced motion giữ logo tĩnh. Một timeout chỉ phục vụ lời
+nhắc chờ lâu, được clear khi unmount. Không có animation loop bằng JavaScript,
+phần trăm giả, telemetry hoặc thời gian chờ tối thiểu. Live status không có busy
+ancestor; “ready” chỉ xuất hiện khi nội dung tool mount, không khi URL vừa đổi.
+Lỗi tải module có hướng quay lại thay vì retry một React.lazy promise đã reject.
+
+YAML/Regex bắt đầu worker đầu tiên không có debounce; các lần sửa sau vẫn có
+200 ms debounce, stale-job guards, timeout và worker termination. Khôi phục draft
+hủy job cũ. JSON/Regex có pane tabs khi workspace hẹp; pane ẩn vẫn mounted để giữ
+editor state nhưng không nằm trong keyboard tab sequence. Base64/Regex giữ mode
+và options cùng input trong session drafts RAM, không thêm persistent settings
+hay history payload. Settings clear drafts vẫn xóa các options này.
+
+Context menu của vault chỉ thay đổi renderer interaction: focus, roving keyboard,
+viewport bounds và guards cho shortcuts phía sau menu/modal. Payload, named IPC,
+active-root/session validation và storage format không thay đổi. Nghiên cứu và
+các giới hạn bằng chứng nằm trong [UX research](ux-research-2026-10-05.md);
+phép đo production nằm trong [Tool loading performance](tool-loading-performance.md).
+
+Keep import CSS cùng lazy component; palette giữ stable note color ID nhưng dùng
+appearance tương ứng light/dark. Xác nhận Delete chỉ thay renderer UX; captured
+box/session/path/id và current editor identity được kiểm tra trước/sau IO, vẫn
+đi qua bridge/main session validation. Draft lỗi còn trong RAM; không có plaintext
+persistence, migration hoặc recovery/Undo storage mới.
+
+AES/HMAC dùng workspace pane tabs, key/password/message chỉ sống trong component;
+không tham gia generic drafts/history. Cron giữ timezone/count/start trong session
+drafts RAM cùng expression để khôi phục đúng preview, không thêm scheduler hoặc
+persistent settings. Các preset có một bước Undo trong RAM; export vẫn schema cũ.
+Global Ctrl+K và vault shortcuts tôn trọng dialog/alertdialog role đang mount,
+kể cả Radix modal không gắn aria-modal; không tạo focus scope phía sau confirmation.

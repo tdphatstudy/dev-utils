@@ -1,0 +1,27 @@
+/* Keep color is note metadata, while its appearance follows the app theme. */
+.keep-note-default { background-color: var(--mac-surface); }
+.keep-note-coral { background-color: #fff0ed; }
+.keep-note-peach { background-color: #fff1df; }
+.keep-note-sand { background-color: #faf3df; }
+.keep-note-mint { background-color: #e4f3ee; }
+.keep-note-sage { background-color: #edf4e4; }
+.keep-note-fog { background-color: #edf2f8; }
+.keep-note-dusk { background-color: #f1ebf8; }
+.keep-note-blossom { background-color: #faeaf1; }
+.keep-note-clay { background-color: #f2ede6; }
+.dark .keep-note-coral { background-color: #42292e; }
+.dark .keep-note-peach { background-color: #40302a; }
+.dark .keep-note-sand { background-color: #3f3728; }
+.dark .keep-note-mint { background-color: #263c37; }
+.dark .keep-note-sage { background-color: #2d392c; }
+.dark .keep-note-fog { background-color: #2b3541; }
+.dark .keep-note-dusk { background-color: #363045; }
+.dark .keep-note-blossom { background-color: #402e39; }
+.dark .keep-note-clay { background-color: #39352f; }
+
+/* Insets keep focus visible within the note's rounded border. */
+.keep-editor input:focus-visible,
+.keep-editor textarea:focus-visible {
+  outline-offset: -3px;
+  border-radius: 8px;
+}

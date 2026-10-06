@@ -16,6 +16,10 @@ const isProd = process.env.NODE_ENV === 'production'
 function vendorChunk(id: string): string | undefined {
   if (!id.includes('node_modules')) return undefined
   const norm = id.replace(/\\/g, '/')
+  // Shell JSX uses react/jsx-runtime. Without an explicit eager React chunk,
+  // Rollup can move that shared dependency into vendor-codemirror, making Home
+  // import and evaluate the entire editor before any editor tool is opened.
+  if (/\/(?:react|react-dom|scheduler)\//.test(norm)) return 'vendor-react'
   if (
     norm.includes('/codemirror') ||
     norm.includes('/@codemirror/') ||

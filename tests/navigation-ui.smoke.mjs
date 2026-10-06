@@ -82,6 +82,7 @@ try {
 
   await page.keyboard.press('Control+k')
   await palette().waitFor()
+  await palette().getByRole('combobox', { name: 'Search tools', exact: true }).waitFor()
   assert.equal(await palette().getByRole('option', { name: 'JSON Studio', exact: true }).count(), 1)
   assert.equal(await palette().getByRole('option', { name: 'Timestamp Converter', exact: true }).count(), 1)
   await palette().getByRole('combobox', { name: 'Search tools', exact: true }).fill('Lorem Text')

@@ -7,6 +7,7 @@ interface Props {
   /** Isolate tool pane only (keeps shell chrome). */
   scope?: 'app' | 'route'
   onHome: () => void
+  homeLabel?: string
 }
 
 interface State {
@@ -51,6 +52,8 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state
     if (!error) return this.props.children
 
+    const loadFailure = /dynamically imported module|importing a module script|loading chunk|unable to preload css/i.test(error.message)
+
     return (
       <div className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-4 bg-mac-bg p-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mac-danger/10 text-mac-danger shadow-[var(--mac-shadow-sm)]">
@@ -58,23 +61,22 @@ export class ErrorBoundary extends Component<Props, State> {
         </div>
         <div className="max-w-md">
           <h2 className="text-[16px] font-semibold tracking-tight text-mac-label">
-            Something went wrong
+            {loadFailure ? 'This tool could not be loaded' : 'Something went wrong'}
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">
-            This view could not be displayed. Retry or choose Home when you are ready.
+            {loadFailure
+              ? 'The tool files could not be opened. Return to the toolbox. If this continues, save your work and reopen DevFusion.'
+              : 'This view could not be displayed. Try again, or return to the toolbox.'}
           </p>
-          <pre className="mt-3 max-h-28 overflow-auto rounded-mac border border-mac-separator bg-mac-surface px-3 py-2 text-left font-mono text-[11px] text-mac-danger shadow-[var(--mac-shadow-sm)]">
-            {error.message || String(error)}
-          </pre>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <button type="button" className="mac-btn-secondary" onClick={this.retry}>
+          {!loadFailure && <button type="button" className="mac-btn-secondary" onClick={this.retry}>
             <RotateCcw className="h-3.5 w-3.5" />
             Try again
-          </button>
+          </button>}
           <button type="button" className="mac-btn-primary" onClick={this.goHome}>
             <Home className="h-3.5 w-3.5" />
-            Back to Home
+            {this.props.homeLabel ?? 'Back to Home'}
           </button>
         </div>
       </div>

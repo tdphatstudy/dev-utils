@@ -31,8 +31,12 @@ function useGlobalHotkeys(): void {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented) return
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        // A confirmation dialog owns focus, including while a write is pending.
+        // Opening another modal underneath it would break both focus scopes.
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
         setCommandOpen(true)
       }
     }

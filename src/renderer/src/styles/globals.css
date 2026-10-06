@@ -374,3 +374,71 @@ pre,
     transform: none;
   }
 }
+
+/* The search row owns keyboard focus; its inset ring stays inside the rounded dialog. */
+.mac-command-dialog {
+  top: min(14dvh, 72px);
+  max-height: min(600px, calc(100dvh - min(14dvh, 72px) - 16px));
+}
+.mac-command-search {
+  border-radius: 13px 13px 0 0;
+}
+.mac-command-search:has(.mac-command-input:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--mac-accent);
+  background-color: var(--mac-accent-soft);
+}
+.mac-command-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Brief, finite brand motion: no JS animation loop, bitmap or forced loading delay. */
+.mac-loading-content {
+  animation: mac-fade-in 180ms ease-out 140ms both;
+}
+.mac-loading-brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  isolation: isolate;
+}
+.mac-loading-logo {
+  animation: mac-logo-breathe 1100ms ease-in-out 180ms 4;
+}
+.mac-loading-orbit {
+  position: absolute;
+  inset: 9px;
+  border: 1px solid color-mix(in srgb, var(--mac-accent) 35%, transparent);
+  border-radius: 22px;
+  z-index: -1;
+}
+.mac-loading-orbit-one {
+  transform: rotate(18deg);
+  animation: mac-orbit-one 1100ms ease-in-out 180ms 4;
+}
+.mac-loading-orbit-two {
+  transform: rotate(-18deg);
+  opacity: 0.65;
+  animation: mac-orbit-two 1100ms ease-in-out 180ms 4;
+}
+@keyframes mac-logo-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.04); }
+}
+@keyframes mac-orbit-one {
+  0%, 100% { transform: rotate(18deg) scale(1); opacity: 0.65; }
+  50% { transform: rotate(36deg) scale(1.08); opacity: 1; }
+}
+@keyframes mac-orbit-two {
+  0%, 100% { transform: rotate(-18deg) scale(1); opacity: 0.65; }
+  50% { transform: rotate(-36deg) scale(1.08); opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mac-loading-content,
+  .mac-loading-logo,
+  .mac-loading-orbit {
+    animation: none !important;
+  }
+}

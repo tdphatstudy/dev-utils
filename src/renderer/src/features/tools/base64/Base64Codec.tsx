@@ -18,6 +18,16 @@ export default function Base64Codec(): JSX.Element {
   const [decodedFormat, setDecodedFormat] = useState<'text' | 'hex'>('text')
   const [input, setInput] = useState('Hello, DevFusion!')
   useToolDraft('base64.codec', input, setInput, { label: 'Base64', historyOnUnmount: true })
+  useToolDraft('base64.codec.options', JSON.stringify({ mode, variant, decodedFormat }), (draft) => {
+    try {
+      const restored: unknown = JSON.parse(draft)
+      if (!restored || typeof restored !== 'object') return
+      const options = restored as Record<string, unknown>
+      if (options.mode === 'encode' || options.mode === 'decode') setMode(options.mode)
+      if (options.variant === 'standard' || options.variant === 'url') setVariant(options.variant)
+      if (options.decodedFormat === 'text' || options.decodedFormat === 'hex') setDecodedFormat(options.decodedFormat)
+    } catch { /* An invalid session option draft leaves the safe defaults in place. */ }
+  })
 
   const result = useMemo(() => {
     if (mode === 'encode') {
@@ -44,7 +54,7 @@ export default function Base64Codec(): JSX.Element {
           ]}
         />
         {mode === 'decode' && <label className="flex items-center gap-2 text-[12px]">Output
-          <select className="mac-input !w-auto" value={decodedFormat} onChange={(e) => setDecodedFormat(e.target.value as 'text' | 'hex')}>
+          <select aria-label="Output" className="mac-input !w-auto" value={decodedFormat} onChange={(e) => setDecodedFormat(e.target.value as 'text' | 'hex')}>
             <option value="text">UTF-8 text</option><option value="hex">Hex bytes</option>
           </select>
         </label>}

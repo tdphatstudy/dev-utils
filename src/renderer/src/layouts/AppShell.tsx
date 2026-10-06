@@ -1,31 +1,20 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TitleBar } from '@renderer/components/chrome/TitleBar'
 import { Sidebar } from '@renderer/components/chrome/Sidebar'
+import { CommandPalette } from '@renderer/components/chrome/CommandPalette'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
 import { useAppStore } from '@renderer/store/app-store'
 import { useIsNarrow } from '@renderer/hooks/useMediaQuery'
 import { getToolById } from '@renderer/registry/tools'
 
-const CommandPalette = lazy(() =>
-  import('@renderer/components/chrome/CommandPalette').then((m) => ({
-    default: m.CommandPalette
-  }))
-)
 
 export function AppShell(): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
-  const commandOpen = useAppStore((s) => s.commandOpen)
   const setLastToolId = useAppStore((s) => s.setLastToolId)
   const isNarrow = useIsNarrow()
   const routeTool = getToolById(location.pathname.startsWith('/tool/') ? location.pathname.slice(6) : '')
-  // Defer cmdk/radix dialog until first open — saves cold-start JS + RAM
-  const [paletteReady, setPaletteReady] = useState(false)
-
-  useEffect(() => {
-    if (commandOpen) setPaletteReady(true)
-  }, [commandOpen])
 
   useEffect(() => {
     const id = location.pathname.startsWith('/tool/') ? location.pathname.slice(6) : ''
@@ -51,12 +40,8 @@ export function AppShell(): JSX.Element {
           </ErrorBoundary>
         </main>
       </div>
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{routeTool ? `${routeTool.name} opened` : 'DevFusion toolbox opened'}</div>
-      {paletteReady && (
-        <Suspense fallback={null}>
-          <CommandPalette />
-        </Suspense>
-      )}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{routeTool ? `${routeTool.name} selected` : 'DevFusion toolbox opened'}</div>
+      <CommandPalette />
     </div>
   )
 }
