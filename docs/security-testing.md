@@ -58,10 +58,28 @@ phụ thuộc concurrency, độ trễ server và thời gian khởi động/dra
 Hash Lab dùng worker riêng, terminate khi Stop/rời tool/hoàn tất. Generate giới
 hạn 1 Mi ký tự và 5 giây. Search tối đa 10 triệu attempts và 600 giây; watchdog
 renderer terminate worker sau budget +1 giây nếu worker chưa phản hồi.
-Dictionary tối đa 1 Mi ký tự, 100.000 dòng, mỗi dòng ≤128 ký tự; giữ nguyên
+Dictionary tối đa 1 Mi ký tự, 100.000 dòng, mỗi dòng ≤1.024 ký tự; giữ nguyên
 spaces, loại duplicate, dòng trống thử chuỗi trống. Alphabet là 1–64 ký tự ASCII
 printable khác nhau, chiều dài 0–16, không materialize toàn bộ candidate space.
-Candidate tìm thấy mặc định ẩn; Reveal rồi Copy là hành động chủ động.
+Candidate tìm thấy mặc định ẩn; Reveal rồi Copy là hành động chủ động. Có import
+file UTF-8 tối đa 4 MiB (sau decode vẫn áp dụng giới hạn dictionary). Read về muộn
+sau edit, Clear, Start hoặc rời tool không được khôi phục input cũ.
+
+Ba tập mẫu nhỏ (candidate thường gặp, giá trị mặc định môi trường dev, chuỗi số)
+được bundle tại máy; không tải wordlist ngoài. User có thể thêm nhiều tập và import
+dictionary riêng. Biến thể giữ candidate gốc, thêm lowercase/uppercase/capitalize
+và tối đa 16 hậu tố, mỗi hậu tố ≤32 ký tự. Loại duplicate dòng gốc và hậu tố;
+tổ hợp giữa các từ/biến thể có thể tạo lượt thử lặp. Sinh biến thể lazy, không
+materialize toàn bộ tập mở rộng. Search plan đếm lượt đã lên kế hoạch và hiển thị
+sáu candidate đầu trước khi chạy; không hứa tìm được preimage.
+
+Live monitor hiển thị số lượt, tốc độ, elapsed, tiến độ theo attempt budget và
+ước tính thời gian còn lại. Time budget vẫn có thể dừng sớm hơn ước tính. Preview
+được bật trong màn hình và có thể tắt; worker chỉ gửi tối đa sáu candidate không
+khớp gần nhất mỗi 250 ms, cùng snapshot đầu/cuối. UI không thêm thời gian chờ giả
+vào việc tính hash. Animation nhẹ, tắt với reduced motion. Candidate trùng digest
+không vào live feed; vẫn cần Reveal. Copy report chỉ chứa thuật toán và metrics,
+không chứa target digest, dictionary, live candidates hay match plaintext.
 
 Hash không thể giải mã ngược. Search chỉ tìm preimage trong tập candidate cho
 raw unsalted hexadecimal digest; không hỗ trợ bcrypt/Argon2/salt/mask nâng cao.
@@ -69,6 +87,22 @@ Một candidate trùng hash không chứng minh nó là input ban đầu. MD5/SH
 thuật toán legacy, không phù hợp để lưu mật khẩu.
 
 ## Cách hiểu kết quả
+
+Stress có preset Quick check / Baseline / Sustained load, thời gian gửi tối thiểu
+theo count/rate và ngưỡng p95/tỷ lệ lỗi do user đặt. Tỷ lệ lỗi dùng response ngoài
+2xx và network failures; loại cancelled khỏi mẫu. Chỉ một run `completed`, gửi đủ
+count và có mẫu p95 hợp lệ mới được đánh giá đạt; stopped/duration-limit/byte-limit
+hoặc thiếu mẫu là incomplete. Có thể đổi ngưỡng sau run để đánh giá lại metrics
+đang hiển thị. Ngưỡng không thay đổi scheduler hoặc phát sinh request mới.
+
+Header audit có thêm nguồn Paste response headers để đọc header tại máy, không
+gọi IPC mạng. Parser giới hạn 64 Ki ký tự, 256 dòng header, 8 Ki mỗi dòng; từ chối
+folded header và response body, giữ giá trị lặp theo thứ tự bằng comma, dùng object
+không prototype; từ chối nhiều status block để không gộp policy của redirect chain.
+Không suy luận status hoặc tự theo redirect từ input paste.
+Header/CORS/JWT findings có bộ đếm và filter All / Needs attention / Passed;
+Copy report luôn giữ đầy đủ findings, không chỉ phần đang lọc. CORS có preset
+untrusted/null/credentialed origin; đổi preset chỉ chỉnh form, cần nhấn Probe.
 
 Header audit là quan sát policy, không phải chứng nhận hệ thống an toàn. CSP
 hiện diện không chứng minh policy hiệu quả; unsafe-inline cần xem cả nonce/hash
@@ -119,3 +153,20 @@ smoke UI enterprise/vault/advanced hiện có cũng pass. Electron development v
 ASAR/fused fixture pass với consent, file-URL worker và localhost stress IPC.
 Bản `release/win-unpacked` được cập nhật và kiểm tra fuses; đây là bản unsigned,
 không phải installer đã ký số. Remote CI và native macOS/Linux chưa chạy local.
+
+## Kiểm chứng refactor UI/UX ngày 2026-10-07
+
+Full suite: 1.013 tests / 108 files pass. Các tests mới chứng minh thứ tự và
+giới hạn biến thể, candidate dài, progress không lộ match, preview opt-in ở
+worker contract, parser header không prototype và đánh giá tải không pass run
+thiếu mẫu. Typecheck node/web và production build pass; warning lazy SQL chunk
+2.9 MB hiện có vẫn còn. Test parser bổ sung cho redirect chain (10 cases) cũng pass.
+
+Browser smoke kiểm tra cả 5 gate/tools ở light/dark và 1180×760 / 720×500,
+production hash worker, các tập mẫu/biến thể/import, read về muộn sau Clear,
+Stop/time budget, tắt preview, reports bỏ plaintext, offline header không gọi
+network IPC, findings filters và CORS presets. Network metrics ở browser là
+fixture; native Windows smoke dùng localhost và preload/CSP thật. Native smoke
+đã qua consent, file-URL worker, stress IPC, invalidation và renderer recovery.
+Smoke i18n kiểm tra 13 ngôn ngữ, labels mới và giữ nguyên candidate khi đổi locale.
+Không có chứng nhận an toàn hệ thống hay kiểm thử native macOS/Linux trong lần này.

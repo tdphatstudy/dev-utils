@@ -859,3 +859,22 @@ unchanged. Additional interface labels and count/state summaries are in
 `src/shared/i18n/analysis-messages.ts`; backend diagnostics and some detailed
 technical findings continue to use English fallback.
 See [the workspace review and verification notes](tool-workspace-2026-10-07.md).
+
+### Security workspace usability (2026-10-07)
+
+`CandidatePanel` supports bounded local UTF-8 candidate import with stale-read
+guards, three bundled sample sets and explicit case/suffix rules. The shared
+`planHashCandidates` counts and lazily generates the expanded search space;
+`searchHash` emits optional bounded plaintext samples to `SearchMonitor` every
+250 ms. Samples remain in renderer/worker RAM, exclude the matching candidate,
+and never enter generic drafts, logs or the metrics-only clipboard report.
+Long dictionary lines now support up to 1,024 characters. Original attempt/time
+budgets, lazy registry IDs, consent and worker termination remain unchanged.
+
+`assessLoad` applies user-selected p95/error thresholds to stress metrics; partial
+runs never pass. Presets only populate inputs. `parseResponseHeaders` adds a
+bounded offline input path to Header Audit using the existing policy analysis.
+CORS origin presets and common findings filters reduce setup/report navigation.
+New interface messages are bundled for all 13 languages in
+`security-workspace-messages.ts`. There are no new privileged bridge methods,
+automatic network calls, persisted candidate sets or storage-format changes.

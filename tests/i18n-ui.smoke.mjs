@@ -5,12 +5,14 @@ import assert from 'node:assert/strict'
 import ts from 'typescript'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const rows = []
-for (const file of ['catalog', 'workspace-messages', 'settings-messages', 'tool-messages', 'analysis-messages']) {
+for (const file of ['catalog', 'workspace-messages', 'settings-messages', 'tool-messages', 'analysis-messages', 'security-workspace-messages']) {
   const ast = ts.createSourceFile(file, await readFile(`src/shared/i18n/${file}.ts`, 'utf8'), ts.ScriptTarget.Latest, true)
   const visit = node => { if (ts.isArrayLiteralExpression(node) && node.elements.length === 13 && node.elements.every(ts.isStringLiteral)) rows.push(node.elements.map(value => value.text)); ts.forEachChild(node, visit) }
   visit(ast)
 }
 const languages = ['en', 'zh', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru', 'ar', 'hi', 'id', 'vi']
+assert.equal(new Set(rows.map(row => row[0])).size, rows.length, 'Source messages must be unique')
+for (const row of rows) assert.ok(row.every(value => value.trim()), 'Every catalog row must have 13 non-empty values')
 const text = (language, key) => language === 'en' ? key : rows.find(row => row[0] === key)?.[languages.indexOf(language)] ?? key
 const root = resolve('out/renderer'), mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' }
 const server = createServer(async (request, response) => {
@@ -102,6 +104,20 @@ try {
   await page.waitForFunction(() => document.body.textContent.includes('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'))
   assert.equal(await page.locator('#workspace').evaluate(element => element.scrollWidth <= element.clientWidth), true)
   await capture('hash-ar')
+  await page.setViewportSize({ width: 1180, height: 760 })
+  await page.evaluate(() => window.__trayLanguage('vi'))
+  await page.getByLabel(text('vi', 'Hash operation'), { exact: true }).selectOption('search')
+  await page.getByRole('button', { name: text('vi', 'Add common candidates'), exact: true }).click()
+  await page.getByText(text('vi', 'Search plan'), { exact: false }).waitFor()
+  await page.getByText(text('vi', 'Candidate variations'), { exact: true }).click()
+  await page.getByRole('checkbox', { name: text('vi', 'Capitalize'), exact: true }).check()
+  assert.equal(await page.getByRole('checkbox', { name: text('vi', 'Show attempted candidates on this screen only'), exact: true }).isChecked(), true)
+  await capture('hash-candidates-vi')
+  for (const language of languages) {
+    await page.evaluate(value => window.__trayLanguage(value), language)
+    await page.getByRole('button', { name: text(language, 'Add common candidates'), exact: true }).waitFor()
+    assert.equal(await page.getByLabel(text(language, 'Candidate dictionary'), { exact: true }).innerText(), 'password\n123456\nadmin\nwelcome\nletmein\nqwerty\nchangeme\ntest\ndeveloper', 'Language must preserve candidate content')
+  }
   await page.evaluate(() => { location.hash = '/tool/json.schema' }); await ready('json.schema')
   await page.evaluate(() => window.__trayLanguage('vi'))
   await page.getByRole('button', { name: text('vi', 'Load example'), exact: true }).click()

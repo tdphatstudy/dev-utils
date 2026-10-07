@@ -2,6 +2,7 @@ import { WORKSPACE_MESSAGES } from './workspace-messages'
 import { SETTINGS_MESSAGES } from './settings-messages'
 import { TOOL_MESSAGES } from './tool-messages'
 import { ANALYSIS_MESSAGES } from './analysis-messages'
+import { SECURITY_WORKSPACE_MESSAGES } from './security-workspace-messages'
 import type { LocaleId } from './locales'
 
 // English source messages, followed by zh/es/fr/de/ja/ko/pt/ru/ar/hi/id/vi.
@@ -209,7 +210,7 @@ const rows: readonly (readonly string[])[] = [
   ['Check the units, time zone and format before calculating. Different units can produce very different dates.', '计算前确认单位、时区和格式。不同单位会产生不同日期。', 'Comprueba unidades, zona horaria y formato. Las unidades cambian las fechas.', 'Vérifiez unités, fuseau et format. Les unités peuvent changer les dates.', 'Einheiten, Zeitzone und Format prüfen. Unterschiedliche Einheiten ergeben andere Daten.', '計算前に単位、タイムゾーン、形式を確認します。単位で日時が大きく変わります。', '계산 전에 단위, 시간대, 형식을 확인하세요. 단위에 따라 날짜가 크게 달라집니다.', 'Confira unidades, fuso e formato. Unidades diferentes mudam as datas.', 'Проверьте единицы, часовой пояс и формат. Единицы существенно влияют на даты.', 'تحقق من الوحدات والمنطقة الزمنية والتنسيق قبل الحساب. قد تغيّر الوحدات التواريخ كثيرًا.', 'गणना से पहले इकाई, समय क्षेत्र और फ़ॉर्मैट जाँचें। इकाई बदलने से तारीख बदल सकती है।', 'Periksa satuan, zona waktu, dan format. Satuan berbeda dapat mengubah tanggal.', 'Kiểm tra đơn vị, múi giờ và định dạng trước khi tính. Sai đơn vị có thể cho ngày hoàn toàn khác.']
 ]
 
-const allRows = [...rows, ...WORKSPACE_MESSAGES, ...SETTINGS_MESSAGES, ...TOOL_MESSAGES, ...ANALYSIS_MESSAGES]
+const allRows = [...rows, ...WORKSPACE_MESSAGES, ...SETTINGS_MESSAGES, ...TOOL_MESSAGES, ...ANALYSIS_MESSAGES, ...SECURITY_WORKSPACE_MESSAGES]
 export const messages: Readonly<Record<string, Readonly<Partial<Record<LocaleId, string>>>>> = Object.freeze(Object.fromEntries(allRows.map(([source, ...values]) => [source, Object.freeze(Object.fromEntries(TRANSLATION_LOCALES.map((locale, index) => [locale, values[index]])))])))
 export const messageKeys = Object.freeze(allRows.map(row => row[0]))
 export function translate(locale: LocaleId, source: string, values: Readonly<Record<string, string | number>> = {}): string {
