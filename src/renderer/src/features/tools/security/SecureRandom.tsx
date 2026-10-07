@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import {
   estimatePasswordEntropy,
@@ -15,6 +16,7 @@ import { RefreshCw } from 'lucide-react'
 type Tab = 'password' | 'bytes' | 'uuid'
 
 export default function SecureRandom(): JSX.Element {
+  useUiLocale()
   const [tab, setTab] = useState<Tab>('password')
   const [length, setLength] = useState(20)
   const [byteLen, setByteLen] = useState(32)
@@ -64,8 +66,7 @@ export default function SecureRandom(): JSX.Element {
         />
         <button type="button" className="mac-btn-primary" disabled={tab === 'password' && !!passwordResult.error} onClick={() => setNonce((n) => n + 1)}>
           <RefreshCw className="h-3.5 w-3.5" />
-          Generate
-        </button>
+          {uiText('Generate')}</button>
         <div className="ml-auto">
           <CopyButton text={current} />
         </div>
@@ -157,6 +158,7 @@ function Toggle({
   checked: boolean
   onChange: (v: boolean) => void
 }): JSX.Element {
+  useUiLocale()
   return (
     <label className="flex items-center gap-1.5">
       <input

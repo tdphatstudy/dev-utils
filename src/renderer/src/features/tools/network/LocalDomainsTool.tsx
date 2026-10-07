@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Globe, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
 import { Modal } from '@renderer/components/ui/Modal'
@@ -6,6 +7,7 @@ import { readLocalDomainInput, type LocalDomainRow, type LocalDomainsStatus, typ
 
 type Confirmation = { kind: 'enable' | 'remove'; entry: LocalDomainRow } | { kind: 'cleanup' | 'ca' }
 export default function LocalDomainsTool(): JSX.Element {
+  useUiLocale()
   const available = !!window.devutils?.localDomains
   const [status, setStatus] = useState<LocalDomainsStatus | null>(null)
   const [domain, setDomain] = useState('')
@@ -90,7 +92,7 @@ export default function LocalDomainsTool(): JSX.Element {
             <h2 className="text-[18px] font-semibold text-mac-label">Test your app with a local domain</h2>
             <p className="mt-1 text-[13px] leading-relaxed text-mac-label-secondary">Route a domain to an app running on this computer. No relay server or external DNS service.</p>
           </div>
-          <button type="button" className="mac-btn-secondary" disabled={!available || busy} onClick={refresh}><RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden />{busy ? 'Working…' : 'Refresh'}</button>
+          <button type="button" className="mac-btn-secondary" disabled={!available || busy} onClick={refresh}><RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden />{busy ? uiText('Working…') : 'Refresh'}</button>
         </div>
         {!available && <p role="status" className="rounded-mac border border-mac-separator bg-mac-surface p-4 text-[13px] text-mac-label-secondary">Local Domains requires the DevFusion desktop app.</p>}
         {error && <div role="alert" className="rounded-mac border border-mac-danger/30 bg-mac-danger/5 p-3 text-[13px] text-mac-danger">{error}<button type="button" className="mac-btn-ghost mt-2 !text-[12px]" disabled={busy || !available} onClick={() => setConfirm({ kind: 'cleanup' })}>Remove local overrides</button></div>}
@@ -122,7 +124,7 @@ export default function LocalDomainsTool(): JSX.Element {
                   <div className="min-w-0 flex-1"><p className="break-all font-mono text-[14px] font-semibold text-mac-label">{entry.domain}</p><p className="mt-1 text-[12px] text-mac-label-secondary">localhost:{entry.targetPort} · {entry.https ? 'HTTPS' : 'HTTP'} · {entry.active ? entry.hostsMapped ? 'Active' : 'Hosts entry missing' : entry.hostsMapped ? 'Cleanup needed' : 'Disabled'}</p><p className="mt-2 break-all font-mono text-[12px] text-mac-label-secondary">{entry.url}</p></div>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className={entry.active || entry.hostsMapped ? 'mac-btn-secondary' : 'mac-btn-primary'} disabled={busy || (!entry.active && !entry.hostsMapped && entry.https && !status.caInstalled)} onClick={() => entry.active || entry.hostsMapped ? disable(entry) : setConfirm({ kind: 'enable', entry })}>{entry.active || entry.hostsMapped ? 'Disable' : 'Enable'}<span className="sr-only"> {entry.domain}</span></button>
-                    <button type="button" className="mac-btn-secondary" disabled={busy || !entry.active || !entry.hostsMapped} onClick={() => { void action(async () => { await window.devutils.localDomains.open(entry.id) }) }}>Open<span className="sr-only"> {entry.domain}</span></button>
+                    <button type="button" className="mac-btn-secondary" disabled={busy || !entry.active || !entry.hostsMapped} onClick={() => { void action(async () => { await window.devutils.localDomains.open(entry.id) }) }}>{uiText('Open')}<span className="sr-only"> {entry.domain}</span></button>
                     <CopyButton text={entry.url} label={`Copy URL for ${entry.domain}`} />
                     <button type="button" className="mac-btn-ghost" disabled={busy} aria-label={`Remove ${entry.domain}`} onClick={() => setConfirm({ kind: 'remove', entry })}><Trash2 className="h-4 w-4" aria-hidden /></button>
                   </div>
@@ -163,7 +165,7 @@ export default function LocalDomainsTool(): JSX.Element {
         <p role="status" aria-live="polite" className="text-[13px] text-mac-label-secondary">{busy ? 'Working… Complete any system authorization prompt. Mapping status is refreshed when the operation finishes.' : notice}</p>
       </div>
       <Modal open={!!confirm} title={confirm?.kind === 'enable' ? `Enable ${confirm.entry.domain}?` : confirm?.kind === 'remove' ? `Remove ${confirm.entry.domain}?` : confirm?.kind === 'ca' ? 'Remove HTTPS trust?' : 'Remove all local overrides?'} description={confirm?.kind === 'enable' ? `This machine will resolve ${confirm.entry.domain} to localhost and proxy to port ${confirm.entry.targetPort}. Disable the mapping when testing is finished to use its normal address again.` : confirm?.kind === 'remove' ? 'The local route and marked hosts entries will be removed before deleting the saved mapping. Other hosts entries are preserved.' : confirm?.kind === 'ca' ? 'Uninstall the dedicated DevFusion development CA from the system trust store. Saved HTTPS mappings will need Setup HTTPS before enabling again.' : 'Remove every DevFusion-marked hosts override, including entries left after a crash. Saved mappings remain available and disabled.'} onClose={() => setConfirm(null)} busy={busy}>
-        <div className="flex flex-wrap justify-end gap-2"><button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button><button type="button" className="mac-btn-primary" disabled={busy} onClick={confirmed}>{busy ? 'Working…' : confirm?.kind === 'enable' ? 'Enable mapping' : confirm?.kind === 'remove' ? 'Remove mapping' : confirm?.kind === 'ca' ? 'Remove trust' : 'Remove overrides'}</button></div>
+        <div className="flex flex-wrap justify-end gap-2"><button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => setConfirm(null)}>{uiText('Cancel')}</button><button type="button" className="mac-btn-primary" disabled={busy} onClick={confirmed}>{busy ? uiText('Working…') : confirm?.kind === 'enable' ? 'Enable mapping' : confirm?.kind === 'remove' ? 'Remove mapping' : confirm?.kind === 'ca' ? 'Remove trust' : 'Remove overrides'}</button></div>
       </Modal>
     </div>
   )

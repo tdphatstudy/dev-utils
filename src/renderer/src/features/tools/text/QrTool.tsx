@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, ImageIcon, QrCode, Upload } from 'lucide-react'
 import {
@@ -26,6 +27,7 @@ const ECC: { id: QrErrorLevel; label: string; hint: string }[] = [
 ]
 
 export default function QrTool(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('encode')
   const [text, setText] = useState('https://example.com')
   const [ecc, setEcc] = useState<QrErrorLevel>('M')
@@ -378,7 +380,7 @@ export default function QrTool(): JSX.Element {
           }
         >
           {busy
-            ? 'Working…'
+            ? uiText('Working…')
             : error
               ? error
               : mode === 'encode'
@@ -401,6 +403,7 @@ function Empty({
   state: 'encode' | 'decode' | 'error'
   message?: string | null
 }): JSX.Element {
+  useUiLocale()
   return (
     <div className="text-center text-[13px] text-mac-label-tertiary">
       <QrCode className="mx-auto mb-2 h-10 w-10 opacity-40" strokeWidth={1.3} />

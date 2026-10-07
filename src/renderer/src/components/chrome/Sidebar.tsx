@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -13,6 +14,7 @@ function navClass(isActive: boolean, compact: boolean): string {
 }
 
 export function Sidebar(): JSX.Element {
+  const { locale } = useUiLocale()
   const collapsed = useAppStore((state) => state.sidebarCollapsed)
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed)
   const setCommandOpen = useAppStore((state) => state.setCommandOpen)
@@ -26,7 +28,7 @@ export function Sidebar(): JSX.Element {
   const navRef = useRef<HTMLElement>(null)
   const drawerNavRef = useRef<HTMLElement>(null)
   const currentTool = getToolById(location.pathname.startsWith('/tool/') ? location.pathname.slice(6) : '')
-  const matchedIds = useMemo(() => new Set(searchTools(query).map((tool) => tool.id)), [query])
+  const matchedIds = useMemo(() => new Set(searchTools(query, locale).map((tool) => tool.id)), [query, locale])
   const filtering = Boolean(query.trim())
   const showLabels = !collapsed || isNarrow
 
@@ -61,17 +63,17 @@ export function Sidebar(): JSX.Element {
   }
   const toolLink = (tool: ToolDefinition, compact: boolean): JSX.Element => {
     const Icon = tool.icon
-    return <NavLink to={`/tool/${tool.id}`} onClick={closeDrawer} title={tool.name} aria-label={tool.name} className={({ isActive }) => navClass(isActive, compact)}><Icon aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />{!compact && <span className="truncate">{tool.name}</span>}</NavLink>
+    return <NavLink to={`/tool/${tool.id}`} onClick={closeDrawer} title={uiText(tool.name)} aria-label={uiText(tool.name)} className={({ isActive }) => navClass(isActive, compact)}><Icon aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />{!compact && <span className="truncate">{uiText(tool.name)}</span>}</NavLink>
   }
   const navigation = (compact: boolean, inDrawer = false): JSX.Element => (
     <>
       {!compact && <div className="px-3 pb-3">
-        <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mac-label-secondary" /><input ref={filterInput} aria-label="Filter sidebar tools" type="search" placeholder="Filter tools…" className="mac-input !pl-8 !pr-8 !text-[12px]" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.stopPropagation(); setQuery('') } }} />{query && <button type="button" aria-label="Clear sidebar filter" className="mac-btn-ghost absolute right-1 top-1/2 !h-6 !w-6 !min-h-0 -translate-y-1/2 !p-0" onClick={() => { setQuery(''); filterInput.current?.focus() }}><X aria-hidden="true" className="h-3.5 w-3.5" /></button>}</div>
+        <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mac-label-secondary" /><input ref={filterInput} aria-label={uiText('Filter sidebar tools')} type="search" placeholder={uiText('Filter tools…')} className="mac-input !ps-8 !pe-8 !text-[12px]" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.stopPropagation(); setQuery('') } }} />{query && <button type="button" aria-label={uiText('Clear sidebar filter')} className="mac-btn-ghost absolute end-1 top-1/2 !h-6 !w-6 !min-h-0 -translate-y-1/2 !p-0" onClick={() => { setQuery(''); filterInput.current?.focus() }}><X aria-hidden="true" className="h-3.5 w-3.5" /></button>}</div>
       </div>}
-      {compact && <div className="px-2 pb-2"><button type="button" aria-label="Search tools" title="Search tools (Ctrl/⌘ K)" className="mac-btn-ghost w-full !px-0" onClick={() => setCommandOpen(true)}><Search aria-hidden="true" className="h-4 w-4" /></button></div>}
-      <nav ref={inDrawer ? drawerNavRef : navRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label="Tools">
-        <NavLink to="/" end title="Home" aria-label="Home" onClick={closeDrawer} className={({ isActive }) => navClass(isActive, compact)}><Home aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />{!compact && <span>Home</span>}</NavLink>
-        {currentTool && !compact && ((filtering && !matchedIds.has(currentTool.id)) || (!filtering && closedGroups.has(currentTool.group))) && <div className="mt-3"><p className="px-2.5 py-1.5 text-[11px] font-semibold text-mac-label-secondary">Current tool</p>{toolLink(currentTool, false)}</div>}
+      {compact && <div className="px-2 pb-2"><button type="button" aria-label={uiText('Search tools')} title="Search tools (Ctrl/⌘ K)" className="mac-btn-ghost w-full !px-0" onClick={() => setCommandOpen(true)}><Search aria-hidden="true" className="h-4 w-4" /></button></div>}
+      <nav ref={inDrawer ? drawerNavRef : navRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label={uiText('Tools')}>
+        <NavLink to="/" end title={uiText('Home')} aria-label={uiText('Home')} onClick={closeDrawer} className={({ isActive }) => navClass(isActive, compact)}><Home aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />{!compact && <span>{uiText('Home')}</span>}</NavLink>
+        {currentTool && !compact && ((filtering && !matchedIds.has(currentTool.id)) || (!filtering && closedGroups.has(currentTool.group))) && <div className="mt-3"><p className="px-2.5 py-1.5 text-[11px] font-semibold text-mac-label-secondary">{uiText('Current tool')}</p>{toolLink(currentTool, false)}</div>}
         {toolGroups.filter((group) => group.id !== 'app').map((group) => {
           const groupTools = getToolsByGroup(group.id).filter((tool) => compact || !filtering || matchedIds.has(tool.id))
           if (!groupTools.length) return null
@@ -79,29 +81,29 @@ export function Sidebar(): JSX.Element {
           const expanded = compact || filtering || !closedGroups.has(group.id)
           const groupContainerId = `sidebar-${inDrawer ? 'drawer' : 'rail'}-group-${group.id}`
           return <div key={group.id} className={cn('mt-3', compact && 'border-t border-mac-hairline pt-2')}>
-            {!compact && <button type="button" className="mac-btn-ghost mb-1 flex !min-h-[30px] w-full justify-start gap-1.5 !px-2.5 !py-1 !text-[11px] font-semibold" aria-expanded={expanded} aria-controls={groupContainerId} onClick={() => toggleGroup(group.id)} disabled={filtering}><GroupIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{group.name}</span><span className="ml-auto text-[11px] font-normal">{groupTools.length}</span><ChevronDown aria-hidden="true" className={cn('h-3.5 w-3.5 shrink-0 transition-transform', !expanded && '-rotate-90')} /></button>}
+            {!compact && <button type="button" className="mac-btn-ghost mb-1 flex !min-h-[30px] w-full justify-start gap-1.5 !px-2.5 !py-1 !text-[11px] font-semibold" aria-expanded={expanded} aria-controls={groupContainerId} onClick={() => toggleGroup(group.id)} disabled={filtering}><GroupIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{uiText(group.name)}</span><span className="ml-auto text-[11px] font-normal">{groupTools.length}</span><ChevronDown aria-hidden="true" className={cn('h-3.5 w-3.5 shrink-0 transition-transform', !expanded && '-rotate-90')} /></button>}
             <ul id={groupContainerId} hidden={!expanded} className="space-y-0.5">{groupTools.map((tool) => <li key={tool.id}>{toolLink(tool, compact)}</li>)}</ul>
           </div>
         })}
         {filtering && !compact && matchedIds.size === 0 && <p role="status" className="px-2.5 py-4 text-[12px] leading-relaxed text-mac-label-secondary">No tools found. Try “JSON”, “date” or “convert”.</p>}
       </nav>
-      <nav aria-label="App" className="shrink-0 border-t border-mac-separator px-2 py-2">{getToolsByGroup('app').filter((tool) => compact || !filtering || matchedIds.has(tool.id)).map((tool) => <div key={tool.id}>{toolLink(tool, compact)}</div>)}</nav>
+      <nav aria-label={uiText('App')} className="shrink-0 border-t border-mac-separator px-2 py-2">{getToolsByGroup('app').filter((tool) => compact || !filtering || matchedIds.has(tool.id)).map((tool) => <div key={tool.id}>{toolLink(tool, compact)}</div>)}</nav>
     </>
   )
 
   return (
     <Dialog.Root open={isNarrow && drawerOpen} onOpenChange={setDrawerOpen}>
-      <aside aria-label="Sidebar" className={cn('relative z-30 flex h-full shrink-0 flex-col border-r border-mac-separator bg-mac-sidebar transition-[width] duration-200 ease-mac', isNarrow || collapsed ? 'w-[56px]' : 'w-[232px]')}>
+      <aside aria-label={uiText('Sidebar')} className={cn('mac-glass relative z-30 flex h-full shrink-0 flex-col border-r border-mac-separator bg-mac-sidebar transition-[width] duration-200 ease-mac', isNarrow || collapsed ? 'w-[56px]' : 'w-[232px]')}>
         <div className={cn('flex pb-3 pt-4', isNarrow || collapsed ? 'flex-col items-center gap-2 px-1' : 'items-center gap-1 px-3')}>
-          <Link to="/" title="Home" aria-label="Home" className={cn('rounded-mac hover:opacity-90', !isNarrow && !collapsed && 'min-w-0 flex-1')} onClick={closeDrawer}><AppLogo size={28} showWordmark={!isNarrow && !collapsed} /></Link>
-          {isNarrow ? <Dialog.Trigger asChild><button ref={menuTrigger} type="button" className="mac-btn-ghost !h-8 !w-8 !min-h-0 !p-0" aria-label="Open menu" title="Open menu"><PanelLeft aria-hidden="true" className="h-4 w-4" /></button></Dialog.Trigger> : <button type="button" onClick={() => setCollapsed(!collapsed)} className="mac-btn-ghost !h-8 !w-8 !min-h-0 shrink-0 !p-0" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <PanelLeft aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}</button>}
+          <Link to="/" title={uiText('Home')} aria-label={uiText('Home')} className={cn('rounded-mac hover:opacity-90', !isNarrow && !collapsed && 'min-w-0 flex-1')} onClick={closeDrawer}><AppLogo size={28} showWordmark={!isNarrow && !collapsed} /></Link>
+          {isNarrow ? <Dialog.Trigger asChild><button ref={menuTrigger} type="button" className="mac-btn-ghost !h-8 !w-8 !min-h-0 !p-0" aria-label={uiText('Open menu')} title={uiText('Open menu')}><PanelLeft aria-hidden="true" className="h-4 w-4" /></button></Dialog.Trigger> : <button type="button" onClick={() => setCollapsed(!collapsed)} className="mac-btn-ghost !h-8 !w-8 !min-h-0 shrink-0 !p-0" aria-label={collapsed ? uiText('Expand sidebar') : uiText('Collapse sidebar')} title={collapsed ? uiText('Expand sidebar') : uiText('Collapse sidebar')}>{collapsed ? <PanelLeft aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}</button>}
         </div>
         {navigation(isNarrow || !showLabels)}
       </aside>
       {isNarrow && <Dialog.Portal>
         <Dialog.Overlay className="mac-overlay-enter fixed inset-0 z-[80] bg-black/40" />
-        <Dialog.Content className="fixed bottom-0 left-[56px] top-[var(--titlebar-height)] z-[81] flex w-[min(280px,calc(100vw-56px))] flex-col border-r border-mac-separator bg-mac-sidebar shadow-[var(--mac-shadow-lg)] outline-none" onOpenAutoFocus={(event) => { event.preventDefault(); filterInput.current?.focus() }} onCloseAutoFocus={(event) => { event.preventDefault(); menuTrigger.current?.focus() }} onEscapeKeyDown={(event) => { if (query) { event.preventDefault(); setQuery('') } }}>
-          <div className="flex items-center justify-between gap-2 px-3 py-4"><Dialog.Title className="text-[15px] font-semibold text-mac-label">Find a tool</Dialog.Title><Dialog.Close asChild><button type="button" aria-label="Close menu" title="Close menu" className="mac-btn-ghost !h-8 !w-8 !min-h-0 !p-0"><X aria-hidden="true" className="h-4 w-4" /></button></Dialog.Close></div>
+        <Dialog.Content className="fixed bottom-0 start-[56px] top-[var(--titlebar-height)] z-[81] flex w-[min(280px,calc(100vw-56px))] flex-col border-r border-mac-separator bg-mac-sidebar shadow-[var(--mac-shadow-lg)] outline-none" onOpenAutoFocus={(event) => { event.preventDefault(); filterInput.current?.focus() }} onCloseAutoFocus={(event) => { event.preventDefault(); menuTrigger.current?.focus() }} onEscapeKeyDown={(event) => { if (query) { event.preventDefault(); setQuery('') } }}>
+          <div className="flex items-center justify-between gap-2 px-3 py-4"><Dialog.Title className="text-[15px] font-semibold text-mac-label">{uiText('Find a tool')}</Dialog.Title><Dialog.Close asChild><button type="button" aria-label={uiText('Close menu')} title={uiText('Close menu')} className="mac-btn-ghost !h-8 !w-8 !min-h-0 !p-0"><X aria-hidden="true" className="h-4 w-4" /></button></Dialog.Close></div>
           <Dialog.Description className="sr-only">Search developer tools or choose a category. Escape closes this menu.</Dialog.Description>
           {navigation(false, true)}
         </Dialog.Content>

@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useId, useMemo, useState } from 'react'
 import { ChevronDown, Undo2 } from 'lucide-react'
 import { CRON_PRESETS, cronToJson, formatCronDate, nextRuns, parseCron } from '@shared/cron'
@@ -11,6 +12,7 @@ import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 import { cn } from '@renderer/lib/utils'
 
 export default function CronTool(): JSX.Element {
+  useUiLocale()
   const [expr, setExpr] = useState('*/5 9-17 * * 1-5')
   const [countInput, setCountInput] = useState('10')
   const [timezone, setTimezone] = useState<'local' | 'UTC'>('local')
@@ -154,7 +156,7 @@ export default function CronTool(): JSX.Element {
           <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface" aria-label="Cron upcoming runs">
             <ToolToolbar label="Cron preview export" className="max-h-[40%] overflow-y-auto !px-3 !py-2">
               <CopyButton text={jsonOut} label="Copy JSON" />
-              <ToolOptions label="Export">
+              <ToolOptions label={uiText('Export')}>
                 <TextInputActions value={expr} onChange={setExpr} output={jsonOut} fileName="cron-preview.json" accept=".json,application/json" actions={['download']} />
                 <SaveToBoxButton type="json" content={jsonOut} defaultName="cron-preview.json" disabled={!jsonOut} />
               </ToolOptions>

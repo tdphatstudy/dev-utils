@@ -2,7 +2,8 @@ import { LocalDomainsService } from './local-domains/service'
 import { MkcertCertificates } from './local-domains/certificates'
 import { SystemHosts } from './platform/local-domains/hosts'
 import { registerLocalDomainsIpc, clearLocalResolverCache } from './local-domains/ipc'
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol, powerMonitor } from 'electron'
+import { VaultAutoLock, registerVaultSecurityIpc } from './vault-auto-lock'
 import { join } from 'path'
 import { stat } from 'fs/promises'
 import { validateFilePath } from './file-hash'
@@ -11,16 +12,21 @@ import { assertTrustedIpc } from './ipc-trust'
 import { lookupDns } from './dns-lookup'
 import { is } from './env'
 import { registerHttpIpc } from './http-ipc'
+import { SecurityTestingService } from './security-testing/service'
+import { registerSecurityTestingIpc } from './security-testing/ipc'
 import { registerSecretBoxIpc, ensureDefaultSecretBox } from './secret-box'
 import { registerPortsIpc } from './ports-ipc'
 import { registerCryptoAndSshIpc } from './ssh/ipc'
 import { pathToFileURL } from 'url'
-import { configureWindowSecurity } from './window-security'
+import { configureWindowSecurity, configureAppPermissions } from './window-security'
 import { APP_NAME } from '@shared/brand'
 import { configureBrand, resourcePath } from './branding'
 import { DesktopTray } from './tray'
+import { LanguagePreferences, registerLanguageIpc } from './language'
+import { translate } from '@shared/i18n/catalog'
+import { attachWindowRecovery } from './window-recovery'
 import { ScreenColorPicker, registerColorPickerIpc } from './color-picker'
-import { clearAccess } from './secret-box/session'
+import { clearAccess, clearAccessForOwner, getAccess, observeAccess } from './secret-box/session'
 import { DesktopOcr, registerOcrIpc } from './ocr'
 import { MockApiServer } from './mock-api-server'
 import { registerMockApiIpc } from './mock-api-ipc'
@@ -44,6 +50,16 @@ function applyMemorySwitches(): void {
 applyMemorySwitches()
 configureBrand()
 let desktopTray: DesktopTray | undefined
+let vaultPolicy: VaultAutoLock | undefined
+const securityTesting = new SecurityTestingService()
+const mainOwners = new Set<number>()
+const language = new LanguagePreferences(app.getPath('userData'), () => [app.getLocale()], state => {
+  desktopTray?.refresh()
+  for (const win of BrowserWindow.getAllWindows()) {
+    try { if (!win.isDestroyed() && mainOwners.has(win.webContents.id)) win.webContents.send('app:languageChanged', state) } catch { /* Closing window. */ }
+  }
+})
+let stopObservingAccess: (() => void) | undefined
 let quitting = false
 let domainsCleanedForQuit = false
 let domainsCleanupPending = false
@@ -90,6 +106,9 @@ function createWindow(route = '/'): BrowserWindow {
       autoplayPolicy: 'user-gesture-required'
     }
   })
+  const owner = mainWindow.webContents.id
+  mainOwners.add(owner)
+  mainWindow.webContents.once('destroyed', () => { mainOwners.delete(owner); vaultPolicy?.forgetOwner(owner) })
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
@@ -106,17 +125,28 @@ function createWindow(route = '/'): BrowserWindow {
   })
 
   const rendererUrl = is.dev && process.env['ELECTRON_RENDERER_URL'] ? process.env['ELECTRON_RENDERER_URL'] : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  configureAppPermissions(mainWindow.webContents.session, rendererUrl)
   configureWindowSecurity(mainWindow, rendererUrl, (url) => shell.openExternal(url))
+  const recover = attachWindowRecovery(mainWindow, () => { clearAccessForOwner(owner); vaultPolicy?.forgetOwner(owner) }, async () => {
+    const t = (message: string): string => translate(language.state().resolved, message)
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'warning', title: APP_NAME, message: t('The workspace stopped responding.'),
+      detail: t('Reload to continue. Unsaved input may be lost. Your encrypted files remain on disk; unlock the box again after reloading.'),
+      buttons: [t('Reload workspace'), t('Close')], defaultId: 0, cancelId: 1, noLink: true
+    })
+    return result.response === 0
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
+    void mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`).catch(error => { if (error?.code !== 'ERR_ABORTED') recover() })
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: route })
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: route }).catch(error => { if (error?.code !== 'ERR_ABORTED') recover() })
   }
   return mainWindow
 }
 
 function registerIpc(): void {
+  registerLanguageIpc(ipcMain, language)
   ipcMain.handle('window:minimize', (event) => {
     assertTrustedIpc(event)
     BrowserWindow.fromWebContents(event.sender)?.minimize()
@@ -183,8 +213,10 @@ function registerIpc(): void {
   )
 
   registerHttpIpc()
+  registerSecurityTestingIpc(securityTesting)
 
   registerSecretBoxIpc()
+  if (vaultPolicy) registerVaultSecurityIpc(ipcMain, vaultPolicy)
   registerPortsIpc()
   registerCryptoAndSshIpc()
   registerColorPickerIpc(colorPicker)
@@ -224,19 +256,26 @@ if (!gotLock) {
       })
       domainsCleanupPending = false
       if (choice.response === 1) { domainsCleanedForQuit = true; app.quit() }
-    })
+    }).catch(() => { domainsCleanupPending = false; quitting = false; localDomains.cancelQuit() })
   })
   app.on('second-instance', () => {
     desktopTray?.open()
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    await language.start()
+    vaultPolicy = new VaultAutoLock(powerMonitor, (owner) => BrowserWindow.getAllWindows().find((win) => win.webContents.id === owner) ?? null, app.getPath('userData'), () => mainOwners.values().next().value)
+    await vaultPolicy.start()
     registerIpc()
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : [{ label: APP_NAME, submenu: [{ label: 'Quit DevFusion', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() }] }]),
       { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }
     ]))
-    desktopTray = new DesktopTray(createWindow, colorPicker, () => app.quit(), desktopOcr, mockApi)
+    desktopTray = new DesktopTray(createWindow, colorPicker, () => app.quit(), desktopOcr, mockApi, {
+      language: () => language.state(), setLanguage: setting => language.set(setting),
+      vaultUnlocked: () => !!getAccess(), lockVault: () => vaultPolicy?.lock('manual')
+    })
+    stopObservingAccess = observeAccess(() => desktopTray?.refresh())
     desktopTray.start()
     // Window first — do not block cold start on vault disk I/O
     desktopTray.open()
@@ -247,10 +286,12 @@ if (!gotLock) {
     app.on('activate', () => {
       desktopTray?.open()
     })
+  }).catch(() => {
+    try { dialog.showErrorBox(APP_NAME, 'DevFusion could not start. Restart the app to retry.') } finally { app.exit(1) }
   })
 
   app.on('window-all-closed', () => {
     if (!desktopTray?.hasTray() && process.platform !== 'darwin') app.quit()
   })
-  app.on('will-quit', () => { mockApi.dispose(); localDomains.dispose(); desktopTray?.dispose(); clearAccess() })
+  app.on('will-quit', () => { stopObservingAccess?.(); securityTesting.dispose(); vaultPolicy?.dispose(); mockApi.dispose(); localDomains.dispose(); desktopTray?.dispose(); clearAccess() })
 }

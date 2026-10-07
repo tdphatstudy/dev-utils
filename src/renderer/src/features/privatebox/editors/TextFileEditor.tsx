@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function TextFileEditor({ value, onChange, className }: Props): JSX.Element {
+  useUiLocale()
   const lines = useMemo(() => countLines(value), [value])
   const ending = useMemo(() => detectLineEnding(value), [value])
   const chars = value.length
@@ -40,7 +42,7 @@ export function TextFileEditor({ value, onChange, className }: Props): JSX.Eleme
           {lines} lines · {words} words · {chars} chars · {ending}
         </span>
         <div className="ml-auto">
-          <CopyButton text={value} label="Copy" className="!text-[11px]" />
+          <CopyButton text={value} label={uiText('Copy')} className="!text-[11px]" />
         </div>
       </div>
       <div className="min-h-0 flex-1 p-2">

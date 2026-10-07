@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { RefreshCw, AlertTriangle } from 'lucide-react'
 import type { KeygenAlgorithm, KeygenResult } from '@shared/crypto/keygen-types'
@@ -16,6 +17,7 @@ const ALGS: { id: KeygenAlgorithm; label: string }[] = [
 ]
 
 export default function KeygenTool(): JSX.Element {
+  useUiLocale()
   const [algorithm, setAlgorithm] = useState<KeygenAlgorithm>('ed25519')
   const [modulus, setModulus] = useState<2048 | 3072 | 4096>(2048)
   const [comment, setComment] = useState('devfusion@local')
@@ -110,7 +112,7 @@ export default function KeygenTool(): JSX.Element {
           onClick={() => void generate()}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
-          {busy ? 'Generating…' : 'Generate'}
+          {busy ? 'Generating…' : uiText('Generate')}
         </button>
         {result && <button type="button" className="mac-btn-secondary" onClick={clear}>Clear keys</button>}
 

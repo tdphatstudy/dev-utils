@@ -1,3 +1,4 @@
+import { t as uiText } from '@renderer/i18n'
 import { useCallback, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Modal } from '@renderer/components/ui/Modal'
@@ -77,7 +78,7 @@ export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" className="mac-btn-secondary" disabled={locked} onClick={cancel}>Keep editing</button>
         {dirty && <button type="button" className="mac-btn-ghost !text-mac-danger" disabled={locked} onClick={() => void leave(false)}>Discard changes</button>}
-        <button type="button" className="mac-btn-primary" disabled={locked} onClick={() => void leave(true)}>{locked ? 'Saving…' : dirty ? 'Save and continue' : 'Continue'}</button>
+        <button type="button" className="mac-btn-primary" disabled={locked} onClick={() => void leave(true)}>{locked ? uiText('Saving…') : dirty ? 'Save and continue' : 'Continue'}</button>
       </div>
     </Modal>
   )

@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { SplitPane } from '@renderer/components/ui/SplitPane'
@@ -24,6 +25,7 @@ meta:
 type ViewMode = 'tree' | 'yaml' | 'json'
 
 export default function YamlStudio(): JSX.Element {
+  useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [view, setView] = useState<ViewMode>('tree')
   useToolDraft('yaml.studio', input, setInput, { label: 'YAML Studio', historyOnUnmount: true })
@@ -63,8 +65,7 @@ export default function YamlStudio(): JSX.Element {
             if (formatted.ok && formatted.text) setInput(formatted.text)
           }}
         >
-          Format
-        </button>
+          {uiText('Format')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
@@ -84,7 +85,7 @@ export default function YamlStudio(): JSX.Element {
             value={view}
             onChange={setView}
             options={[
-              { value: 'tree', label: 'Tree' },
+              { value: 'tree', label: uiText('Tree') },
               { value: 'yaml', label: 'YAML' },
               { value: 'json', label: 'JSON' }
             ]}
@@ -107,8 +108,7 @@ export default function YamlStudio(): JSX.Element {
           />
           <CopyButton text={outputCopy} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
-            Sample
-          </button>
+            {uiText('Sample')}</button>
         </div>
         <TextInputActions value={input} onChange={setInput} output={view === 'json' ? jsonOut : yamlOut} fileName={view === 'json' ? 'converted.json' : 'formatted.yaml'} accept=".yaml,.yml,.txt" />
       </ToolToolbar>

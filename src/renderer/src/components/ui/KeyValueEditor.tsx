@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Undo2 } from 'lucide-react'
 import type { KeyValueRow } from '@shared/http/types'
@@ -21,6 +22,7 @@ export function KeyValueEditor({
   className,
   labelPrefix = 'Row'
 }: Props): JSX.Element {
+  useUiLocale()
   const inputs = useRef(new Map<string, HTMLInputElement>())
   const addButton = useRef<HTMLButtonElement>(null)
   const pendingFocus = useRef<string | null>(null)
@@ -59,10 +61,10 @@ export function KeyValueEditor({
         <table className="w-full table-fixed border-collapse text-[13px]" aria-label={`${labelPrefix} fields`}>
           <thead className="sticky top-0 z-10 bg-mac-surface text-[12px] text-mac-label-secondary">
             <tr className="border-b border-mac-separator">
-              <th className="w-10 px-2 py-2 font-medium"><span className="sr-only">Enabled</span></th>
-              <th className="px-2 py-1.5 text-left font-medium">Key</th>
-              <th className="px-2 py-1.5 text-left font-medium">Value</th>
-              <th className="w-10 px-1"><span className="sr-only">Actions</span></th>
+              <th className="w-10 px-2 py-2 font-medium"><span className="sr-only">{uiText('Enabled')}</span></th>
+              <th className="px-2 py-1.5 text-left font-medium">{uiText('Key')}</th>
+              <th className="px-2 py-1.5 text-left font-medium">{uiText('Value')}</th>
+              <th className="w-10 px-1"><span className="sr-only">{uiText('Actions')}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -122,8 +124,7 @@ export function KeyValueEditor({
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-mac-separator p-2">
         <button ref={addButton} type="button" className="mac-btn-secondary !text-[13px]" onClick={add}>
           <Plus className="h-3.5 w-3.5" />
-          Add row
-        </button>
+          {uiText('Add row')}</button>
         {removed && <>
           <span className="text-[12px] text-mac-label-secondary" role="status">{labelPrefix} removed.</span>
           <button type="button" className="mac-btn-ghost !text-[13px]" onClick={() => {
@@ -132,7 +133,7 @@ export function KeyValueEditor({
             pendingFocus.current = removed.row.id
             setRemoved(null)
             onChange(next)
-          }}><Undo2 className="h-3.5 w-3.5" aria-hidden />Undo</button>
+          }}><Undo2 className="h-3.5 w-3.5" aria-hidden />{uiText('Undo')}</button>
         </>}
       </div>
     </div>

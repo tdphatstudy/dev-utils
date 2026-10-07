@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TitleBar } from '@renderer/components/chrome/TitleBar'
@@ -10,6 +11,7 @@ import { getToolById } from '@renderer/registry/tools'
 
 
 export function AppShell(): JSX.Element {
+  useUiLocale()
   const location = useLocation()
   const navigate = useNavigate()
   const setLastToolId = useAppStore((s) => s.setLastToolId)
@@ -23,13 +25,13 @@ export function AppShell(): JSX.Element {
 
   return (
     <div
-      className="flex h-full flex-col bg-mac-bg"
+      className="mac-app-shell flex h-full flex-col bg-mac-bg"
       data-layout={isNarrow ? 'narrow' : 'regular'}
     >
       <a href="#workspace" className="mac-skip-link mac-btn-primary" onClick={(event) => {
         event.preventDefault()
         document.getElementById('workspace')?.focus()
-      }}>Skip to workspace</a>
+      }}>{uiText('Skip to workspace')}</a>
       <TitleBar />
       <div className="flex min-h-0 min-w-0 flex-1">
         <Sidebar />

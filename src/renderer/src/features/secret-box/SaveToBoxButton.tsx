@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
+import { useEffect, useRef, useState } from 'react'
 import { HardDrive } from 'lucide-react'
 import type { DocType } from '@shared/secret-box/types'
 import { cn } from '@renderer/lib/utils'
@@ -25,6 +26,7 @@ export function SaveToBoxButton({
   className,
   onSaved
 }: Props): JSX.Element {
+  useUiLocale()
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
   const [prompt, setPrompt] = useState(false)
@@ -32,15 +34,25 @@ export function SaveToBoxButton({
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
   const desktop = !!window.devutils?.privateBox
+  const version = useRef(0)
+  useEffect(() => {
+    const unsubscribe = window.devutils?.security?.onVaultLocked(() => {
+      version.current++
+      setKeyB(''); setPrompt(false); setError(null); setOkMsg(null)
+    })
+    return () => { version.current++; unsubscribe?.() }
+  }, [])
 
   const save = async (password?: string): Promise<void> => {
     if (saving.current || !desktop) return
     saving.current = true
+    const attempt = version.current
     setBusy(true)
     setError(null)
     setOkMsg(null)
     try {
       const prep = await window.devutils.privateBox.prepareDefaultForSave()
+      if (attempt !== version.current) return
       let sessionId = prep.sessionId
       if (!prep.hasAccess) {
         const pw = password ?? keyB
@@ -50,6 +62,7 @@ export function SaveToBoxButton({
           return
         }
         sessionId = await window.devutils.privateBox.accessDefault(pw)
+        if (attempt !== version.current) return
       }
 
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
@@ -64,6 +77,7 @@ export function SaveToBoxButton({
         content,
         relativeDir: 'saves'
       }, sessionId ?? '')
+      if (attempt !== version.current) return
       setPrompt(false)
       setKeyB('')
       const msg = `Saved “${result.doc.name}” → ${result.boxName}/saves`
@@ -71,6 +85,7 @@ export function SaveToBoxButton({
       onSaved?.({ name: result.doc.name, boxName: result.boxName })
       window.setTimeout(() => setOkMsg(null), 4000)
     } catch (e) {
+      if (attempt !== version.current) return
       if (isVaultAccessError(e)) {
         setPrompt(true)
         setError(e instanceof Error && e.message.includes('SESSION_CHANGED') ? 'The box session changed. Retry to unlock Default Secret Box before saving.' : 'Enter Secret Box password (key B) to save')
@@ -93,7 +108,7 @@ export function SaveToBoxButton({
         title={desktop ? 'Save into Default Secret Box' : 'Save to Box requires the desktop app'}
       >
         <HardDrive className="h-3.5 w-3.5" />
-        {busy ? 'Saving…' : 'Save to Box'}
+        {busy ? uiText('Saving…') : 'Save to Box'}
       </button>
       {okMsg && (
         <span role="status" className="text-[11px] text-mac-success">{okMsg}</span>
@@ -123,7 +138,7 @@ export function SaveToBoxButton({
               disabled={busy}
               onChange={(e) => setKeyB(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !busy) void save(keyB)
+                if (e.key === 'Enter') { e.preventDefault(); if (!busy) void save(keyB) }
                 if (e.key === 'Escape' && !busy) {
                   setPrompt(false)
                   setError(null)
@@ -144,8 +159,7 @@ export function SaveToBoxButton({
                   setKeyB('')
                 }}
               >
-                Cancel
-              </button>
+                {uiText('Cancel')}</button>
               <button
                 type="button"
                 className="mac-btn-primary"

@@ -210,7 +210,7 @@ export class DesktopOcr {
     this.closeJob(job, new Error(typeof message === 'string' && message.length <= 300 ? message : 'OCR failed. Try another image or PDF.'))
   }
   close(event: IpcMainInvokeEvent): void { this.closeJob(this.trusted(event).job) }
-  copy(event: IpcMainInvokeEvent): void { const { job } = this.trusted(event, 'result'); clipboard.writeText(job.result!.text) }
+  copy(event: IpcMainInvokeEvent): Promise<void> { const { job } = this.trusted(event, 'result'); return clipboard.writeText(job.result!.text) }
   cancel(id: unknown, owner: WebContents): boolean {
     validateOcrId(id)
     if (!this.job || this.job.id !== id || this.job.owner !== owner) return false

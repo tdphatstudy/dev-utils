@@ -1,3 +1,5 @@
+import { t as uiText } from '@renderer/i18n'
+import { useI18n } from '@renderer/i18n'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { json } from '@codemirror/lang-json'
@@ -16,7 +18,7 @@ import {
 } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { Decoration, EditorView } from '@codemirror/view'
-import { Prec } from '@codemirror/state'
+import { EditorState, Prec } from '@codemirror/state'
 import { useAppStore } from '@renderer/store/app-store'
 import { cn } from '@renderer/lib/utils'
 import type { SqlDialectId } from '@shared/sql'
@@ -47,6 +49,7 @@ interface Props {
   issue?: EditorIssue | null
   label?: string
   onRun?: () => void
+  maxLength?: number
 }
 
 const baseTheme = EditorView.theme({
@@ -119,8 +122,10 @@ export function CodeEditor({
   placeholder,
   issue,
   label,
-  onRun
+  onRun,
+  maxLength
 }: Props): JSX.Element {
+  const { t, locale } = useI18n()
   const theme = useAppStore((s) => s.theme)
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)
@@ -158,9 +163,10 @@ export function CodeEditor({
           ? [Decoration.mark({ class: 'cm-error-token', attributes: { title: diagnostic?.error ?? '' } }).range(errorOffset, errorOffset + 1)] : [])
       ]
       return [baseTheme, EditorView.lineWrapping, languageExtension(language, sqlDialect),
+        ...(maxLength === undefined ? [] : [EditorState.transactionFilter.of(transaction => transaction.newDoc.length <= maxLength ? transaction : [])]),
         EditorView.decorations.of(Decoration.set(decorations, true)),
         EditorView.contentAttributes.of({
-          'aria-label': label ?? `${readOnly ? 'Output' : 'Input'} ${language} editor`,
+          'aria-label': label ? t(label) : `${t(readOnly ? 'Output' : 'Input')} ${language} editor`,
           ...(readOnly ? { 'aria-readonly': 'true' } : {}),
           ...(diagnostic ? { 'aria-invalid': 'true', 'aria-describedby': diagnosticId } : {}),
           ...(onRun ? { 'aria-keyshortcuts': 'Control+Enter Meta+Enter' } : {})
@@ -174,7 +180,7 @@ export function CodeEditor({
           return false
         } }))].flat()
     },
-    [language, sqlDialect, errorOffset, value, diagnostic, diagnosticId, readOnly, label, onRun]
+    [locale, language, sqlDialect, errorOffset, value, diagnostic, diagnosticId, readOnly, label, onRun, maxLength]
   )
 
   const jumpToError = (): void => {
@@ -195,14 +201,14 @@ export function CodeEditor({
     >
       {label && (
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-mac-separator px-3 py-2">
-          <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-mac-label">{label}</span>
-          {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title="Select and copy text from this output">Read only</span>}
+          <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-mac-label">{t(label)}</span>
+          {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title="Select and copy text from this output">{uiText('Read only')}</span>}
           {onRun && <kbd className="text-[11px] text-mac-label-secondary" title="Run from this editor with Ctrl or Command + Enter" aria-hidden>Ctrl/⌘ ↵</kbd>}
           <span className="text-[11px] tabular-nums text-mac-label-secondary" aria-hidden>{value.length.toLocaleString()} chars</span>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
-      <CodeMirror
+      <CodeMirror dir="ltr"
         value={value}
         height="100%"
         theme={isDark ? oneDark : 'light'}

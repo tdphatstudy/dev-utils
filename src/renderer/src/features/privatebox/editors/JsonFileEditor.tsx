@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { TreeView, type JsonValue } from '@renderer/components/ui/TreeView'
@@ -15,6 +16,7 @@ interface Props {
 type ViewMode = 'edit' | 'tree' | 'split'
 
 export function JsonFileEditor({ value, onChange, className }: Props): JSX.Element {
+  useUiLocale()
   const [indent, setIndent] = useState(2)
   const [sortKeys, setSortKeys] = useState(false)
   const [view, setView] = useState<ViewMode>('split')
@@ -45,8 +47,7 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
             if (formatted.ok && formatted.text) onChange(formatted.text)
           }}
         >
-          Format
-        </button>
+          {uiText('Format')}</button>
         <button
           type="button"
           className="mac-btn-secondary !text-[11px]"
@@ -55,11 +56,9 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
             if (r.ok && r.text) onChange(r.text)
           }}
         >
-          Minify
-        </button>
+          {uiText('Minify')}</button>
         <label className="flex items-center gap-1 text-[11px] text-mac-label-secondary">
-          Indent
-          <select
+          {uiText('Indent')}<select
             className="mac-input !w-auto !py-0.5 !text-[11px]"
             value={indent}
             onChange={(e) => setIndent(Number(e.target.value))}
@@ -75,19 +74,18 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
             onChange={(e) => setSortKeys(e.target.checked)}
             className="accent-mac-accent"
           />
-          Sort keys
-        </label>
+          {uiText('Sort keys')}</label>
         <SegmentedControl
           value={view}
           onChange={setView}
           options={[
             { value: 'edit', label: 'Edit' },
-            { value: 'tree', label: 'Tree' },
-            { value: 'split', label: 'Split' }
+            { value: 'tree', label: uiText('Tree') },
+            { value: 'split', label: uiText('Split') }
           ]}
         />
         <div className="ml-auto">
-          <CopyButton text={value} label="Copy" className="!text-[11px]" />
+          <CopyButton text={value} label={uiText('Copy')} className="!text-[11px]" />
         </div>
       </div>
 

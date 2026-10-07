@@ -102,6 +102,11 @@ try {
       for (const tool of catalogue) {
         await page.goto(url + '/#/tool/' + tool.id)
         await page.getByRole('heading', { name: tool.name, exact: true }).first().waitFor()
+        if (tool.id.startsWith('hacking.')) {
+          await page.waitForFunction(() => Boolean(document.querySelector('[data-tool-ready]')) || Array.from(document.querySelectorAll('button')).some(button => button.textContent === 'Agree'))
+          if (await page.locator('[data-security-gate]').count()) await page.getByRole('button', { name: 'Agree', exact: true }).click()
+          await page.locator(`[data-tool-ready="${tool.id}"]`).waitFor()
+        }
         await settle()
         assert.equal(await page.getByText('Something went wrong', { exact: true }).count(), 0, tool.id + ' crashed')
         const overflow = await page.locator('#workspace').evaluate((workspace) => [...workspace.querySelectorAll('button,input,select,textarea,[role="tablist"]')].filter((element) => {

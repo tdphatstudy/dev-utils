@@ -198,10 +198,10 @@ export class ScreenColorPicker {
   }
   cancel(event: IpcMainInvokeEvent): Promise<void> { return this.cancelCapture(this.trustedHelper(event, 'overlay').job) }
   repick(event: IpcMainInvokeEvent): Promise<void> { return this.startCapture(this.trustedHelper(event, 'result').job) }
-  copy(event: IpcMainInvokeEvent, format: unknown): void {
+  copy(event: IpcMainInvokeEvent, format: unknown): Promise<void> {
     const { job } = this.trustedHelper(event, 'result')
     if (!job.color || !isColorFormat(format)) throw new Error('Choose HEX, RGB, HSL or HSV.')
-    clipboard.writeText(job.color[format])
+    return clipboard.writeText(job.color[format])
   }
   close(event: IpcMainInvokeEvent): void { this.closeJob(this.trustedHelper(event).job) }
 

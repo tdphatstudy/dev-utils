@@ -1,10 +1,18 @@
+import { isLanguage, type LanguageSetting } from '@shared/i18n/locales'
 export type ToolLoadingMode = 'on-demand' | 'preload'
+export type SurfaceMode = 'glass' | 'solid'
+export type MotionMode = 'system' | 'reduced'
+export type InputRetention = 'session' | 'off'
 
 export const MAX_RECENT_TOOLS = 10
 export const MAX_FAVORITE_TOOLS = 12
 
 export interface AppPreferences {
+  language: LanguageSetting
   theme: 'dark' | 'light' | 'system'
+  surfaceMode: SurfaceMode
+  motionMode: MotionMode
+  inputRetention: InputRetention
   sidebarCollapsed: boolean
   lastToolId: string | null
   recentToolIds: string[]
@@ -34,7 +42,11 @@ export function readAppPreferences(value: unknown): Partial<AppPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const raw = value as Record<string, unknown>
   const result: Partial<AppPreferences> = {}
+  if (isLanguage(raw.language)) result.language = raw.language
   if (raw.theme === 'dark' || raw.theme === 'light' || raw.theme === 'system') result.theme = raw.theme
+  if (raw.surfaceMode === 'glass' || raw.surfaceMode === 'solid') result.surfaceMode = raw.surfaceMode
+  if (raw.motionMode === 'system' || raw.motionMode === 'reduced') result.motionMode = raw.motionMode
+  if (raw.inputRetention === 'session' || raw.inputRetention === 'off') result.inputRetention = raw.inputRetention
   if (typeof raw.sidebarCollapsed === 'boolean') result.sidebarCollapsed = raw.sidebarCollapsed
   if (raw.lastToolId === null || isPreferenceToolId(raw.lastToolId)) result.lastToolId = raw.lastToolId
   const recent = toolIds(raw.recentToolIds, MAX_RECENT_TOOLS)

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, Session } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
-import { configureWindowSecurity, isAppNavigation, isExternalUrlAllowed } from './window-security'
+import { configureWindowSecurity, configureAppPermissions, isAppNavigation, isExternalUrlAllowed } from './window-security'
 import { bindSessionOwner, clearAccess, getAccess, setAccess } from './secret-box/session'
 import { SCRYPT_PARAMS } from '@shared/secret-box/constants'
 
@@ -32,4 +32,29 @@ it('blocks external navigation and OS protocol popups without launching anything
   expect(event.preventDefault).toHaveBeenCalled()
   expect(handler.mock.calls[0][0]({ url: 'ms-settings:privacy' })).toEqual({ action: 'deny' })
   expect(open).not.toHaveBeenCalled()
+  const webview = { preventDefault: vi.fn() }
+  contents.emit('will-attach-webview', webview)
+  expect(webview.preventDefault).toHaveBeenCalledOnce()
+})
+
+it('denies browser/device permissions and permits only app main-frame clipboard writes', () => {
+  const request = vi.fn(), check = vi.fn(), device = vi.fn()
+  configureAppPermissions({ setPermissionRequestHandler: request, setPermissionCheckHandler: check, setDevicePermissionHandler: device } as unknown as Session, 'file:///app/index.html')
+  const contents = { isDestroyed: () => false, getURL: () => 'file:///app/index.html#/tool/security.env' }
+  const details = { isMainFrame: true, requestingUrl: 'file:///app/index.html#/tool/security.env' }
+  const handler = check.mock.calls[0][0]
+  expect(handler(contents, 'clipboard-sanitized-write', 'file://', details)).toBe(true)
+  for (const permission of ['clipboard-read', 'media', 'display-capture', 'geolocation', 'notifications', 'usb', 'serial', 'fileSystem', 'unknown']) {
+    expect(handler(contents, permission, 'file://', details)).toBe(false)
+    const callback = vi.fn()
+    request.mock.calls[0][0](contents, permission, callback, details)
+    expect(callback).toHaveBeenCalledWith(false)
+  }
+  for (const invalid of [{ ...details, isMainFrame: false }, { ...details, requestingUrl: 'file:///app/other.html' }, { isMainFrame: true }]) {
+    expect(handler(contents, 'clipboard-sanitized-write', 'file://', invalid)).toBe(false)
+  }
+  expect(handler(null, 'clipboard-sanitized-write', 'file://', details)).toBe(false)
+  expect(handler({ ...contents, isDestroyed: () => true }, 'clipboard-sanitized-write', 'file://', details)).toBe(false)
+  expect(handler({ ...contents, getURL: () => 'https://example.com' }, 'clipboard-sanitized-write', 'file://', details)).toBe(false)
+  expect(device.mock.calls[0][0]({ deviceType: 'usb' })).toBe(false)
 })

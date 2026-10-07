@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -6,6 +7,7 @@ import { compareChecksum, FILE_HASH_ALGORITHMS, type HashAlgorithm, type FileHas
 import { FileUp } from 'lucide-react'
 
 export default function FileHash(): JSX.Element {
+  useUiLocale()
   const [path, setPath] = useState<string | null>(null)
   const [size, setSize] = useState<number | null>(null)
   const [algo, setAlgo] = useState<HashAlgorithm>('sha256')
@@ -113,7 +115,7 @@ export default function FileHash(): JSX.Element {
           </select>
         </label>
         <button type="button" className="mac-btn-secondary" disabled={busy || !path} onClick={() => void compute(algo, false)}>Recheck file</button>
-        {busy && progress && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : 'Cancel'}</button>}
+        {busy && progress && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : uiText('Cancel')}</button>}
         <div className="ml-auto"><CopyButton text={busy ? '' : hash} label="Copy checksum" /></div>
       </ToolToolbar>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-5" aria-busy={busy}>
@@ -153,6 +155,7 @@ export default function FileHash(): JSX.Element {
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }): JSX.Element {
+  useUiLocale()
   return <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-2">
     <dt className="text-mac-label-tertiary">{label}</dt>
     <dd className={mono ? 'code-select break-all font-mono text-[12px]' : ''}>{value}</dd>

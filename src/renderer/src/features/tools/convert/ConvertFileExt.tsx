@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { ArrowLeftRight } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -21,6 +22,7 @@ const SAMPLE_JSON = `{
 }`
 
 export default function ConvertFileExt(): JSX.Element {
+  useUiLocale()
   const [from, setFrom] = useState<FormatId>('json')
   const [to, setTo] = useState<FormatId>('yaml')
   const [input, setInput] = useState(SAMPLE_JSON)
@@ -86,8 +88,7 @@ export default function ConvertFileExt(): JSX.Element {
 
         {to === 'json' && (
           <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-            Indent
-            <select
+            {uiText('Indent')}<select
               className="mac-input !w-auto !py-1"
               value={indent}
               onChange={(e) => setIndent(Number(e.target.value))}
@@ -105,7 +106,7 @@ export default function ConvertFileExt(): JSX.Element {
             defaultName={to === 'json' ? undefined : `converted.${to === 'yaml' ? 'yaml' : 'txt'}`}
             disabled={!result.ok}
           />
-          <CopyButton text={output} label="Copy output" />
+          <CopyButton text={output} label={uiText('Copy output')} />
           <button
             type="button"
             className="mac-btn-ghost"
@@ -115,8 +116,7 @@ export default function ConvertFileExt(): JSX.Element {
               setInput(SAMPLE_JSON)
             }}
           >
-            Sample
-          </button>
+            {uiText('Sample')}</button>
         </div>
         <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted.${to}`} accept=".json,.yaml,.yml,.txt" />
       </ToolToolbar>

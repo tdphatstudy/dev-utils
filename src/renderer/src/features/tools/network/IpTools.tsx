@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { parseCidr, parseIp } from '@shared/network/ip'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -7,6 +8,7 @@ import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 type Mode = 'ip' | 'cidr'
 
 export default function IpTools(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('ip')
   const [inputs, setInputs] = useState({ ip: '192.168.1.10', cidr: '10.0.0.1/8' })
   const input = inputs[mode]
@@ -73,7 +75,7 @@ export default function IpTools(): JSX.Element {
 
         {mode === 'cidr' && cidr.ok && (
           <div className="grid max-w-lg gap-2 rounded-mac-lg border border-mac-separator bg-mac-surface p-4 text-[13px] shadow-mac">
-            <Row label="Network" value={cidr.network} mono />
+            <Row label={uiText('Network')} value={cidr.network} mono />
             <Row label="Prefix" value={`/${cidr.prefix}`} />
             <Row label="Addresses" value={String(cidr.hostCount)} />
             <Row label="Netmask" value={cidr.netmask} mono />
@@ -94,6 +96,7 @@ export default function IpTools(): JSX.Element {
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }): JSX.Element {
+  useUiLocale()
   return (
     <div className="grid grid-cols-[110px_1fr] gap-2">
       <span className="text-mac-label-tertiary">{label}</span>

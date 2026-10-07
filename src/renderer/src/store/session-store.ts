@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 
 export const NO_HISTORY_TOOLS = new Set([
+  'hacking.stress', 'hacking.hash', 'hacking.headers', 'hacking.cors', 'hacking.jwt',
+  'json.schema',
+  'json.reconcile',
+  'network.openapi',
+  'text.logs',
+  'security.env',
   'design.color',
   'text.ocr',
   'security.random',
@@ -27,6 +33,8 @@ export interface HistoryEntry {
 }
 
 interface SessionState {
+  retention: boolean
+  setRetention: (enabled: boolean) => void
   history: HistoryEntry[]
   drafts: Record<string, string>
   pushHistory: (entry: Omit<HistoryEntry, 'at'>) => void
@@ -40,11 +48,13 @@ interface SessionState {
 const MAX_HISTORY = 40
 
 export const useSessionStore = create<SessionState>((set, get) => ({
+  retention: true,
+  setRetention: (retention) => set(retention ? { retention } : { retention, history: [], drafts: {} }),
   history: [],
   drafts: {},
 
   pushHistory: (entry) => {
-    if (NO_HISTORY_TOOLS.has(entry.toolId)) return
+    if (!get().retention || NO_HISTORY_TOOLS.has(entry.toolId)) return
     if (!entry.snippet.trim()) return
     set((s) => {
       const next: HistoryEntry = { ...entry, at: Date.now() }
@@ -62,11 +72,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   clearHistory: () => set({ history: [] }),
 
   setDraft: (toolId, value) => {
-    if (NO_HISTORY_TOOLS.has(toolId)) return
+    if (!get().retention || NO_HISTORY_TOOLS.has(toolId)) return
     set((s) => ({ drafts: { ...s.drafts, [toolId]: value } }))
   },
 
-  getDraft: (toolId) => get().drafts[toolId],
+  getDraft: (toolId) => get().retention ? get().drafts[toolId] : undefined,
   clearDrafts: () => set({ drafts: {} }),
 
   clearDraft: (toolId) =>

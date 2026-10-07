@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -18,6 +19,7 @@ const SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
 `
 
 export default function XmlStudio(): JSX.Element {
+  useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [indent, setIndent] = useState(2)
   useToolDraft('markup.xml', input, setInput, {
@@ -51,8 +53,7 @@ export default function XmlStudio(): JSX.Element {
           disabled={!input.trim() || !validated.ok || !formatted.ok}
           onClick={runFormat}
         >
-          Format
-        </button>
+          {uiText('Format')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
@@ -62,11 +63,9 @@ export default function XmlStudio(): JSX.Element {
             if (r.ok) setInput(r.text)
           }}
         >
-          Minify
-        </button>
+          {uiText('Minify')}</button>
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          Indent
-          <select
+          {uiText('Indent')}<select
             className="mac-input !w-auto !py-1"
             value={indent}
             onChange={(e) => setIndent(Number(e.target.value))}
@@ -82,10 +81,9 @@ export default function XmlStudio(): JSX.Element {
             defaultName={`xml-${new Date().toISOString().slice(0, 10)}.xml`}
             disabled={!input.trim() || !validated.ok}
           />
-          <CopyButton text={output} label="Copy output" />
+          <CopyButton text={output} label={uiText('Copy output')} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
-            Sample
-          </button>
+            {uiText('Sample')}</button>
         </div>
         <TextInputActions value={input} onChange={setInput} output={output} fileName="formatted.xml" accept=".xml,.xhtml,.svg,text/xml,application/xml" />
       </ToolToolbar>

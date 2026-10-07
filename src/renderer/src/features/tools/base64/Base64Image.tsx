@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseImageBase64, imageBytesToDataUrl } from '@shared/base64/image'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -12,6 +13,7 @@ type Mode = 'toBase64' | 'fromBase64'
 type Loaded = { url: string; width: number; height: number; error?: string }
 
 export default function Base64Image(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('fromBase64')
   const [text, setText] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
@@ -71,7 +73,7 @@ export default function Base64Image(): JSX.Element {
           event.target.value = ''
           if (file) void onFile(file)
         }} />
-        <button type="button" className="mac-btn-secondary" disabled={!text && !error} onClick={() => edit('')}>Clear</button>
+        <button type="button" className="mac-btn-secondary" disabled={!text && !error} onClick={() => edit('')}>{uiText('Clear')}</button>
         {ready && <a className="mac-btn-secondary" href={meta.dataUrl} download={`decoded-image.${extension}`}>Download image</a>}
         <div className="ml-auto flex flex-wrap gap-2">
           <CopyButton text={ready ? meta.dataUrl : ''} label="Copy data URL" />

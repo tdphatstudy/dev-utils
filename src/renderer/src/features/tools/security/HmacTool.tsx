@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useState } from 'react'
 import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
 import { hmacBase64, hmacHex, type HmacAlgorithm } from '@shared/crypto/hmac'
@@ -8,6 +9,7 @@ import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 
 export default function HmacTool(): JSX.Element {
+  useUiLocale()
   const [message, setMessage] = useState('hello')
   const [secret, setSecret] = useState('')
   const [secretTouched, setSecretTouched] = useState(false)
@@ -54,7 +56,7 @@ export default function HmacTool(): JSX.Element {
       </div>
 
       <div className="flex min-h-[200px] flex-1 flex-col">
-      <SplitPane labels={['Input', 'Output']} activePane={activePane} onPaneChange={setActivePane}>
+      <SplitPane labels={[uiText('Input'), uiText('Output')]} activePane={activePane} onPaneChange={setActivePane}>
         <CodeEditor value={message} onChange={setMessage} language="text" label="HMAC message (UTF-8)" />
         <div className="h-full min-h-0 min-w-0" aria-busy={calculating}>
           <CodeEditor value={out} language="text" label={`HMAC-${algo} (${format === 'hex' ? 'Hex' : 'Base64'})`} placeholder={!secret ? 'Enter a secret key to calculate the HMAC.' : calculating ? 'Calculating…' : 'No result'} readOnly />

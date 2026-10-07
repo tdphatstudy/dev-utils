@@ -1,3 +1,4 @@
+import { t as uiText } from '@renderer/i18n'
 import { Component, type ReactNode } from 'react'
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react'
 import { saveCrashReport } from '@renderer/lib/error-guard'
@@ -61,19 +62,18 @@ export class ErrorBoundary extends Component<Props, State> {
         </div>
         <div className="max-w-md">
           <h2 className="text-[16px] font-semibold tracking-tight text-mac-label">
-            {loadFailure ? 'This tool could not be loaded' : 'Something went wrong'}
+            {loadFailure ? uiText('This tool could not be loaded') : uiText('Something went wrong')}
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">
             {loadFailure
               ? 'The tool files could not be opened. Return to the toolbox. If this continues, save your work and reopen DevFusion.'
-              : 'This view could not be displayed. Try again, or return to the toolbox.'}
+              : uiText('This view could not be displayed. Try again, or return to the toolbox.')}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           {!loadFailure && <button type="button" className="mac-btn-secondary" onClick={this.retry}>
             <RotateCcw className="h-3.5 w-3.5" />
-            Try again
-          </button>}
+            {uiText('Try again')}</button>}
           <button type="button" className="mac-btn-primary" onClick={this.goHome}>
             <Home className="h-3.5 w-3.5" />
             {this.props.homeLabel ?? 'Back to Home'}

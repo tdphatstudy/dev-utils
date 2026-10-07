@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useI18n } from '@renderer/i18n'
 import { cn } from '@renderer/lib/utils'
 
 export interface SegmentOption<T extends string> {
@@ -21,10 +22,11 @@ export function SegmentedControl<T extends string>({
   className,
   label = 'Options'
 }: Props<T>): JSX.Element {
+  const { t, locale } = useI18n()
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const selectedIndex = options.findIndex((option) => option.value === value)
   return (
-    <div className={cn('mac-segment max-w-full flex-wrap', className)} role="group" aria-label={label}>
+    <div className={cn('mac-segment max-w-full flex-wrap', className)} role="group" aria-label={t(label)}>
       {options.map((opt, index) => (
         <button
           key={opt.value}
@@ -36,8 +38,9 @@ export function SegmentedControl<T extends string>({
           className="mac-segment-item min-w-0 [overflow-wrap:anywhere]"
           onClick={() => onChange(opt.value)}
           onKeyDown={(event) => {
-            const next = event.key === 'ArrowRight' ? (index + 1) % options.length
-              : event.key === 'ArrowLeft' ? (index - 1 + options.length) % options.length
+            const step = locale === 'ar' ? -1 : 1
+            const next = event.key === 'ArrowRight' ? (index + step + options.length) % options.length
+              : event.key === 'ArrowLeft' ? (index - step + options.length) % options.length
                 : event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : null
             if (next === null) return
             event.preventDefault()
@@ -45,7 +48,7 @@ export function SegmentedControl<T extends string>({
             onChange(options[next].value)
           }}
         >
-          {opt.label}
+          {t(opt.label)}
         </button>
       ))}
     </div>

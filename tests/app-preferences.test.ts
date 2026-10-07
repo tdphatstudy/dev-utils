@@ -8,9 +8,14 @@ vi.stubGlobal('localStorage', storage)
 vi.stubGlobal('window', { localStorage: storage })
 // Node has no browser storage. Install the fixture before creating the store.
 const { useAppStore } = await import('../src/renderer/src/store/app-store')
+const { useSessionStore } = await import('../src/renderer/src/store/session-store')
 afterAll(() => vi.unstubAllGlobals())
 
 describe('app preference compatibility and privacy', () => {
+  it('validates the retention mode without accepting payloads or coercions', () => {
+    for (const mode of ['off', 'session']) expect(readAppPreferences({ inputRetention: mode })).toEqual({ inputRetention: mode })
+    for (const invalid of [false, {}, null, 'forever']) expect(readAppPreferences({ inputRetention: invalid })).toEqual({})
+  })
   it('preserves existing preferences without requiring a storage migration', () => {
     const oldPreferences = { theme: 'light', sidebarCollapsed: true, lastToolId: 'json.studio', recentToolIds: ['json.studio', 'privatebox.keep'], launchMode: 'last', sshDir: 'C:\\fixture\\.ssh', sshConfigPath: 'C:\\fixture\\config' }
     expect(readAppPreferences(oldPreferences)).toEqual(oldPreferences)
@@ -32,6 +37,13 @@ describe('app preference compatibility and privacy', () => {
     }
   })
 
+  it('accepts appearance metadata only and preserves defaults for legacy or malformed input', () => {
+    expect(readAppPreferences({})).not.toHaveProperty('surfaceMode')
+    expect(readAppPreferences({ surfaceMode: 'solid', motionMode: 'reduced' })).toEqual({ surfaceMode: 'solid', motionMode: 'reduced' })
+    expect(readAppPreferences({ surfaceMode: 'glass', motionMode: 'system' })).toEqual({ surfaceMode: 'glass', motionMode: 'system' })
+    expect(readAppPreferences({ surfaceMode: 'transparent', motionMode: false })).toEqual({})
+  })
+
   it('deduplicates and caps tool lists while permitting future valid tool IDs', () => {
     const ids = Array.from({ length: 30 }, (_, index) => `text.fixture${index}`)
     const prefs = readAppPreferences({ favoriteToolIds: ids, recentToolIds: ids })
@@ -43,8 +55,20 @@ describe('app preference compatibility and privacy', () => {
 describe('favorite tool preferences', () => {
   beforeEach(() => {
     saved = ''
+    useSessionStore.getState().setRetention(true)
     useAppStore.persist.setOptions({ storage: createJSONStorage(() => storage) })
-    useAppStore.setState({ theme: 'dark', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', toolLoadingMode: 'on-demand', sshDir: null, sshConfigPath: null, commandOpen: false })
+    useAppStore.setState({ theme: 'dark', inputRetention: 'session', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', toolLoadingMode: 'on-demand', sshDir: null, sshConfigPath: null, commandOpen: false })
+  })
+  it('enforces Off during hydration and never hydrates input content or replaces actions', async () => {
+    useSessionStore.getState().setDraft('json.studio', 'private cached input')
+    saved = JSON.stringify({ state: { inputRetention: 'off', drafts: { 'json.studio': 'persistent private input' }, setInputRetention: null }, version: 0 })
+    await useAppStore.persist.rehydrate()
+    expect(useSessionStore.getState().retention).toBe(false)
+    expect(useSessionStore.getState().drafts).toEqual({})
+    expect(useAppStore.getState().setInputRetention).toBeTypeOf('function')
+    useAppStore.getState().setInputRetention('session')
+    expect(useSessionStore.getState().retention).toBe(true)
+    expect(useSessionStore.getState().getDraft('json.studio')).toBeUndefined()
   })
 
   it('defaults to on demand and persists explicit preload across hydration', async () => {
@@ -67,7 +91,7 @@ describe('favorite tool preferences', () => {
     useAppStore.getState().setCommandOpen(true)
     const persisted = JSON.parse(saved).state
     expect(persisted.favoriteToolIds).toEqual(['text.ocr'])
-    expect(Object.keys(persisted).sort()).toEqual(['favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme', 'toolLoadingMode'].sort())
+    expect(Object.keys(persisted).sort()).toEqual(['language', 'favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme', 'toolLoadingMode', 'surfaceMode', 'motionMode', 'inputRetention'].sort())
     expect(persisted).not.toHaveProperty('commandOpen')
   })
 

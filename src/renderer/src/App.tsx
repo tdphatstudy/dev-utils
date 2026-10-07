@@ -5,9 +5,18 @@ import { useAppStore } from './store/app-store'
 import { installGlobalErrorGuards } from './lib/error-guard'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { quickTargetPath } from '@shared/quick-actions'
+import { VaultLockBoundary } from './components/VaultLockBoundary'
+import { useLanguageSync } from './i18n'
 
 function useThemeEffect(): void {
   const theme = useAppStore((s) => s.theme)
+  const surfaceMode = useAppStore((s) => s.surfaceMode)
+  const motionMode = useAppStore((s) => s.motionMode)
+
+  useEffect(() => {
+    document.documentElement.dataset.surface = surfaceMode
+    document.documentElement.dataset.motion = motionMode
+  }, [surfaceMode, motionMode])
 
   useEffect(() => {
     const root = document.documentElement
@@ -54,6 +63,7 @@ function useGlobalErrorGuard(): [boolean, () => void] {
 }
 
 export default function App(): JSX.Element {
+  useLanguageSync()
   useThemeEffect()
   useToolPreloading()
   useGlobalHotkeys()
@@ -64,7 +74,7 @@ export default function App(): JSX.Element {
   return (
     <ErrorBoundary scope="app" onHome={() => navigate('/')}>
       <div className="flex h-full flex-col">
-        <div className="min-h-0 flex-1"><Outlet /></div>
+        <div className="min-h-0 flex-1"><VaultLockBoundary><Outlet /></VaultLockBoundary></div>
         {failed && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-t border-mac-danger/30 bg-mac-surface px-4 py-3 text-[13px]">
           <p className="min-w-0 flex-1 text-mac-label">An action failed. Your tool is still open; try the action again.</p>
           <button type="button" className="mac-btn-secondary" onClick={dismissError}>Dismiss</button>

@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n/catalog'
 import type { LazyExoticComponent, ComponentType } from 'react'
 import { createToolLoader } from './tool-loader'
 import {
@@ -44,6 +45,7 @@ export type ToolGroupId =
   | 'design'
   | 'base64'
   | 'security'
+  | 'hacking'
   | 'network'
   | 'file'
   | 'text'
@@ -79,6 +81,7 @@ export const toolGroups: ToolGroup[] = [
   { id: 'design', name: 'Design', icon: Palette, order: 4.5 },
   { id: 'base64', name: 'Base64', icon: Binary, order: 5 },
   { id: 'security', name: 'Security', icon: Shield, order: 6 },
+  { id: 'hacking', name: 'Hacking / Security Testing', icon: Shield, order: 6.5 },
   { id: 'network', name: 'Network', icon: Network, order: 7 },
   { id: 'file', name: 'File', icon: File, order: 8 },
   { id: 'text', name: 'Text / Dev', icon: Regex, order: 9 },
@@ -88,6 +91,46 @@ export const toolGroups: ToolGroup[] = [
 ]
 
 export const tools: ToolDefinition[] = [
+  { id: 'hacking.stress', group: 'hacking', name: 'API Stress Test', description: 'Paced HTTP load with count, rate, concurrency, status and latency metrics', keywords: ['stress', 'load', 'rps', 'performance', 'api', 'hacking'], icon: Radio, ...createToolLoader(() => import('@renderer/features/tools/hacking/StressTool')) },
+  { id: 'hacking.hash', group: 'hacking', name: 'Hash Lab', description: 'Generate digests and search explicit candidate sets locally', keywords: ['hash', 'md5', 'sha256', 'dictionary', 'preimage', 'hacking'], icon: Fingerprint, ...createToolLoader(() => import('@renderer/features/tools/hacking/HashLab')) },
+  { id: 'hacking.headers', group: 'hacking', name: 'HTTP Security Headers', description: 'Review observed TLS, CSP, framing and browser header policies', keywords: ['headers', 'csp', 'hsts', 'http', 'security', 'hacking'], icon: Shield, ...createToolLoader(() => import('@renderer/features/tools/hacking/HeaderAudit')) },
+  { id: 'hacking.cors', group: 'hacking', name: 'CORS Policy Probe', description: 'Inspect preflight and GET origin policies without browser enforcement', keywords: ['cors', 'origin', 'preflight', 'options', 'hacking'], icon: Globe, ...createToolLoader(() => import('@renderer/features/tools/hacking/CorsProbe')) },
+  { id: 'hacking.jwt', group: 'hacking', name: 'JWT Security Review', description: 'Review signing declarations, lifetime, issuer and audience policy locally', keywords: ['jwt', 'token', 'claims', 'algorithm', 'hacking'], icon: KeyRound, ...createToolLoader(() => import('@renderer/features/tools/hacking/JwtReview')) },
+  {
+    id: 'json.schema', group: 'json', name: 'JSON Schema Validator',
+    description: 'Validate payloads and event contracts against draft 7 or 2020-12 schemas',
+    keywords: ['schema', 'validation', 'contract', 'payload', 'event', 'kafka', 'json schema', 'enterprise'],
+    icon: Shield,
+    ...createToolLoader(() => import('@renderer/features/tools/enterprise/SchemaValidator'))
+  },
+  {
+    id: 'json.reconcile', group: 'json', name: 'Data Reconciliation',
+    description: 'Join exports by business key, detect drift, duplicates and missing records',
+    keywords: ['reconcile', 'reconciliation', 'migration', 'data', 'database', 'etl', 'compare', 'audit', 'enterprise'],
+    icon: Database,
+    ...createToolLoader(() => import('@renderer/features/tools/enterprise/DataReconciliation'))
+  },
+  {
+    id: 'network.openapi', group: 'network', name: 'API Contract Review',
+    description: 'Review OpenAPI operations and compare release changes before publishing',
+    keywords: ['openapi', 'swagger', 'api', 'contract', 'breaking', 'release', 'compatibility', 'enterprise'],
+    icon: GitCompare,
+    ...createToolLoader(() => import('@renderer/features/tools/enterprise/ContractReview'))
+  },
+  {
+    id: 'text.logs', group: 'text', name: 'Structured Log Explorer',
+    description: 'Filter JSONL incidents by trace and service; inspect errors and latency percentiles',
+    keywords: ['logs', 'jsonl', 'ndjson', 'pino', 'incident', 'trace', 'latency', 'p95', 'observability', 'enterprise'],
+    icon: Search,
+    ...createToolLoader(() => import('@renderer/features/tools/enterprise/LogExplorer'))
+  },
+  {
+    id: 'security.env', group: 'security', name: 'Environment Compare',
+    description: 'Compare .env configuration without exposing values in the report',
+    keywords: ['env', 'dotenv', 'environment', 'config', 'staging', 'production', 'release', 'deployment', 'compare'],
+    icon: Shield,
+    ...createToolLoader(() => import('@renderer/features/tools/security/EnvironmentCompare'))
+  },
   {
     id: 'network.local-domains',
     group: 'network',
@@ -593,14 +636,9 @@ export function getToolsByGroup(group: ToolGroupId): ToolDefinition[] {
   return tools.filter((t) => t.group === group)
 }
 
-export function searchTools(query: string): ToolDefinition[] {
-  const q = query.trim().toLowerCase()
+export function searchTools(query: string, locale: import('@shared/i18n/locales').LocaleId = 'en'): ToolDefinition[] {
+  const normalize = (text: string): string => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
+  const q = normalize(query.trim())
   if (!q) return tools
-  return tools.filter(
-    (t) =>
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q) ||
-      t.keywords.some((k) => k.includes(q)) ||
-      t.group.includes(q)
-  )
+  return tools.filter(tool => [tool.name, tool.description, translate(locale, tool.name), translate(locale, tool.description), translate(locale, toolGroups.find(group => group.id === tool.group)?.name ?? tool.group), tool.group, ...tool.keywords].some(text => normalize(text).includes(q)))
 }

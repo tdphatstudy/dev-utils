@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useState } from 'react'
 import { Modal } from '@renderer/components/ui/Modal'
 
@@ -20,6 +21,7 @@ export function NameDialog({
   onConfirm,
   onCancel
 }: Props): JSX.Element | null {
+  useUiLocale()
   const [value, setValue] = useState(initialValue)
 
   useEffect(() => {
@@ -52,8 +54,7 @@ export function NameDialog({
         </label>
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="mac-btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
+            {uiText('Cancel')}</button>
           <button type="button" className="mac-btn-primary" disabled={!value.trim()} onClick={submit}>
             {confirmLabel}
           </button>

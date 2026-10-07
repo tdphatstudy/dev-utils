@@ -211,7 +211,7 @@ export function DesktopLogin({
                   autoComplete="off"
                   autoFocus={mode !== 'portable'}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') void submit()
+                    if (e.key === 'Enter') { e.preventDefault(); void submit() }
                   }}
                 />
               </label>

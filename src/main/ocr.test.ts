@@ -64,7 +64,11 @@ it('selects a native-pixel region across all displays then replaces the engine w
   const popup = f.windows[3]
   expect(value.view(event(popup))).toEqual({ kind: 'result', result: output })
   expect(popup.webContents.mainFrame.url).toBe(pathToFileURL('/fixture/ocr-helper.html').href)
-  expect(f.copy).not.toHaveBeenCalled(); value.copy(event(popup)); expect(f.copy).toHaveBeenCalledWith(output.text)
+  expect(f.copy).not.toHaveBeenCalled()
+  f.copy.mockResolvedValueOnce(undefined)
+  await value.copy(event(popup)); expect(f.copy).toHaveBeenCalledWith(output.text)
+  f.copy.mockRejectedValueOnce(new Error('Async clipboard failure'))
+  await expect(value.copy(event(popup))).rejects.toThrow('Async clipboard failure')
   value.close(event(popup)); expect(f.windows.every(w => w.destroyed)).toBe(true)
 })
 it('cancel validates request ownership, invalidates late capture and releases all listeners', async () => {

@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -15,6 +16,7 @@ const RIGHT = `name: DevFusion\nversion: 2\nfeatures:\n  - yaml\n  - diff\nlocal
 type ViewMode = 'tree' | 'lines'
 
 export default function YamlDiff(): JSX.Element {
+  useUiLocale()
   const [left, setLeft] = useState(LEFT)
   const [right, setRight] = useState(RIGHT)
   const [mode, setMode] = useState<ViewMode>('lines')
@@ -79,7 +81,7 @@ export default function YamlDiff(): JSX.Element {
           onChange={setMode}
           options={[
             { value: 'lines', label: 'Lines' },
-            { value: 'tree', label: 'Tree' }
+            { value: 'tree', label: uiText('Tree') }
           ]}
         />
         <span className="text-[12px] text-mac-label-secondary">
@@ -87,7 +89,7 @@ export default function YamlDiff(): JSX.Element {
         </span>
         {mode === 'lines' && <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary"><input type="checkbox" checked={normalize} onChange={(event) => setNormalize(event.target.checked)} className="accent-mac-accent" />Format before comparing</label>}
         <button type="button" className="mac-btn-secondary" onClick={() => { setLeft(right); setRight(left) }}>Swap A / B</button>
-        <button type="button" className="mac-btn-ghost" onClick={() => { setLeft(LEFT); setRight(RIGHT) }}>Sample</button>
+        <button type="button" className="mac-btn-ghost" onClick={() => { setLeft(LEFT); setRight(RIGHT) }}>{uiText('Sample')}</button>
         <div className="ml-auto">
           <CopyButton text={mode === 'tree' ? report : lineDiffReport(lineStats)} label="Copy diff" />
         </div>

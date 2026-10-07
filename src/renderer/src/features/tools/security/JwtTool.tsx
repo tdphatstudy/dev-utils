@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
 import { parseJson } from '@shared/json'
@@ -26,6 +27,7 @@ const DEFAULT_PAYLOAD = `{
 }`
 
 export default function JwtTool(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('verify')
   const [token, setToken] = useState('')
   const [secret, setSecret] = useState(JWT_SAMPLE_SECRET)
@@ -149,14 +151,13 @@ export default function JwtTool(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'decode', label: 'Decode' },
+            { value: 'decode', label: uiText('Decode') },
             { value: 'verify', label: 'Verify' },
             { value: 'sign', label: 'Sign (HS)' }
           ]}
         />
         <button type="button" disabled={busy} className="mac-btn-ghost" onClick={() => void loadSample()}>
-          Sample
-        </button>
+          {uiText('Sample')}</button>
         <div className="ml-auto flex gap-2">
           <CopyButton text={mode === 'sign' ? currentSigned : token} label="Copy token" />
           <CopyButton text={mode === 'sign' ? payloadValid ? payloadEdit : '' : payloadText} label="Copy payload" />

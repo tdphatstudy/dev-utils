@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
+import { useI18n } from '@renderer/i18n'
 
 export function ToolToolbar({
   children,
@@ -10,10 +11,11 @@ export function ToolToolbar({
   className?: string
   label?: string
 }): JSX.Element {
+  const { t } = useI18n()
   return (
     <div
       role={label ? 'group' : undefined}
-      aria-label={label}
+      aria-label={label ? t(label) : undefined}
       className={cn(
         'mac-tool-toolbar flex min-h-[48px] shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-b border-mac-separator bg-mac-surface px-3 py-2.5 sm:px-4',
         className
@@ -26,12 +28,13 @@ export function ToolToolbar({
 
 /** Native disclosure keeps secondary actions discoverable without a permanent extra row. */
 export function ToolOptions({ label = 'Options', children }: { label?: string; children: React.ReactNode }): JSX.Element {
+  const { t } = useI18n()
   return (
     <details className="group min-w-0 max-w-full open:w-full">
       <summary className="mac-btn-ghost cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        {label}<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+        {t(label)}<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
       </summary>
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-mac-separator pt-2" role="group" aria-label={label}>
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-mac-separator pt-2" role="group" aria-label={t(label)}>
         {children}
       </div>
     </details>

@@ -1,6 +1,9 @@
 import type { LocalDomainInput, LocalDomainPorts, LocalDomainsStatus, DomainResolution } from '@shared/local-domains/types'
+import { isLanguageState, type LanguageSetting, type LanguageState } from '@shared/i18n/locales'
 import { contextBridge, ipcRenderer } from 'electron'
+import { isVaultLockEvent, type RecoveredVaultDraft, type SecurityState, type VaultIdleMinutes, type VaultLockEvent } from '@shared/security-policy'
 import type { HttpRequestPayload, HttpResponsePayload } from '@shared/http/types'
+import type { SecurityToolId, StressInput, StressProgress, ProbeInput, HeaderReport, CorsInput, CorsReport } from '@shared/security-testing/types'
 import type {
   AccessInput,
   DirEntry,
@@ -50,9 +53,42 @@ export interface FileInfo {
 }
 
 const api = {
+  securityTesting: {
+    accepted: (id: SecurityToolId): Promise<boolean> => ipcRenderer.invoke('securityTesting:accepted', id),
+    accept: (id: SecurityToolId): Promise<void> => ipcRenderer.invoke('securityTesting:accept', id),
+    stress: (input: StressInput, id: string): Promise<StressProgress> => ipcRenderer.invoke('securityTesting:stress', input, id),
+    headers: (input: ProbeInput, id: string): Promise<HeaderReport> => ipcRenderer.invoke('securityTesting:headers', input, id),
+    cors: (input: CorsInput, id: string): Promise<CorsReport> => ipcRenderer.invoke('securityTesting:cors', input, id),
+    stop: (id: string): Promise<boolean> => ipcRenderer.invoke('securityTesting:stop', id),
+    onProgress: (callback: (value: StressProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, value: StressProgress): void => { if (value && typeof value.id === 'string' && typeof value.started === 'number') callback(value) }
+      ipcRenderer.on('securityTesting:progress', listener)
+      return () => ipcRenderer.removeListener('securityTesting:progress', listener)
+    }
+  },
+  security: {
+    state: (): Promise<SecurityState> => ipcRenderer.invoke('security:state'),
+    setIdleMinutes: (minutes: VaultIdleMinutes): Promise<SecurityState> => ipcRenderer.invoke('security:setIdleMinutes', minutes),
+    preserveDraft: (id: string, content: string): Promise<void> => ipcRenderer.invoke('security:preserveDraft', id, content),
+    releaseEmpty: (id: string): Promise<void> => ipcRenderer.invoke('security:releaseEmpty', id),
+    recoverDraft: (sessionId: string): Promise<RecoveredVaultDraft | null> => ipcRenderer.invoke('security:recoverDraft', sessionId),
+    discardDraft: (sessionId: string, id: string): Promise<void> => ipcRenderer.invoke('security:discardDraft', sessionId, id),
+    onVaultLocked: (callback: (event: VaultLockEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => { if (isVaultLockEvent(value)) callback(value) }
+      ipcRenderer.on('security:vaultLocked', listener)
+      return () => ipcRenderer.removeListener('security:vaultLocked', listener)
+    }
+  },
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke('app:platform'),
   version: (): Promise<string> => ipcRenderer.invoke('app:version'),
   app: {
+    language: (): Promise<LanguageState> => ipcRenderer.invoke('app:language'),
+    setLanguage: (language: LanguageSetting): Promise<LanguageState> => ipcRenderer.invoke('app:setLanguage', language),
+    onLanguageChanged: (callback: (state: LanguageState) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => { if (isLanguageState(value)) callback(value) }
+      ipcRenderer.on('app:languageChanged', listener)
+      return () => ipcRenderer.removeListener('app:languageChanged', listener)
+    },
     trayAvailable: (): Promise<boolean> => ipcRenderer.invoke('app:trayAvailable'),
     quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
     onOpenTool: (callback: (target: QuickTarget) => void): (() => void) => {

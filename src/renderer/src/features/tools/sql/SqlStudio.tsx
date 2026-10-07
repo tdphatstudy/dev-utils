@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -65,6 +66,7 @@ LIMIT 100;`
 }
 
 export default function SqlStudio(): JSX.Element {
+  useUiLocale()
   const [dialect, setDialect] = useState<SqlDialectId>('mysql')
   const [input, setInput] = useState(SAMPLES.mysql)
   const [indent, setIndent] = useState(2)
@@ -109,8 +111,7 @@ export default function SqlStudio(): JSX.Element {
             if (r.ok) setInput(r.text)
           }}
         >
-          Format
-        </button>
+          {uiText('Format')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
@@ -120,8 +121,7 @@ export default function SqlStudio(): JSX.Element {
             if (r.ok) setInput(r.text)
           }}
         >
-          Minify
-        </button>
+          {uiText('Minify')}</button>
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
           Dialect
@@ -142,8 +142,7 @@ export default function SqlStudio(): JSX.Element {
         </label>
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          Indent
-          <select
+          {uiText('Indent')}<select
             className="mac-input !w-auto !py-1"
             value={indent}
             onChange={(e) => setIndent(Number(e.target.value))}
@@ -176,8 +175,7 @@ export default function SqlStudio(): JSX.Element {
             className="mac-btn-ghost"
             onClick={() => setInput(SAMPLES[dialect] ?? SAMPLES.generic)}
           >
-            Sample
-          </button>
+            {uiText('Sample')}</button>
         </div>
         <TextInputActions value={input} onChange={setInput} output={formatted.ok ? formatted.text : ''} fileName="formatted.sql" accept=".sql,.txt" />
       </ToolToolbar>

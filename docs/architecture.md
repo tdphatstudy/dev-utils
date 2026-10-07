@@ -400,6 +400,39 @@ and Linux native behavior and installers remain unverified on this host.
 
 ### UI/UX navigation and preferences (2026-10-05)
 
+The 2026-10-06 enterprise UI pass adds validated `surfaceMode` (glass/solid) and
+`motionMode` (system/reduced) metadata to the existing preference key without a
+storage migration. Glass is a CSS material on titlebar/sidebar/palette/shared
+dialogs; code and document backgrounds remain opaque. Workspace container queries
+size workflow shortcuts and Environment Compare inputs to available desktop width.
+Page/dialog entrances last 180 ms, tool cards have a small hover lift, and reduced
+motion disables them. Reduced transparency/contrast media queries remove glass
+where Chromium exposes those OS preferences; explicit Solid works on all hosts.
+These are macOS-inspired CSS materials, not native macOS Liquid Glass APIs.
+
+`security.env` is a lazy, local Environment Compare tool backed by
+`src/shared/env/compare.ts`. It accepts a bounded literal dotenv subset (256 Ki
+characters / 5,000 lines per input), never evaluates shell/variable substitutions,
+and compares literal values after removing enclosing quotes. Unsupported syntax
+fails with line numbers without echoing content. Reports return keys/status only,
+flag duplicate assignments and use the last assignment. Input changes invalidate
+results; navigation unmounts component inputs. It is excluded from generic
+draft/history storage. The tool does not read deployment files, access the network
+or prove deployment correctness. Names/status are still configuration metadata;
+Copy report is an explicit clipboard action. Home groups existing tools into API,
+release and infrastructure workflows without loading their UI modules.
+
+Main-window session permissions are now deny-by-default for browser/device APIs.
+Only sanitized clipboard writes from the exact app main-frame URL are permitted;
+programmatic clipboard reads, camera, microphone, geolocation and device access
+are refused. Native dialogs, main network tools and explicit desktop capture use
+their existing typed IPC paths. Webview attachment is rejected. Permission policy
+does not replace IPC validation or the helper partitions' separate policies.
+Native tray/OCR/color Copy actions await Electron 44's asynchronous clipboard
+write; failures reach existing popup error UI or generic tray feedback. No secret
+payload is logged by the new feedback path.
+See [review and verification](enterprise-review-2026-10-06.md).
+
 Home is search-first with category filtering, task-oriented quick access and up to
 12 favorite tool IDs. Favorites, recent IDs, theme, sidebar state, launch mode and
 SSH paths keep the existing `devutils-app` preference key. Hydration whitelists
@@ -683,3 +716,146 @@ publication never overwrites keys. Quit gates new Enable actions and attempts
 hosts cleanup, prompting on failure; cancelling an unsaved-edit quit resets the
 gate. Crash recovery is explicit on next tool open. See
 [Local Domains](local-domains.md) for the user flow, privacy and platform limits.
+
+### Enterprise lock, privacy and release controls (2026-10-06)
+
+`src/main/vault-auto-lock.ts` owns idle policy and subscribes to Electron power
+events. Access observers arm a main timer only during an active vault session.
+Lock clears main key buffers and invalidates the session/revision before sending
+the typed `security:vaultLocked` event. The named security bridge validates the
+trusted sender; main bounds recovery content, validates idle choices and checks
+current session/owner/root on draft recovery or discard.
+
+Sensitive editors register RAM-only snapshot readers. `VaultLockBoundary` masks
+the view and suspends portalled modal focus scopes before capturing unsaved text.
+Main retains separate authenticated encryption checkpoints in RAM, never settings,
+generic drafts, logs or automatic vault writes. Successful capture remounts the
+view; failure retains hidden edits until retry or explicit discard. Recovery is
+offered after reauthentication, restores to the editor and preserves explicit Save.
+Checkpoint buffers are zeroed on owner destruction/disposal. Vault format, salts,
+default storage paths and existing privatebox IPC channel names remain unchanged.
+
+`inputRetention` is validated preference metadata. Hydration and its setter enforce
+the policy at the session store, so pending tool flushes cannot repopulate drafts
+or history while Off. Existing preferences retain session caching; sensitive tool
+inputs remain excluded regardless of the mode. The mask store holds only a transient
+boolean, not decrypted content.
+
+Packaging applies a complete Electron fuse policy in `afterPack` and reads it back.
+Signed profiles require credentials, signing/notarization and post-sign fuse checks.
+Quality CI covers three desktop hosts; signed artifact generation is manual and
+does not publish. See [enterprise delivery](enterprise-release.md) for current
+verification, compatibility, rollout/recovery steps and limits.
+
+### Advanced API, data and incident tools (2026-10-06)
+
+`json.schema` and `json.reconcile` belong to JSON, `network.openapi` to Network,
+and `text.logs` to Text / Dev. There is no separate Enterprise group. Lazy
+interfaces under `features/tools/enterprise` share UI controls without eager
+analysis. `useAnalysisJob` creates one bundled browser worker per explicit action,
+terminates it on change/unmount/Cancel/completion and bounds runtime to five
+seconds. File reads are revision-guarded so a delayed upload cannot overwrite
+cleared or newer inputs. All four IDs are excluded from generic drafts/history.
+
+`src/shared/enterprise` holds bounded parsing, own-property JSON Pointer lookup,
+strict schema profile validation, OpenAPI review, keyed reconciliation and JSONL
+statistics. Modules use pure JavaScript plus browser-compatible YAML and the
+eval-free `@cfworker/json-schema` interpreter; they import neither Electron nor
+main/renderer modules. Analysis runs in the renderer's worker, including regex
+constraints, with no new IPC or main services and no external reference fetching.
+The existing `worker-src 'self'` and script CSP remain unchanged. Reports omit
+payload values with explicit metadata/aggregate limits; tool input files are read
+through the browser File API and never modified. See
+[advanced developer tools](advanced-developer-tools.md) for supported standards,
+processing budgets, privacy, report interpretation and verification.
+
+### Hacking / Security Testing (2026-10-06)
+
+The separate `hacking` group registers five lazy `hacking.*` tools. `ToolPage`
+wraps each in `SecurityConsentGate`: loading/red logo, localized responsibility
+warning and explicit per-tool agreement before mounting. A main-process
+`SecurityTestingService` owns app-session consent in RAM, retaining it through
+renderer reload and clearing it on app disposal. No consent settings or files
+are created. The browser preview has temporary consent without network services.
+
+`src/shared/security-testing` holds contracts, runtime payload bounds, header/CORS
+and offline JWT observations, and a bounded candidate hash search. `HashLab`
+creates a bundled browser worker per action and terminates it on completion,
+Stop/unmount or timeout. No remote keys, references or candidate lists are fetched.
+All five IDs are excluded from generic drafts/history, regardless of retention
+preferences. Reports omit private request/header/claim values; matching hash
+candidates require Reveal for plaintext display/copy.
+
+Main services under `src/main/security-testing` run explicit network operations
+through named `securityTesting` preload methods and trusted IPC. Main checks
+consent, payload limits and owner/job identity, permits one network job per
+window and one stress test app-wide, and aborts on navigation/renderer crash/owner close/quit.
+The scheduler bounds count/rate/concurrency/duration/aggregate bytes and avoids
+catch-up bursts. Its separate transport streams/discards bounded responses,
+keeps normal TLS validation and never follows redirects; the existing HTTP
+Client remains independent. CORS sends only OPTIONS plus a GET sample and treats
+credential mode as analysis, without sending credentials. Existing Electron
+isolation, permissions and CSP remain intact. See
+[Security Testing](security-testing.md) for budgets, privacy, interpretation and
+verification limits.
+
+### Interface languages, consistent tool help and tray (2026-10-07)
+
+`src/shared/i18n` provides 13 bundled languages (English, Simplified Chinese,
+Spanish, French, German, Japanese, Korean, Portuguese, Russian, Arabic, Hindi,
+Indonesian and Vietnamese) plus a System setting. Unknown interface messages
+fall back to English. Core navigation, Settings, common actions, tool names,
+guides, consent and tray messages are translated; some tool descriptions,
+specialized controls, backend diagnostics and analytical report prose retain
+English fallback. No translation service or runtime translation of user data is
+used. Code, input, document content, export keys and technical identifiers are
+never rewritten. Arabic sets the document direction; code and technical inputs
+remain left-to-right.
+
+`LanguagePreferences` owns a bounded, versioned `language.json` under the existing
+user-data directory. Writes are serialized and atomic; invalid payloads are
+rejected and failed writes retain the previous setting. Named, trusted
+`app:language` / `app:setLanguage` IPC and a validated `app:languageChanged` event
+keep renderer preferences and tray selections synchronized. Renderer hydration
+accepts language metadata only. Language subscriptions update labels without
+remounting a tool or discarding its live input. Late responses cannot overwrite a
+newer tray event.
+
+`ToolGuide` supplies a consistently placed, accessible help disclosure for each
+tool, with domain-specific input advice and three steps. `SplitPane` displays
+labels in wide workspaces and preserves tabs at compact widths. Common controls
+translate display labels while retaining operation values. Native tray items are
+grouped into quick actions, tools and app preferences, with busy status, a
+language submenu, Settings and manual vault lock. Async/synchronous native
+failures produce generic feedback without raw private data or unhandled
+rejections. Tray refresh and disposal tolerate closing native resources.
+
+`attachWindowRecovery` catches renderer process failure and failed initial loads,
+invalidates vault access and forgets unrecoverable RAM checkpoints before asking
+the user to reload or close. There is no automatic reload loop. Recovery may lose
+unsaved input; encrypted files stay on disk. Security-testing network jobs abort
+on renderer death. Tests force a real Electron renderer crash in an isolated
+temporary profile and verify main-process survival, cleared keys and restored
+preload access. This reduces failure impact, not a guarantee against every
+possible native/OS crash. See [verification notes](i18n-ux-2026-10-07.md).
+
+### Tool workspace consistency
+
+The four analytical tools, environment comparison and five security-testing tools
+share `components/ui/ToolWorkspace.tsx`: a fixed `ToolToolbar`, independently
+scrolling input/results panes, compact pane tabs, explicit empty/busy/error states
+and a secondary limits disclosure. Paired documents retain both editors when
+switching tabs. `SplitPane` explicitly hides inactive panels and moves focus out
+of a panel that becomes hidden, including an automatic transition to results.
+
+`AnalysisInput` preserves bounded UTF-8 file reads and revision guards. Transient
+text inputs use the existing CodeMirror editor through `ToolTextInput`; an optional
+editor transaction limit rejects oversized changes before the visible document
+and application state diverge. A read-only editor, in addition to a disabled
+fieldset, locks request bodies during network runs. Request edits explicitly
+invalidate results; they do not depend on textarea change-event bubbling.
+Processing, IPC, tool IDs, privacy exclusions and cancellation budgets are
+unchanged. Additional interface labels and count/state summaries are in
+`src/shared/i18n/analysis-messages.ts`; backend diagnostics and some detailed
+technical findings continue to use English fallback.
+See [the workspace review and verification notes](tool-workspace-2026-10-07.md).

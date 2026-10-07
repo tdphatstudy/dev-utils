@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences, type ToolLoadingMode } from './app-preferences'
+import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences, type ToolLoadingMode, type SurfaceMode, type MotionMode, type InputRetention } from './app-preferences'
+import { useSessionStore } from './session-store'
+import { isLanguage, isLocale, type LanguageSetting, type LocaleId } from '@shared/i18n/locales'
 
 export type { ToolLoadingMode } from './app-preferences'
 
@@ -10,7 +12,17 @@ export type ThemeMode = 'dark' | 'light' | 'system'
 export type LaunchMode = 'home' | 'last'
 
 interface AppState {
+  language: LanguageSetting
+  systemLocale: LocaleId | null
+  setLanguage: (language: LanguageSetting) => void
+  setSystemLocale: (locale: LocaleId) => void
   theme: ThemeMode
+  surfaceMode: SurfaceMode
+  motionMode: MotionMode
+  inputRetention: InputRetention
+  setInputRetention: (mode: InputRetention) => void
+  setSurfaceMode: (mode: SurfaceMode) => void
+  setMotionMode: (mode: MotionMode) => void
   sidebarCollapsed: boolean
   /** Last opened tool (for "resume last tool" launch mode). */
   lastToolId: string | null
@@ -48,7 +60,21 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      language: 'system',
+      systemLocale: null,
+      setLanguage: language => { if (isLanguage(language)) set({ language }) },
+      setSystemLocale: systemLocale => { if (isLocale(systemLocale)) set({ systemLocale }) },
       theme: 'dark',
+      surfaceMode: 'glass',
+      motionMode: 'system',
+      inputRetention: 'session',
+      setInputRetention: (inputRetention) => {
+        if (inputRetention !== 'session' && inputRetention !== 'off') return
+        useSessionStore.getState().setRetention(inputRetention === 'session')
+        set({ inputRetention })
+      },
+      setSurfaceMode: (surfaceMode) => set({ surfaceMode }),
+      setMotionMode: (motionMode) => set({ motionMode }),
       sidebarCollapsed: false,
       lastToolId: null,
       recentToolIds: [],
@@ -87,9 +113,17 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'devutils-app',
-      merge: (persisted, current) => ({ ...current, ...readAppPreferences(persisted) }),
+      merge: (persisted, current) => {
+        const next = { ...current, ...readAppPreferences(persisted) }
+        useSessionStore.getState().setRetention(next.inputRetention === 'session')
+        return next
+      },
       partialize: (s) => ({
+        language: s.language,
         theme: s.theme,
+        surfaceMode: s.surfaceMode,
+        motionMode: s.motionMode,
+        inputRetention: s.inputRetention,
         sidebarCollapsed: s.sidebarCollapsed,
         lastToolId: s.lastToolId,
         recentToolIds: s.recentToolIds,

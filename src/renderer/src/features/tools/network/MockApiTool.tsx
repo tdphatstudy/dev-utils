@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, Download, Play, Plus, Square, Trash2, Undo2, Upload } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -32,6 +33,7 @@ function conditionLabel(condition: MockCondition): string {
 }
 
 export default function MockApiTool(): JSX.Element {
+  useUiLocale()
   const [yaml, setYaml] = useState(MOCK_EXAMPLE_YAML)
   const [tab, setTab] = useState<Tab>('Endpoints')
   const [selected, setSelected] = useState('')
@@ -151,10 +153,10 @@ export default function MockApiTool(): JSX.Element {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <ToolToolbar>
-        {status.running ? <button className="mac-btn-secondary" disabled={busy} onClick={() => void run('stop')}><Square size={14} />Stop server</button>
+        {status.running ? <button className="mac-btn-secondary" disabled={busy} onClick={() => void run('stop')}><Square size={14} />{uiText('Stop server')}</button>
           : <button className="mac-btn-primary" disabled={!api || !ready || busy || !config} onClick={() => void run('start')}><Play size={14} />Start server</button>}
         {status.running && <button className="mac-btn-primary" disabled={busy || !config || !hasPendingChanges || portChanged} title={portChanged ? 'Stop and start the server to change its port' : undefined} onClick={() => void run('apply')}><Check size={14} />Apply changes</button>}
-        <ToolStatus tone={status.running ? 'success' : 'neutral'}>{busy ? 'Working…' : status.running ? `Serving ${status.name} · ${status.requests} requests` : 'Stopped · no listening port'}</ToolStatus>
+        <ToolStatus tone={status.running ? 'success' : 'neutral'}>{busy ? uiText('Working…') : status.running ? `Serving ${status.name} · ${status.requests} requests` : 'Stopped · no listening port'}</ToolStatus>
         <div className="ml-auto flex flex-wrap gap-2">
           <button className="mac-btn-secondary" onClick={() => importRef.current?.click()}><Upload size={14} />Import YAML</button>
           <button className="mac-btn-secondary" disabled={!config} onClick={() => download(yaml)}><Download size={14} />Export YAML</button>
@@ -163,7 +165,7 @@ export default function MockApiTool(): JSX.Element {
         </div>
       </ToolToolbar>
       <div className="shrink-0 space-y-2 border-b border-mac-separator px-4 py-3 text-[13px]">
-        {status.baseUrl && <div className="flex flex-wrap items-center gap-2"><code className="selectable break-all text-mac-success">{status.baseUrl}</code><CopyButton text={status.baseUrl} label="Copy base URL" /><span role="status" className={hasPendingChanges ? 'text-mac-warning' : 'text-mac-label-secondary'}>{hasPendingChanges ? portChanged ? 'Unapplied changes. Stop and start the server to change its port.' : 'Unapplied changes. Click Apply changes to serve this draft; the server is still using the previous configuration.' : 'All changes applied to the running server.'}</span></div>}
+        {status.baseUrl && <div className="flex flex-wrap items-center gap-2"><code className="selectable break-all text-mac-success">{status.baseUrl}</code><CopyButton text={status.baseUrl} label={uiText('Copy base URL')} /><span role="status" className={hasPendingChanges ? 'text-mac-warning' : 'text-mac-label-secondary'}>{hasPendingChanges ? portChanged ? 'Unapplied changes. Stop and start the server to change its port.' : 'Unapplied changes. Click Apply changes to serve this draft; the server is still using the previous configuration.' : 'All changes applied to the running server.'}</span></div>}
         <p className="text-mac-label-secondary">Export YAML to keep your draft. A started server stays active in the tray until Stop or Quit.</p>
         {undo && <div className="flex flex-wrap items-center gap-2 rounded-mac-lg bg-mac-control px-3 py-2"><span role="status" className="min-w-0 flex-1">{undo.message}</span><button type="button" className="mac-btn-secondary" onClick={() => { importVersion.current++; setYaml(undo.yaml); setSelected(undo.selected); setUndo(null); setError('') }}><Undo2 size={14} />Undo delete</button></div>}
         {!api && <p role="alert" className="text-mac-warning">Starting a server requires the DevFusion desktop app. You can still build, import, export and try rules here.</p>}
@@ -213,6 +215,7 @@ export default function MockApiTool(): JSX.Element {
 }
 
 function ServerSettings({ config, onSave }: { config: MockConfig; onSave: (config: MockConfig) => void }): JSX.Element {
+  useUiLocale()
   const [name, setName] = useState(config.name)
   const [port, setPort] = useState(String(config.port))
   const [cors, setCors] = useState(config.cors.enabled)
@@ -228,17 +231,19 @@ function ServerSettings({ config, onSave }: { config: MockConfig; onSave: (confi
 }
 
 function EndpointEditor({ draft, onClose, onSave }: { draft: MockEndpoint; onClose: () => void; onSave: (draft: MockEndpoint) => void }): JSX.Element {
+  useUiLocale()
   const [value, setValue] = useState(draft)
   const [error, setError] = useState('')
   return <Modal open title="Endpoint" description="Use exact routes or named path parameters such as /api/users/:id." onClose={onClose}><form className="space-y-3" onSubmit={(event) => { event.preventDefault(); try { onSave(value) } catch (failure) { setError(message(failure)) } }}>
     <label className="block text-[13px]">Endpoint name<input className="mac-input mt-1" value={value.name} maxLength={120} onChange={(event) => setValue({ ...value, name: event.target.value })} /></label>
     <label className="block text-[13px]">Method<select aria-label="Method" className="mac-input mt-1" value={value.method} onChange={(event) => setValue({ ...value, method: event.target.value as MockEndpoint['method'] })}>{MOCK_METHODS.map((method) => <option key={method}>{method}</option>)}</select></label>
     <label className="block text-[13px]">Path<input className="mac-input mt-1 font-mono" value={value.path} maxLength={2048} onChange={(event) => setValue({ ...value, path: event.target.value })} /></label>
-    {error && <p role="alert" className="text-[13px] text-mac-danger">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={onClose}>Cancel</button><button type="submit" className="mac-btn-primary">Save endpoint</button></div>
+    {error && <p role="alert" className="text-[13px] text-mac-danger">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={onClose}>{uiText('Cancel')}</button><button type="submit" className="mac-btn-primary">Save endpoint</button></div>
   </form></Modal>
 }
 
 function ResponseEditor({ draft, onClose, onSave }: { draft: MockResponse; onClose: () => void; onSave: (draft: MockResponse) => void }): JSX.Element {
+  useUiLocale()
   const [name, setName] = useState(draft.name)
   const [status, setStatus] = useState(String(draft.status))
   const [delay, setDelay] = useState(String(draft.delayMs ?? 0))
@@ -263,11 +268,12 @@ function ResponseEditor({ draft, onClose, onSave }: { draft: MockResponse; onClo
     <label className="block text-[13px]">Response headers (JSON object)<textarea aria-label="Response headers" className="mac-input mt-1 h-20 resize-y font-mono" spellCheck={false} value={headers} maxLength={65536} onChange={(event) => setHeaders(event.target.value)} /></label>
     <label className="block text-[13px]">Body format<select aria-label="Body format" className="mac-input mt-1" value={bodyType} onChange={(event) => setBodyType(event.target.value as 'json' | 'text')}><option value="json">JSON</option><option value="text">Text</option></select></label>
     <div className="h-48"><CodeEditor value={body} onChange={setBody} language={bodyType === 'json' ? 'json' : 'text'} label="Response body" /></div>
-    {error && <p role="alert" className="text-[13px] text-mac-danger">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={onClose}>Cancel</button><button type="submit" className="mac-btn-primary">Save response</button></div>
+    {error && <p role="alert" className="text-[13px] text-mac-danger">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={onClose}>{uiText('Cancel')}</button><button type="submit" className="mac-btn-primary">Save response</button></div>
   </form></Modal>
 }
 
 function ConditionList({ label, values, onChange }: { label: string; values: MockCondition[]; onChange: (values: MockCondition[]) => void }): JSX.Element {
+  useUiLocale()
   const edit = (index: number, value: MockCondition): void => onChange(values.map((entry, position) => position === index ? value : entry))
   return <fieldset className="space-y-2 rounded-mac-lg border border-mac-separator p-3"><legend className="px-1 text-[13px] font-semibold">{label} conditions</legend>
     <p className="pb-1 text-[13px] leading-relaxed text-mac-label-secondary">{label === 'ALL' ? 'Every condition below must match the request.' : 'At least one condition below must match. Leave empty if no alternative condition is needed.'}</p>
@@ -283,6 +289,7 @@ function ConditionList({ label, values, onChange }: { label: string; values: Moc
 }
 
 function RuleTester({ config }: { config: MockConfig | null }): JSX.Element {
+  useUiLocale()
   const [method, setMethod] = useState('GET')
   const [path, setPath] = useState('/api/users?role=admin')
   const [headers, setHeaders] = useState('{"authorization":"Bearer example"}')
@@ -320,6 +327,7 @@ function RuleTester({ config }: { config: MockConfig | null }): JSX.Element {
 }
 
 function Guide(): JSX.Element {
+  useUiLocale()
   return <div className="max-w-3xl space-y-4 text-[14px] leading-relaxed"><h2 className="text-[16px] font-semibold">Connect your frontend while the backend is being built</h2><ol className="list-decimal space-y-2 pl-5"><li>Define endpoints in the form or YAML. Use named path parameters such as <code>/api/users/:id</code>.</li><li>Add response rules: missing authorization → 401, role filter → a filtered list, invalid JSON field → 422. Put specific rules before broader ones.</li><li>Use Try rules to verify headers, query and body conditions. The last response is the unconditional fallback.</li><li>Start the server and set your frontend API base URL to <code>http://127.0.0.1:PORT</code>. The example uses port 4010. Local development origins are allowed by default.</li><li>Use Apply changes after editing a running server. Only port changes require Stop, then Start. Export YAML to save or share your contract; import reloads it without starting a server.</li></ol>
     <div className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4"><h3 className="mb-2 font-semibold">Condition behavior</h3><ul className="list-disc space-y-1 pl-4"><li>ALL must all pass; ANY requires at least one match. If both are present, both groups must pass.</li><li>Header names ignore case. Repeated query values match when any one value passes the operator.</li><li>Body conditions use JSON Pointer: <code>/user/role</code>, <code>/items/0/id</code>, and an empty key for the root. Null is present; missing is absent.</li><li>Body equals checks the value type. For gt/gte/lt/lte, choose Number. Date strings compare as text only.</li><li>Routes are checked in YAML order. Put fixed routes such as <code>/users/me</code> before <code>/users/:id</code>. HEAD falls back to GET and sends no body.</li><li>Response headers and JSON/text bodies are static values. Delays are capped at 10 seconds; request/response bodies at 1 MiB. Scripts, regular expressions and proxying are unavailable.</li></ul></div>
     <div className="rounded-mac-lg border border-mac-separator p-4"><h3 className="mb-2 font-semibold">Browser example</h3><pre className="selectable overflow-auto whitespace-pre-wrap break-all font-mono text-[13px]">{'fetch("http://127.0.0.1:4010/api/users?role=admin", {\n  headers: { Authorization: "Bearer example" }\n}).then(response => response.json())'}</pre><p className="mt-2 text-mac-label-secondary">Use fetch without credentials. Add an exact CORS origin for a non-local frontend; HTTPS pages may block HTTP mixed content. This server is for local development and exposes no LAN listener.</p></div>

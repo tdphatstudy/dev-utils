@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FolderOpen,
@@ -41,6 +42,7 @@ const emptyHostForm = (): SshHostInput => ({
 })
 
 export default function SshManager(): JSX.Element {
+  useUiLocale()
   const desktop = !!window.devutils?.ssh
   const loadVersion = useRef(0)
   const publicVersion = useRef(0)
@@ -626,8 +628,7 @@ export default function SshManager(): JSX.Element {
                   className="mac-btn-ghost"
                   onClick={() => setHostFormMode(null)}
                 >
-                  Cancel
-                </button>
+                  {uiText('Cancel')}</button>
               </div>
               {hostFormIssue && <p role="status" className="text-[12px] text-mac-label-secondary">{hostFormIssue}</p>}
             </div>
@@ -715,8 +716,7 @@ export default function SshManager(): JSX.Element {
                   className="mac-btn-ghost"
                   onClick={() => setKeyFormMode(null)}
                 >
-                  Cancel
-                </button>
+                  {uiText('Cancel')}</button>
               </div>
               {keyIssue && <p role="status" className="text-[12px] text-mac-label-secondary">{keyIssue}</p>}
               <p className="text-[11px] text-mac-label-secondary">Private keys use OpenSSH format and have no passphrase. Keep the key and recovery copies private. Renaming does not update config or external scripts.</p>
@@ -811,7 +811,7 @@ export default function SshManager(): JSX.Element {
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
                       Public key
                     </span>
-                    <CopyButton text={pubContent} label="Copy" />
+                    <CopyButton text={pubContent} label={uiText('Copy')} />
                   </div>
                   <pre className="selectable max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-mac border border-mac-separator bg-mac-control p-2 font-mono text-[11px]">
                     {pubContent}
@@ -868,7 +868,7 @@ export default function SshManager(): JSX.Element {
                 ) : (
                   <Wifi className="h-3.5 w-3.5" />
                 )}
-                {testing ? 'Testing…' : 'Test'}
+                {testing ? 'Testing…' : uiText('Test')}
               </button>
             </div>
             <p className="text-[11px] text-mac-label-tertiary">Tests TCP reachability only; does not authenticate SSH or verify host keys.</p>

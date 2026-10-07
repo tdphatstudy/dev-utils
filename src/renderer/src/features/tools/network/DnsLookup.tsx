@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { normalizeDnsInput, DNS_RECORD_TYPES, DNS_RECORD_HELP, type DnsRecordType } from '@shared/network/dns'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -7,6 +8,7 @@ import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
 
 
 export default function DnsLookup(): JSX.Element {
+  useUiLocale()
   const [host, setHost] = useState('example.com')
   const [type, setType] = useState<DnsRecordType>('A')
   const [output, setOutput] = useState('')
@@ -93,8 +95,8 @@ export default function DnsLookup(): JSX.Element {
         <button type="button" className="mac-btn-primary" disabled={busy || !normalized.ok || !available} onClick={lookup}>
           {busy ? 'Looking up…' : 'Lookup'}
         </button>
-        <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => { invalidate(); setHost(type === 'PTR' ? '1.1.1.1' : type === 'SRV' ? '_sip._tcp.example.com' : 'example.com') }}>Sample</button>
-        <button type="button" className="mac-btn-secondary" disabled={busy || (!host && !output)} onClick={() => { invalidate(); setHost('') }}>Clear</button>
+        <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => { invalidate(); setHost(type === 'PTR' ? '1.1.1.1' : type === 'SRV' ? '_sip._tcp.example.com' : 'example.com') }}>{uiText('Sample')}</button>
+        <button type="button" className="mac-btn-secondary" disabled={busy || (!host && !output)} onClick={() => { invalidate(); setHost('') }}>{uiText('Clear')}</button>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <SaveToBoxButton type="json" content={output} disabled={!output || busy} />
           <CopyButton text={output} label="Copy response" />

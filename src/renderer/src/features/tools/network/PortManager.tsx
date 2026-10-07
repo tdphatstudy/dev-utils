@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw, Skull, ShieldAlert } from 'lucide-react'
 import { isCriticalProcess, systemKillConfirmPhrase } from '@shared/ports/classify'
@@ -9,6 +10,7 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 type Filter = 'all' | PortTier
 
 export default function PortManager(): JSX.Element {
+  useUiLocale()
   const [entries, setEntries] = useState<PortEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -160,7 +162,7 @@ export default function PortManager(): JSX.Element {
             [
               { id: 'all', label: 'All' },
               { id: 'application', label: 'Application' },
-              { id: 'system', label: 'System' }
+              { id: 'system', label: uiText('System') }
             ] as const
           ).map((f) => (
             <button
@@ -187,7 +189,7 @@ export default function PortManager(): JSX.Element {
         <CopyButton text={!filtered.length || busy || error ? '' : JSON.stringify(filtered, null, 2)} label="Copy JSON" />
         <div className="ml-auto flex items-center gap-3 text-[11px]">
           <Legend color="bg-emerald-500" label="Application" />
-          <Legend color="bg-amber-500" label="System" />
+          <Legend color="bg-amber-500" label={uiText('System')} />
         </div>
       </ToolToolbar>
 
@@ -195,7 +197,7 @@ export default function PortManager(): JSX.Element {
         Scans <strong className="text-mac-label">TCP LISTEN</strong> only (fast).{' '}
         <strong className="text-mac-label">Application</strong> (green) — dev servers (3000, 5173,
         node…) · simple confirm.{' '}
-        <strong className="text-mac-warning">System</strong> (amber) — OS / infra — type{' '}
+        <strong className="text-mac-warning">{uiText('System')}</strong> (amber) — OS / infra — type{' '}
         <code className="font-mono text-mac-label">kill [port]</code>. Never kills this app or
         protected PIDs or known critical process names. Process details may be hidden by OS permissions. Stopping a process closes all its listeners.
       </div>
@@ -220,7 +222,7 @@ export default function PortManager(): JSX.Element {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-10 text-center text-mac-label-tertiary">
-                  {busy ? 'Scanning TCP listeners…' : !desktop ? 'Desktop app required' : error ? 'Scan unavailable' : entries.length ? 'No listeners match these filters. Clear filters to show all.' : 'No visible TCP listeners found. Permissions can limit this scan.'}
+                  {busy ? 'Scanning TCP listeners…' : !desktop ? uiText('Desktop app required') : error ? 'Scan unavailable' : entries.length ? 'No listeners match these filters. Clear filters to show all.' : 'No visible TCP listeners found. Permissions can limit this scan.'}
                 </td>
               </tr>
             ) : (
@@ -275,7 +277,7 @@ export default function PortManager(): JSX.Element {
 
       <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : entries.length ? 'success' : 'neutral'}>
-          {!desktop ? 'Desktop app required' : error ?? (busy ? 'Scanning…' : status)}
+          {!desktop ? uiText('Desktop app required') : error ?? (busy ? 'Scanning…' : status)}
         </ToolStatus>
         {scannedAt && <span className="ml-auto text-[11px] text-mac-label-tertiary">{filtered.length}/{entries.length} shown · {new Date(scannedAt).toLocaleTimeString()}</span>}
       </footer>
@@ -369,8 +371,7 @@ export default function PortManager(): JSX.Element {
                 disabled={killing}
                 onClick={closeKill}
               >
-                Cancel
-              </button>
+                {uiText('Cancel')}</button>
               <button
                 type="button"
                 className={cn(
@@ -395,6 +396,7 @@ export default function PortManager(): JSX.Element {
 }
 
 function TierBadge({ tier }: { tier: PortTier }): JSX.Element {
+  useUiLocale()
   return (
     <span
       className={cn(
@@ -410,12 +412,13 @@ function TierBadge({ tier }: { tier: PortTier }): JSX.Element {
           tier === 'system' ? 'bg-amber-500' : 'bg-emerald-500'
         )}
       />
-      {tier === 'system' ? 'System' : 'App'}
+      {tier === 'system' ? uiText('System') : uiText('App')}
     </span>
   )
 }
 
 function Legend({ color, label }: { color: string; label: string }): JSX.Element {
+  useUiLocale()
   return (
     <span className="flex items-center gap-1.5 text-mac-label-secondary">
       <span className={cn('h-2 w-2 rounded-full', color)} />

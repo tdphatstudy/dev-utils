@@ -1,3 +1,4 @@
+import { t as uiText } from '@renderer/i18n'
 import { useToolPreloadStore } from '@renderer/store/tool-preload-store'
 import { useAppStore, type LaunchMode, type ThemeMode, type ToolLoadingMode } from '@renderer/store/app-store'
 import { useSessionStore } from '@renderer/store/session-store'
@@ -5,10 +6,31 @@ import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { useNavigate } from 'react-router-dom'
 import { getToolById } from '@renderer/registry/tools'
 import { useEffect, useState } from 'react'
+import type { SurfaceMode, MotionMode } from '@renderer/store/app-preferences'
+import { VAULT_IDLE_MINUTES, type VaultIdleMinutes } from '@shared/security-policy'
+import { LOCALES, type LanguageSetting } from '@shared/i18n/locales'
+import { setInterfaceLanguage, useI18n } from '@renderer/i18n'
 
 export function SettingsPage(): JSX.Element {
+  const { t } = useI18n()
+  const language = useAppStore(state => state.language)
+  const [languageBusy, setLanguageBusy] = useState(false), [languageError, setLanguageError] = useState(false)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
+  const surfaceMode = useAppStore((s) => s.surfaceMode)
+  const setSurfaceMode = useAppStore((s) => s.setSurfaceMode)
+  const motionMode = useAppStore((s) => s.motionMode)
+  const setMotionMode = useAppStore((s) => s.setMotionMode)
+  const inputRetention = useAppStore((s) => s.inputRetention)
+  const setInputRetention = useAppStore((s) => s.setInputRetention)
+  const [idleMinutes, setIdleMinutes] = useState<VaultIdleMinutes | null>(null)
+  const [policyBusy, setPolicyBusy] = useState(false)
+  const [policyError, setPolicyError] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.devutils?.security?.state().then((state) => { if (live) setIdleMinutes(state.idleMinutes) }).catch(() => { if (live) setPolicyError(true) })
+    return () => { live = false }
+  }, [])
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
   const launchMode = useAppStore((s) => s.launchMode)
@@ -30,73 +52,113 @@ export function SettingsPage(): JSX.Element {
       <div className="mx-auto max-w-xl space-y-6">
         <div>
           <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-mac-label-tertiary">
-            Preferences
-          </p>
+            {uiText('Preferences')}</p>
           <h1 className="mt-0.5 text-[20px] font-semibold tracking-[-0.02em] text-mac-label">
-            Settings
-          </h1>
+            {uiText('Settings')}</h1>
           <p className="mt-1 text-[14px] text-mac-label-secondary">
-            Make DevFusion feel right for you. Your preferences are saved on this device.
-          </p>
+            {uiText('Make DevFusion feel right for you. Your preferences are saved on this device.')}</p>
         </div>
 
+        <section aria-labelledby="language-heading" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 id="language-heading" className="mb-3 text-[13px] font-semibold">{t('Language')}</h2>
+          <label className="mb-1.5 block text-[14px]" htmlFor="interface-language">{t('Interface language')}</label>
+          <select id="interface-language" data-language-select className="mac-input" value={language} disabled={languageBusy} onChange={event => {
+            const value = event.target.value as LanguageSetting
+            setLanguageBusy(true); setLanguageError(false)
+            void setInterfaceLanguage(value).catch(() => setLanguageError(true)).finally(() => setLanguageBusy(false))
+          }}><option value="system">{t('Follow system')}</option>{LOCALES.map(value => <option key={value.id} value={value.id} lang={value.intl}>{value.name}</option>)}</select>
+          <p className="mt-3 text-[13px] leading-relaxed text-mac-label-secondary">{t('Applies immediately to the interface and desktop tray. Code and your input stay unchanged.')}</p>
+          {languageBusy && <p role="status" className="mt-2 text-[13px]">{t('Saving…')}</p>}
+          {languageError && <p role="alert" className="mt-2 text-[13px] text-mac-danger">{t('Language could not be saved. Try again.')}</p>}
+        </section>
+
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
-          <h2 className="mb-2 text-[13px] font-semibold text-mac-label">Desktop tray</h2>
-          <p className="text-[14px] leading-relaxed text-mac-label-secondary">{tray === true ? 'Closing the window locks the vault and clears this window’s drafts and history. DevFusion stays in the tray for color picking, OCR, UUID copying and quick tools. A Mock API server you started keeps running until Stop or Quit.' : tray === false ? 'The desktop tray is unavailable. Closing the last window exits normally on Windows and Linux.' : window.devutils?.app ? 'Checking desktop tray…' : 'The tray is available in the desktop app.'}</p>
-          <p className="mt-2 text-[13px] text-mac-label-tertiary">No hidden tool window, screen polling or automatic startup. Use Quit to stop the app completely.</p>
-          {window.devutils?.app && <button type="button" className="mac-btn-secondary mt-3" onClick={() => { void window.devutils.app.quit().catch(() => setQuitError('Could not quit. Try Quit from the tray menu.')) }}>Quit DevFusion</button>}
+          <h2 className="mb-2 text-[13px] font-semibold text-mac-label">{uiText('Desktop tray')}</h2>
+          <p className="text-[14px] leading-relaxed text-mac-label-secondary">{tray === true ? t('Closing clears drafts and history and locks boxes. The app stays in the tray. Mock API keeps running until Stop or Quit.') : tray === false ? t('The tray is unavailable. Closing the last window exits on Windows and Linux.') : window.devutils?.app ? uiText('Checking desktop tray…') : uiText('The tray is available in the desktop app.')}</p>
+          <p className="mt-2 text-[13px] text-mac-label-tertiary">{t('No automatic startup or screen polling. Quit stops the app completely.')}</p>
+          {window.devutils?.app && <button type="button" className="mac-btn-secondary mt-3" onClick={() => { void window.devutils.app.quit().catch(() => setQuitError('Could not quit. Try Quit from the tray menu.')) }}>{uiText('Quit DevFusion')}</button>}
           {quitError && <p role="alert" className="mt-2 text-[13px] text-mac-danger">{quitError}</p>}
         </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-            Appearance
-          </h2>
+            {uiText('Appearance')}</h2>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="text-[14px] text-mac-label-secondary">Theme</span>
+            <span className="text-[14px] text-mac-label-secondary">{uiText('Theme')}</span>
             <SegmentedControl
               value={theme}
-              label="Theme"
+              label={uiText('Theme')}
               onChange={(v) => setTheme(v as ThemeMode)}
               options={[
-                { value: 'dark', label: 'Dark' },
-                { value: 'light', label: 'Light' },
-                { value: 'system', label: 'System' }
+                { value: 'dark', label: uiText('Dark') },
+                { value: 'light', label: uiText('Light') },
+                { value: 'system', label: uiText('System') }
               ]}
             />
           </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <span className="text-[14px] text-mac-label-secondary">{uiText('Surface')}</span>
+            <SegmentedControl label={uiText('Surface')} value={surfaceMode} onChange={(value) => setSurfaceMode(value as SurfaceMode)} options={[{ value: 'glass', label: 'Liquid Glass' }, { value: 'solid', label: uiText('Solid') }]} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <span className="text-[14px] text-mac-label-secondary">{uiText('Motion')}</span>
+            <SegmentedControl label={uiText('Motion')} value={motionMode} onChange={(value) => setMotionMode(value as MotionMode)} options={[{ value: 'system', label: uiText('Follow system') }, { value: 'reduced', label: uiText('Reduced') }]} />
+          </div>
+          <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Glass adds depth; Solid removes transparency. Editors stay solid. Follow system respects reduced motion.')}</p>
           <div className="mt-4 flex items-center justify-between gap-4">
-            <span className="text-[14px] text-mac-label-secondary">Sidebar</span>
+            <span className="text-[14px] text-mac-label-secondary">{uiText('Sidebar')}</span>
             <button
               type="button"
               className="mac-btn-secondary"
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? uiText('Expand sidebar') : uiText('Collapse sidebar')}
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             >
-              {sidebarCollapsed ? 'Expand' : 'Collapse'}
+              {sidebarCollapsed ? uiText('Expand') : uiText('Collapse')}
             </button>
           </div>
+        </section>
+
+        <section aria-labelledby="security-heading" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
+          <h2 id="security-heading" className="text-[13px] font-semibold text-mac-label">{uiText('Security & privacy')}</h2>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[14px] text-mac-label-secondary">{uiText('Tool input retention')}</span>
+            <SegmentedControl label={uiText('Tool input retention')} value={inputRetention} onChange={(value) => setInputRetention(value as 'session' | 'off')} options={[{ value: 'session', label: uiText('This window') }, { value: 'off', label: uiText('Off') }]} />
+          </div>
+          <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Off clears cached inputs and history. Current input clears when you leave the tool. Sensitive tools never cache input.')}</p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <label htmlFor="vault-idle-minutes" className="text-[14px] text-mac-label-secondary">{uiText('Lock boxes after device idle')}</label>
+            <select id="vault-idle-minutes" className="mac-input" value={idleMinutes ?? ''} disabled={idleMinutes === null || policyBusy} onChange={(event) => {
+              const minutes = Number(event.target.value) as VaultIdleMinutes
+              setPolicyBusy(true); setPolicyError(false)
+              void window.devutils.security.setIdleMinutes(minutes).then((state) => setIdleMinutes(state.idleMinutes)).catch(() => setPolicyError(true)).finally(() => setPolicyBusy(false))
+            }}>
+              {idleMinutes === null && <option value="">{uiText('Desktop app required')}</option>}
+              {VAULT_IDLE_MINUTES.map((minutes) => <option key={minutes} value={minutes}>{t('{count} minutes', { count: minutes })}</option>)}
+            </select>
+          </div>
+          <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Boxes lock on sleep or screen lock. Unsaved edits are encrypted in RAM for recovery after unlocking the original box. Save recovered edits before closing.')}</p>
+          {policyBusy && <p role="status" className="mt-2 text-xs text-mac-label-secondary">{t('Saving…')}</p>}
+          {policyError && <p role="alert" className="mt-2 text-xs text-mac-danger">{t('Could not load or save the lock policy. Reopen Settings to retry.')}</p>}
         </section>
 
         <section aria-labelledby="tool-loading-heading" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="tool-loading-heading" className="text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-              Tool loading
-            </h2>
+              {uiText('Tool loading')}</h2>
             <SegmentedControl
               value={toolLoadingMode}
-              label="Tool loading"
+              label={uiText('Tool loading')}
               onChange={(value) => setToolLoadingMode(value as ToolLoadingMode)}
               options={[
-                { value: 'on-demand', label: 'On demand' },
-                { value: 'preload', label: 'Preload' }
+                { value: 'on-demand', label: uiText('On demand') },
+                { value: 'preload', label: uiText('Preload') }
               ]}
             />
           </div>
           <p className="mt-3 text-[14px] leading-relaxed text-mac-label-secondary">
             {toolLoadingMode === 'on-demand'
-              ? 'Default · Loads each tool when you open it, reducing startup memory and CPU use.'
-              : 'Prepares tool interfaces while this window is visible and idle. Uses more memory and background CPU to reduce first-open waits.'}
+              ? t('Loads tools when opened, using less startup memory and CPU.')
+              : t('Prepares interfaces while the window is visible and idle. Uses more memory and CPU to open tools faster.')}
           </p>
           {toolLoadingMode === 'preload' && (
             <p role="status" aria-live={preparation.phase === 'ready' || preparation.phase === 'partial' ? 'polite' : 'off'} aria-atomic="true" className="mt-2 text-[13px] text-mac-label-secondary">
@@ -110,28 +172,25 @@ export function SettingsPage(): JSX.Element {
             </p>
           )}
           <p className="mt-2 text-[12px] leading-relaxed text-mac-label-tertiary">
-            OCR processing and system or network actions still run only when requested. Switching to On demand stops further preparation; loaded tools stay cached until this window closes or reloads.
-          </p>
+            {t('Preparation loads interfaces only. OCR, file, system and network actions run when you request them.')}</p>
         </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-            On launch
-          </h2>
+            {uiText('On launch')}</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-[14px] text-mac-label-secondary">Start at</div>
+              <div className="text-[14px] text-mac-label-secondary">{uiText('Start at')}</div>
               <p className="mt-0.5 text-[12px] text-mac-label-tertiary">
-                Choose Home to browse tools, or Last tool to reopen your previous tool. Tool inputs are not restored after the window closes.
-              </p>
+                {t('Choose Home or your last tool. Input is not restored after closing the window.')}</p>
             </div>
             <SegmentedControl
               value={launchMode}
-              label="Start at"
+              label={uiText('Start at')}
               onChange={(v) => setLaunchMode(v as LaunchMode)}
               options={[
-                { value: 'home', label: 'Home' },
-                { value: 'last', label: 'Last tool' }
+                { value: 'home', label: uiText('Home') },
+                { value: 'last', label: uiText('Last tool') }
               ]}
             />
           </div>
@@ -140,23 +199,21 @@ export function SettingsPage(): JSX.Element {
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-              Session history
-            </h2>
+              {uiText('Session history')}</h2>
             <button
               type="button"
               className="mac-btn-ghost !text-[12px]"
               onClick={clearHistory}
               disabled={history.length === 0}
-              aria-label="Clear session history"
+              aria-label={uiText('Clear session history')}
             >
-              Clear
-            </button>
+              {uiText('Clear')}</button>
           </div>
           <p className="mb-3 text-[13px] text-mac-label-secondary">
-            {history.length} entries · input snippets from eligible tools, kept only until this window closes or reloads. Security, vault, SSH, HTTP, Mock API, URL, QR, OCR and screen-color payloads are excluded.
+            {t('{count} entries in RAM. Sensitive inputs are excluded. Closing or reloading clears history.', { count: history.length })}
           </p>
           {history.length === 0 ? (
-            <p className="text-[14px] text-mac-label-tertiary">No history yet</p>
+            <p className="text-[14px] text-mac-label-tertiary">{uiText('No history yet')}</p>
           ) : (
             <ul className="max-h-64 space-y-1 overflow-auto">
               {history.map((h) => {
@@ -169,7 +226,7 @@ export function SettingsPage(): JSX.Element {
                       onClick={() => navigate(`/tool/${h.toolId}`)}
                     >
                       <span className="text-[14px] font-medium text-mac-label">
-                        {tool?.name ?? h.label}
+                        {tool ? t(tool.name) : h.label}
                       </span>
                       <span className="truncate font-mono text-[12px] text-mac-label-tertiary">
                         {h.snippet}
@@ -184,22 +241,21 @@ export function SettingsPage(): JSX.Element {
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">Input drafts</h2>
-            <button type="button" className="mac-btn-ghost !text-[12px]" disabled={draftCount === 0} onClick={clearDrafts}>Clear input drafts</button>
+            <h2 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">{uiText('Input drafts')}</h2>
+            <button type="button" className="mac-btn-ghost !text-[12px]" disabled={draftCount === 0} onClick={clearDrafts}>{uiText('Clear input drafts')}</button>
           </div>
-          <p className="text-[13px] text-mac-label-secondary">{draftCount} cached tool inputs in memory. Clearing removes inputs restored when returning to a tool. It does not remove saved vault files, preferences or history.</p>
+          <p className="text-[13px] text-mac-label-secondary">{t('{count} cached inputs in RAM. Clear removes drafts; saved files and preferences are kept.', { count: draftCount })}</p>
         </section>
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-            Shortcuts
-          </h2>
+            {uiText('Shortcuts')}</h2>
           <ul className="space-y-2 text-[14px] text-mac-label-secondary">
             <li className="flex items-center gap-2">
               <kbd className="mac-kbd">⌘/Ctrl+K</kbd>
-              <span>Open command palette</span>
+              <span>{uiText('Open command palette')}</span>
             </li>
-            <li className="flex items-center gap-2"><kbd className="mac-kbd">⌘/Ctrl+Enter</kbd><span>Run in supported editors and HTTP requests</span></li>
+            <li className="flex items-center gap-2"><kbd className="mac-kbd">⌘/Ctrl+Enter</kbd><span>{uiText('Run in supported editors and HTTP requests')}</span></li>
             <li>In JSON/YAML trees, click a key to copy its path. Use the filter to find paths and values.</li>
           </ul>
         </section>

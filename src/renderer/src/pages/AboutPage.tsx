@@ -1,9 +1,11 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useState } from 'react'
 import { Shield, Keyboard, WifiOff } from 'lucide-react'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import { APP_NAME } from '@shared/brand'
 
 export function AboutPage(): JSX.Element {
+  useUiLocale()
   const [version, setVersion] = useState<string | null>(null)
   const [platform, setPlatform] = useState('')
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
@@ -37,7 +39,7 @@ export function AboutPage(): JSX.Element {
         <div className="mt-8 space-y-4">
           <Card
             icon={<WifiOff className="h-4 w-4 text-mac-accent" />}
-            title="Local processing"
+            title={uiText('Local processing')}
             body={<ul className="list-disc space-y-2 pl-4"><li>JSON, YAML, Base64, image, OCR and crypto tools process data on your device. OCR uses bundled models that load during recognition; images, PDFs and captures stay local.</li><li>No account sign-in or background telemetry. HTTP, DNS and TCP probes use the network only when you run them.</li><li>Mock API starts a local server only after Start and stays active in the tray until Stop or Quit. Native file and network tools require the desktop app.</li></ul>}
           />
           <Card
@@ -81,6 +83,7 @@ function Card({
   title: string
   body: React.ReactNode
 }): JSX.Element {
+  useUiLocale()
   return (
     <div className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
       <div className="mb-2 flex items-center gap-2">

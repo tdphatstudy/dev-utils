@@ -57,7 +57,11 @@ it('covers every full desktop display before selecting and shows a format popup 
   const popup = fixture.windows[2], view = value.view(eventFor(popup))
   expect(view).toMatchObject({ kind: 'result', color: { hex: '#AABBCC', rgb: 'rgb(170, 187, 204)', hsl: 'hsl(210, 25%, 73%)', hsv: 'hsv(210, 17%, 80%)' } })
   expect(fixture.clipboard).not.toHaveBeenCalled()
-  value.copy(eventFor(popup), 'rgb')
+  let copied!: () => void
+  fixture.clipboard.mockImplementationOnce(() => new Promise<void>((resolve) => { copied = resolve }))
+  const copy = value.copy(eventFor(popup), 'rgb')
+  expect(copy).toBeInstanceOf(Promise)
+  copied(); await copy
   expect(fixture.clipboard).toHaveBeenCalledWith('rgb(170, 187, 204)')
   expect(value.getLast()).toBe('#AABBCC'); expect(value.isBusy()).toBe(false)
   value.close(eventFor(popup)); expect(fixture.windows.every(win => win.destroyed)).toBe(true)
@@ -118,6 +122,8 @@ it('refuses foreign windows, subframes, malformed colors, stale helpers and arbi
   expect(() => value.copy(popup, 'arbitrary secret text')).toThrow('Choose HEX')
   fixture.clipboard.mockImplementation(() => { throw new Error('Clipboard unavailable') })
   expect(() => value.copy(popup, 'hsl')).toThrow('Clipboard unavailable')
+  fixture.clipboard.mockRejectedValueOnce(new Error('Async clipboard failure'))
+  await expect(value.copy(popup, 'hex')).rejects.toThrow('Async clipboard failure')
   expect(value.getLast()).toBe('#112233')
   registerColorPickerIpc(value)
   fixture.trust.mockImplementation(() => { throw new Error('Untrusted frame') })

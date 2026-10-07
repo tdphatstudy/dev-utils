@@ -1,5 +1,7 @@
+import { t as uiText } from '@renderer/i18n'
 import { Children, useEffect, useId, useRef, useState } from 'react'
 import { cn } from '@renderer/lib/utils'
+import { useI18n } from '@renderer/i18n'
 
 /**
  * Responsive dual-pane layout for tools:
@@ -27,6 +29,7 @@ export function SplitPane({
   onDragOver?: React.DragEventHandler<HTMLDivElement>
   onDrop?: React.DragEventHandler<HTMLDivElement>
 }): JSX.Element {
+  const { t } = useI18n()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const buttonsRef = useRef<(HTMLButtonElement | null)[]>([])
   const [wide, setWide] = useState(false)
@@ -57,10 +60,15 @@ export function SplitPane({
     observer.observe(element)
     return () => observer.disconnect()
   }, [focusPanes])
+  useEffect(() => {
+    if (wide || !focusPanes) return
+    const previousPanel = document.getElementById(`${id}-pane-${1 - selected}`)
+    if (previousPanel?.contains(document.activeElement)) buttonsRef.current[selected]?.focus()
+  }, [selected, wide, focusPanes, id])
   if (focusPanes && labels) return (
     <div ref={wrapperRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!wide && (
-        <div role="tablist" aria-label="Workspace panes" className="flex shrink-0 gap-1 border-b border-mac-separator bg-mac-surface px-3 py-1.5">
+        <div role="tablist" aria-label={uiText('Workspace panes')} className="flex shrink-0 gap-1 border-b border-mac-separator bg-mac-surface px-3 py-1.5">
           {labels.map((label, index) => (
             <button
               key={label}
@@ -81,7 +89,7 @@ export function SplitPane({
                 setSelected(next as 0 | 1)
                 buttonsRef.current[next]?.focus()
               }}
-            >{label}</button>
+            >{t(label)}</button>
           ))}
         </div>
       )}
@@ -93,8 +101,9 @@ export function SplitPane({
         onDrop={onDrop}
       >
         {panes.map((pane, index) => (
-          <div key={index} id={`${id}-pane-${index}`} role={wide ? 'region' : 'tabpanel'} aria-label={wide ? labels[index] : undefined} aria-labelledby={wide ? undefined : `${id}-tab-${index}`} hidden={!wide && selected !== index} className="min-h-0 min-w-0">
-            {pane}
+          <div key={index} id={`${id}-pane-${index}`} role={wide ? 'region' : 'tabpanel'} aria-label={wide ? t(labels[index]) : undefined} aria-labelledby={wide ? undefined : `${id}-tab-${index}`} hidden={!wide && selected !== index} className={cn('flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-mac-lg', !wide && selected !== index && '!hidden')}>
+            {wide && <div className="shrink-0 px-1 pb-1.5 text-[12px] font-semibold text-mac-label-secondary">{t(labels[index])}</div>}
+            <div className="min-h-0 flex-1">{pane}</div>
           </div>
         ))}
       </div>

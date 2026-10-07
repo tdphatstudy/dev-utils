@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pin,
@@ -23,6 +24,7 @@ import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
 import { Modal } from '@renderer/components/ui/Modal'
 import { useUnsavedChanges } from '@renderer/hooks/useUnsavedChanges'
+import { useVaultDraftRecovery } from '@renderer/hooks/useVaultDraftRecovery'
 import './KeepApp.css'
 
 interface NoteCard {
@@ -50,6 +52,7 @@ function isNeedsAccess(e: unknown): boolean {
 }
 
 export default function KeepApp(): JSX.Element {
+  useUiLocale()
   const desktop = !!window.devutils?.privateBox
   const inventoryVersion = useRef(0)
   const mounted = useRef(false)
@@ -80,6 +83,18 @@ export default function KeepApp(): JSX.Element {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const editorDirty = !!editing && (draft.title !== editing.note.title || draft.body !== editing.note.body || draft.color !== editing.note.color || draft.pinned !== editing.note.pinned)
   const composerDirty = creating && Boolean(composer.title || composer.body)
+  const recoveryDialog = useVaultDraftRecovery(hasAccess ? sessionId.current : '', 'keep', () =>
+    editorDirty || composerDirty ? {
+      kind: 'keep', path: editorDirty ? editing?.doc.relativePath : undefined,
+      content: editorDirty && editing ? serializeKeepNote(draft, editing.doc.content) : '',
+      composer: composerDirty ? serializeKeepNote(composer) : undefined
+    } : null, async (checkpoint, restoredSession) => {
+      const version = inventoryVersion.current
+      const file = checkpoint.path ? await window.devutils.privateBox.readFile(checkpoint.path, restoredSession) : null
+      if (!mounted.current || sessionId.current !== restoredSession || version !== inventoryVersion.current) throw new Error('View changed during recovery.')
+      if (file) { setEditing(cardFor(file)); setDraft(parseKeepNote(checkpoint.content)) }
+      if (checkpoint.composer) { setCreating(true); setComposer(parseKeepNote(checkpoint.composer)) }
+    })
   const { requestLeave, dialog: leaveDialog } = useUnsavedChanges({
     dirty: editorDirty || composerDirty,
     busy: saving || signingOut,
@@ -366,7 +381,7 @@ export default function KeepApp(): JSX.Element {
             value={keyB}
             onChange={(e) => setKeyB(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !busy && keyB.trim()) void unlock(keyB)
+              if (e.key === 'Enter') { e.preventDefault(); if (!busy && keyB.trim()) void unlock(keyB) }
             }}
             autoFocus
             autoComplete="off"
@@ -495,7 +510,7 @@ export default function KeepApp(): JSX.Element {
 
       </div>
 
-      {editing && (
+      {editing && !recoveryDialog && (
         <Modal open title="Edit note" description="Changes are saved only when you choose Save changes." onClose={closeEditor} busy={saving}>
             {error && <p role="alert" className="mb-3 rounded-lg bg-mac-surface p-3 text-[12px] text-mac-danger">{error}</p>}
             <NoteEditor
@@ -522,12 +537,13 @@ export default function KeepApp(): JSX.Element {
           </p>
           {deleteError && <p role="alert" className="mb-4 text-[13px] leading-relaxed text-mac-danger">{deleteError}</p>}
           <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" className="mac-btn-secondary" disabled={saving} onClick={cancelDelete}>Cancel</button>
+            <button type="button" className="mac-btn-secondary" disabled={saving} onClick={cancelDelete}>{uiText('Cancel')}</button>
             <button type="button" className="mac-btn-primary" style={{ backgroundColor: 'var(--mac-danger-fill)' }} disabled={saving} onClick={() => void deleteCard()}>{saving ? 'Deleting…' : 'Delete note'}</button>
           </div>
         </Modal>
       )}
       {leaveDialog}
+      {recoveryDialog}
     </div>
   )
 }
@@ -539,6 +555,7 @@ function Section({
   title?: string
   children: React.ReactNode
 }): JSX.Element {
+  useUiLocale()
   return (
     <section className="mx-auto mb-8 max-w-6xl">
       {title && (
@@ -552,6 +569,7 @@ function Section({
 }
 
 function KeepCard({ card, onOpen }: { card: NoteCard; onOpen: () => void }): JSX.Element {
+  useUiLocale()
   const bg = colorBg(card.note.color)
   return (
     <button
@@ -608,6 +626,7 @@ function NoteEditor({
   setShowPalette: (v: boolean) => void
   busy?: boolean
 }): JSX.Element {
+  useUiLocale()
   const bg = colorBg(note.color)
   return (
     <div className={cn('keep-editor rounded-xl border border-mac-separator shadow-mac', bg)}>
@@ -663,14 +682,14 @@ function NoteEditor({
             <Trash2 className="h-4 w-4" />
           </button>
         )}
-        <button type="button" className="mac-btn-secondary ml-auto" disabled={busy} onClick={onCancel}>Close</button>
+        <button type="button" className="mac-btn-secondary ml-auto" disabled={busy} onClick={onCancel}>{uiText('Close')}</button>
         <button
           type="button"
           className="mac-btn-primary"
           onClick={onClose}
           disabled={busy}
         >
-          {busy ? 'Saving…' : submitLabel}
+          {busy ? uiText('Saving…') : submitLabel}
         </button>
 
         {showPalette && (

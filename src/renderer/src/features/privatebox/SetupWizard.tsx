@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useState } from 'react'
 import { FolderOpen, Shield, Smartphone, Globe2 } from 'lucide-react'
 import type { VaultMode } from '@shared/secret-box/types'
@@ -18,6 +19,7 @@ export function SetupWizard({
   onCancel,
   title = 'New Private Box'
 }: Props): JSX.Element {
+  useUiLocale()
   const [step, setStep] = useState(0)
   const [rootPath, setRootPath] = useState('')
   const [boxName, setBoxName] = useState('')
@@ -137,8 +139,7 @@ export function SetupWizard({
                 <div className="flex gap-1">
                   {onCancel && (
                     <button type="button" className="mac-btn-ghost" onClick={onCancel}>
-                      Cancel
-                    </button>
+                      {uiText('Cancel')}</button>
                   )}
                   <button type="button" className="mac-btn-ghost" onClick={onOpenExisting}>
                     Add existing folder…
@@ -239,6 +240,7 @@ function ModeCard({
   body: string
   onClick: () => void
 }): JSX.Element {
+  useUiLocale()
   return (
     <button
       type="button"
@@ -270,6 +272,7 @@ function Field({
   value: string
   onChange: (v: string) => void
 }): JSX.Element {
+  useUiLocale()
   return (
     <label className="block text-[12px]">
       <span className="mb-1 block text-mac-label-secondary">{label}</span>

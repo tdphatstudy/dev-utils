@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { NO_HISTORY_TOOLS, useSessionStore } from '../src/renderer/src/store/session-store'
 
-beforeEach(() => useSessionStore.setState({ history: [], drafts: {} }))
+beforeEach(() => useSessionStore.setState({ history: [], drafts: {}, retention: true }))
 
 describe('session privacy and history', () => {
+  it('clears retained content and rejects delayed writes while retention is off', () => {
+    const store = useSessionStore.getState()
+    store.setDraft('json.studio', 'private-input')
+    store.pushHistory({ toolId: 'json.studio', label: 'JSON', snippet: 'private-input' })
+    store.setRetention(false)
+    store.setDraft('json.studio', 'delayed-flush')
+    store.pushHistory({ toolId: 'json.studio', label: 'JSON', snippet: 'delayed-flush' })
+    expect(useSessionStore.getState().drafts).toEqual({})
+    expect(useSessionStore.getState().history).toEqual([])
+    store.setRetention(true)
+    expect(store.getDraft('json.studio')).toBeUndefined()
+  })
   it.each([...NO_HISTORY_TOOLS])('never keeps payloads from %s in drafts or history', (toolId) => {
     useSessionStore.getState().setDraft(toolId, 'private-data')
     useSessionStore.getState().pushHistory({ toolId, label: toolId, snippet: 'private-data' })

@@ -13,6 +13,9 @@ let access: EphemeralAccess | null = null
 let revision = 0
 let sessionId: string | undefined
 let ownerId: number | undefined
+const observers = new Set<() => void>()
+export function getSessionOwner(): number | undefined { return ownerId }
+export function observeAccess(callback: () => void): () => void { observers.add(callback); return () => observers.delete(callback) }
 
 export function getSessionId(): string | undefined { return sessionId }
 export function bindSessionOwner(id: number): void { requireAccess(); ownerId = id }
@@ -51,6 +54,7 @@ export function setAccess(next: EphemeralAccess | null): void {
   access = next
   sessionId = next ? randomUUID() : undefined
   ownerId = undefined
+  for (const observer of observers) { try { observer() } catch { /* Native UI failure must not interrupt key invalidation or other observers. */ } }
 }
 
 export function requireAccess(): EphemeralAccess {

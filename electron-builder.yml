@@ -46,7 +46,8 @@ extraResources:
 # Root icon for all platforms (buildResources = resources/)
 icon: icon.png
 
-# Embed custom icon into .exe without winCodeSign (see scripts/after-pack.mjs)
+# Apply and verify Electron security fuses before signing on every platform.
+# Also embed the Windows icon without requiring winCodeSign in local builds.
 afterPack: scripts/after-pack.mjs
 
 win:

@@ -1,8 +1,10 @@
 import { cn } from '@renderer/lib/utils'
 import logoSvg from '@renderer/assets/logo.svg'
+import dangerLogoSvg from '@renderer/assets/logo-danger.svg'
 import { APP_NAME } from '@shared/brand'
 
 interface Props {
+  tone?: 'default' | 'danger'
   size?: number
   className?: string
   showWordmark?: boolean
@@ -15,6 +17,7 @@ interface Props {
 const APPLE_CORNER = 0.2237
 
 export function AppLogo({
+  tone = 'default',
   size = 28,
   className,
   showWordmark = false,
@@ -22,7 +25,7 @@ export function AppLogo({
   pngSrc
 }: Props): JSX.Element {
   const usePng = variant === 'png' && !!pngSrc
-  const src = usePng ? pngSrc! : logoSvg
+  const src = tone === 'danger' ? dangerLogoSvg : usePng ? pngSrc! : logoSvg
   const radius = usePng ? 0 : Math.round(size * APPLE_CORNER * 10) / 10
 
   return (

@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Copy, LoaderCircle } from 'lucide-react'
 import { cn, copyText } from '@renderer/lib/utils'
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function CopyButton({ text, className, label = 'Copy' }: Props): JSX.Element {
+  useUiLocale()
   const [copied, setCopied] = useState(false)
   const [failed, setFailed] = useState(false)
   const [pending, setPending] = useState(false)
@@ -69,7 +71,7 @@ export function CopyButton({ text, className, label = 'Copy' }: Props): JSX.Elem
       type="button"
       onClick={() => void onCopy()}
       disabled={!text || pending}
-      title={failed ? 'Clipboard access failed. Select the output and copy it with Ctrl/⌘ + C, or try again.' : !text ? 'Nothing to copy yet.' : undefined}
+      title={failed ? 'Clipboard access failed. Select the output and copy it with Ctrl/⌘ + C, or try again.' : !text ? uiText('Nothing to copy yet.') : undefined}
       aria-live="polite"
       aria-atomic="true"
       aria-busy={pending}
@@ -89,7 +91,7 @@ export function CopyButton({ text, className, label = 'Copy' }: Props): JSX.Elem
       ) : (
         <Copy className="h-3.5 w-3.5" aria-hidden />
       )}
-      {copied ? 'Copied' : failed ? 'Copy failed · retry' : label}
+      {copied ? uiText('Copied') : failed ? uiText('Copy failed · retry') : uiText(label)}
     </button>
   )
 }

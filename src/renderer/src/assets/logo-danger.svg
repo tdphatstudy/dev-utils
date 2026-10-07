@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="DevFusion">
+  <defs>
+    <linearGradient id="fusion-bg" x1="6" y1="4" x2="60" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EF4444"/><stop offset=".55" stop-color="#DC2626"/><stop offset="1" stop-color="#991B1B"/>
+    </linearGradient>
+    <linearGradient id="fusion-front" x1="12" y1="26" x2="44" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E0EEFF"/>
+    </linearGradient>
+    <linearGradient id="fusion-f" x1="21" y1="31" x2="40" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DC2626"/><stop offset="1" stop-color="#B91C1C"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#fusion-bg)"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="1"/>
+  <rect x="27" y="10" width="27" height="27" rx="7" fill="#8BE0FF" fill-opacity=".34" stroke="#C5F1FF" stroke-width="1.5"/>
+  <rect x="19" y="18" width="29" height="29" rx="8" fill="#BAD6FF" fill-opacity=".5" stroke="#E1ECFF" stroke-width="1.5"/>
+  <rect x="10" y="26" width="32" height="29" rx="8" fill="url(#fusion-front)"/>
+  <path d="M21 47V34H34M21 40H31" stroke="url(#fusion-f)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="47" cy="50" r="6" fill="#64E5ED"/>
+  <circle cx="47" cy="50" r="2.5" fill="#22629D"/>
+</svg>

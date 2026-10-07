@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { aesGcmDecrypt, aesGcmEncrypt } from '@shared/crypto/aes'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -9,6 +10,7 @@ import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 type Mode = 'encrypt' | 'decrypt'
 
 export default function AesTool(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('encrypt')
   const [password, setPassword] = useState('')
   const [passwordTouched, setPasswordTouched] = useState(false)
@@ -91,10 +93,10 @@ export default function AesTool(): JSX.Element {
           { value: 'decrypt', label: 'Decrypt' }
         ]} />
         <button type="button" className="mac-btn-primary" disabled={busy || !password || (mode === 'decrypt' && !input.trim())} onClick={() => void run()}>
-          {busy ? 'Working…' : mode === 'encrypt' ? 'Encrypt text' : 'Decrypt text'}
+          {busy ? uiText('Working…') : mode === 'encrypt' ? 'Encrypt text' : 'Decrypt text'}
         </button>
         {hasResult && <button type="button" className="mac-btn-secondary" onClick={useOutput}>Use to {mode === 'encrypt' ? 'decrypt' : 'encrypt'}</button>}
-        <div className="ml-auto"><CopyButton text={output} label="Copy output" /></div>
+        <div className="ml-auto"><CopyButton text={output} label={uiText('Copy output')} /></div>
       </ToolToolbar>
 
       <div className="shrink-0 border-b border-mac-separator px-3 py-2">
@@ -111,12 +113,12 @@ export default function AesTool(): JSX.Element {
       </div>
 
       <div className="flex min-h-[200px] flex-1 flex-col">
-      <SplitPane labels={['Input', 'Output']} activePane={activePane} onPaneChange={setActivePane}>
+      <SplitPane labels={[uiText('Input'), uiText('Output')]} activePane={activePane} onPaneChange={setActivePane}>
         <CodeEditor value={input} onChange={changeInput} label={mode === 'encrypt' ? 'Plaintext (UTF-8)' : 'DevFusion AES ciphertext (Base64)'} onRun={() => void run()} language="text"
           issue={mode === 'decrypt' && error ? { error, hint: 'Check the password and paste the complete Base64 output from this tool.' } : null}
           placeholder={mode === 'encrypt' ? 'Plaintext…' : 'Paste DevFusion AES ciphertext…'} />
         <div className="h-full min-h-0 min-w-0" aria-busy={busy}>
-          <CodeEditor value={output} language="text" label={mode === 'encrypt' ? 'Encrypted output (Base64)' : 'Decrypted plaintext'} placeholder={busy ? 'Working…' : hasResult ? 'Empty plaintext' : 'Run to see the result'} readOnly />
+          <CodeEditor value={output} language="text" label={mode === 'encrypt' ? 'Encrypted output (Base64)' : 'Decrypted plaintext'} placeholder={busy ? uiText('Working…') : hasResult ? 'Empty plaintext' : 'Run to see the result'} readOnly />
         </div>
       </SplitPane>
       </div>

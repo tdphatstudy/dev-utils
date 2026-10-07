@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 import {
@@ -27,6 +28,7 @@ const MODES: Mode[] = ['test', 'replace', 'split', 'explain', 'cheatsheet']
 const PREVIEW_LIMIT = 20_000
 
 export default function RegexTool(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('test')
   const [activePane, setActivePane] = useState<0 | 1>(0)
   const [pattern, setPattern] = useState('[\\w.+-]+@[\\w-]+\\.[\\w.-]+')
@@ -123,14 +125,14 @@ export default function RegexTool(): JSX.Element {
           onChange={(value) => { setMode(value); setActivePane(value === 'explain' || value === 'cheatsheet' ? 1 : 0); setUndo(null) }}
           label="Regex mode"
           options={[
-            { value: 'test', label: 'Test' },
-            { value: 'replace', label: 'Replace' },
-            { value: 'split', label: 'Split' },
-            { value: 'explain', label: 'Explain' },
-            { value: 'cheatsheet', label: 'Cheatsheet' }
+            { value: 'test', label: uiText('Test') },
+            { value: 'replace', label: uiText('Replace') },
+            { value: 'split', label: uiText('Split') },
+            { value: 'explain', label: uiText('Explain') },
+            { value: 'cheatsheet', label: uiText('Cheatsheet') }
           ]}
         />
-        <button type="button" className="mac-btn-primary" onClick={pending ? cancel : rerun}>{pending ? 'Cancel' : 'Run'}</button>
+        <button type="button" className="mac-btn-primary" onClick={pending ? cancel : rerun}>{pending ? uiText('Cancel') : uiText('Run')}</button>
         {undo && <button type="button" className="mac-btn-secondary" title="Restore the pattern, flags and test string before the example" onClick={() => { setPattern(undo.pattern); setFlags(undo.flags); setText(undo.text); setMode(undo.mode); setUndo(null) }}><Undo2 className="h-3.5 w-3.5" aria-hidden />Undo example</button>}
         <ToolOptions label="Options & examples">
           <select className="mac-input !w-auto max-w-full" aria-label="Regex example" value="" onChange={(event) => applySample(Number(event.target.value))}>
@@ -225,7 +227,7 @@ export default function RegexTool(): JSX.Element {
             <span className="mr-auto text-[12px] font-semibold text-mac-label">{mode === 'test' ? 'Matches' : mode === 'replace' ? 'Replacement result' : mode === 'split' ? 'Split parts' : mode === 'explain' ? 'Pattern explanation' : 'RegExp reference'}</span>
             {current && <>
               <CopyButton text={output} label={mode === 'replace' ? 'Copy result' : mode === 'split' ? 'Copy parts' : 'Copy matches'} />
-              <ToolOptions label="Export">
+              <ToolOptions label={uiText('Export')}>
                 <SaveToBoxButton type={mode === 'replace' ? 'text' : 'json'} content={output} defaultName={mode === 'replace' ? 'regex-replacement.txt' : mode === 'split' ? 'regex-split.json' : 'regex-matches.json'} disabled={pending || !current.ok || (mode !== 'replace' && !output)} />
               </ToolOptions>
             </>}
@@ -333,8 +335,7 @@ export default function RegexTool(): JSX.Element {
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex items-center justify-between border-b border-mac-separator px-3 py-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-                  Result
-                </span>
+                  {uiText('Result')}</span>
                 {replaced.ok && (
                   <span className="text-[11px] text-mac-label-tertiary">
                     {replaced.count} replacement{replaced.count === 1 ? '' : 's'}

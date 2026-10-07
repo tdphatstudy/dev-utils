@@ -10,9 +10,9 @@ export const QUICK_TOOLS = [
 ] as const
 
 export type QuickToolId = typeof QUICK_TOOLS[number]['id']
-export type QuickTarget = QuickToolId | 'home'
+export type QuickTarget = QuickToolId | 'home' | 'app.settings'
 export function isQuickTarget(value: unknown): value is QuickTarget {
-  return value === 'home' || QUICK_TOOLS.some((tool) => tool.id === value)
+  return value === 'home' || value === 'app.settings' || QUICK_TOOLS.some((tool) => tool.id === value)
 }
 export function quickTargetPath(target: QuickTarget): string {
   return target === 'home' ? '/' : `/tool/${target}`

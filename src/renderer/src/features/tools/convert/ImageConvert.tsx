@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImageIcon, Download } from 'lucide-react'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
@@ -17,6 +18,7 @@ import {
 } from '@shared/image/convert'
 
 export default function ImageConvert(): JSX.Element {
+  useUiLocale()
   const [srcUrl, setSrcUrl] = useState<string | null>(null)
   const [srcName, setSrcName] = useState('image')
   const [srcW, setSrcW] = useState(0)
@@ -345,7 +347,7 @@ export default function ImageConvert(): JSX.Element {
           disabled={!srcUrl || busy || loading || Boolean(resizeError)}
           onClick={() => void convert()}
         >
-          {busy ? 'Converting…' : 'Convert'}
+          {busy ? 'Converting…' : uiText('Convert')}
         </button>
         <button
           type="button"
@@ -354,8 +356,7 @@ export default function ImageConvert(): JSX.Element {
           onClick={download}
         >
           <Download className="h-3.5 w-3.5" />
-          Download
-        </button>
+          {uiText('Download')}</button>
       </ToolToolbar>
       <div className="shrink-0 border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">
         {format === 'jpeg' && <label className="mr-3 inline-flex items-center gap-2">JPEG background<input type="color" aria-label="JPEG background" value={background} onChange={(event) => setBackground(event.target.value)} /></label>}
@@ -399,8 +400,7 @@ export default function ImageConvert(): JSX.Element {
 
         <div className="flex min-h-0 flex-col rounded-mac-lg border border-mac-separator bg-mac-surface">
           <div className="border-b border-mac-separator px-3 py-1.5 text-[11px] font-medium text-mac-label-tertiary">
-            Output
-            {currentOut && outW > 0 && (
+            {uiText('Output')}{currentOut && outW > 0 && (
               <span className="ml-2 font-normal">
                 {outW}×{outH} · {formatBytes(outBytes)} · {format.toUpperCase()}
               </span>

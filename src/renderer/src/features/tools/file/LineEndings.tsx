@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { convertLineEndings, countLines, detectLineEnding, lineEndingCounts, type LineEnding } from '@shared/file/text'
 import { TextInputActions } from '@renderer/components/ui/TextInputActions'
@@ -11,6 +12,7 @@ import { useToolDraft } from '@renderer/hooks/useToolDraft'
 const SAMPLE = 'line one\r\nline two\r\nline three\n'
 
 export default function LineEndings(): JSX.Element {
+  useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [target, setTarget] = useState<LineEnding>('lf')
   useToolDraft('file.lineendings', input, setInput, {
@@ -44,8 +46,7 @@ export default function LineEndings(): JSX.Element {
         <div className="ml-auto flex gap-2">
           <CopyButton text={output} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
-            Sample
-          </button>
+            {uiText('Sample')}</button>
         </div>
         <TextInputActions value={input} onChange={setInput} output={output} fileName={`converted-${target}.txt`} accept="text/*,.txt,.csv,.log,.md" preserveBom />
       </ToolToolbar>

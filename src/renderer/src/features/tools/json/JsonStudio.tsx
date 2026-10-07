@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -21,6 +22,7 @@ const SAMPLE = `{
 type ViewMode = 'tree' | 'raw'
 
 export default function JsonStudio(): JSX.Element {
+  useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [indent, setIndent] = useState(2)
   const [sortKeys, setSortKeys] = useState(false)
@@ -56,35 +58,34 @@ export default function JsonStudio(): JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SplitPane labels={['Input', 'Output']}>
+      <SplitPane labels={[uiText('Input'), uiText('Output')]}>
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
           <ToolToolbar label="JSON input actions" className="max-h-[45%] overflow-y-auto !px-2 !py-2">
-            <button type="button" className="mac-btn-primary" disabled={!input.trim() || !result.ok} title="Format JSON (Ctrl/⌘ + Enter in the input editor)" onClick={formatInput}>Format</button>
+            <button type="button" className="mac-btn-primary" disabled={!input.trim() || !result.ok} title="Format JSON (Ctrl/⌘ + Enter in the input editor)" onClick={formatInput}>{uiText('Format')}</button>
             <button type="button" className="mac-btn-secondary" disabled={!input.trim() || !result.ok} onClick={() => {
               const minified = formatJson(input, { minify: true })
               if (minified.ok && minified.text) replaceInput(minified.text, 'minify')
-            }}>Minify</button>
-            {undo && <button type="button" className="mac-btn-secondary" title={`Restore the input before ${undo.action}`} onClick={() => { setInput(undo.value); setUndo(null) }}><Undo2 className="h-3.5 w-3.5" aria-hidden />Undo</button>}
-            <ToolOptions label="Formatting">
-              <label className="flex items-center gap-2 text-[13px] text-mac-label-secondary">Indent
-                <select aria-label="Indent" className="mac-input !w-auto" value={indent} onChange={(event) => setIndent(Number(event.target.value))}><option value={2}>2 spaces</option><option value={4}>4 spaces</option></select>
+            }}>{uiText('Minify')}</button>
+            {undo && <button type="button" className="mac-btn-secondary" title={`Restore the input before ${undo.action}`} onClick={() => { setInput(undo.value); setUndo(null) }}><Undo2 className="h-3.5 w-3.5" aria-hidden />{uiText('Undo')}</button>}
+            <ToolOptions label={uiText('Formatting')}>
+              <label className="flex items-center gap-2 text-[13px] text-mac-label-secondary">{uiText('Indent')}<select aria-label={uiText('Indent')} className="mac-input !w-auto" value={indent} onChange={(event) => setIndent(Number(event.target.value))}><option value={2}>{uiText('2 spaces')}</option><option value={4}>{uiText('4 spaces')}</option></select>
               </label>
-              <label className="flex min-h-[34px] items-center gap-2 text-[13px] text-mac-label-secondary"><input type="checkbox" checked={sortKeys} onChange={(event) => setSortKeys(event.target.checked)} className="h-4 w-4 accent-mac-accent" />Sort keys</label>
+              <label className="flex min-h-[34px] items-center gap-2 text-[13px] text-mac-label-secondary"><input type="checkbox" checked={sortKeys} onChange={(event) => setSortKeys(event.target.checked)} className="h-4 w-4 accent-mac-accent" />{uiText('Sort keys')}</label>
             </ToolOptions>
             <ToolOptions label="Input actions">
               <TextInputActions value={input} onChange={(value) => replaceInput(value, value ? 'opening a file' : 'clear')} output={outputText} fileName="formatted.json" accept=".json,.txt,application/json" actions={['open', 'clear']} />
-              <button type="button" className="mac-btn-ghost" onClick={() => replaceInput(SAMPLE, 'sample')}>Sample</button>
+              <button type="button" className="mac-btn-ghost" onClick={() => replaceInput(SAMPLE, 'sample')}>{uiText('Sample')}</button>
             </ToolOptions>
           </ToolToolbar>
           <div className="min-h-0 flex-1">
-            <CodeEditor value={input} onChange={(value) => { if (value !== input) { setUndo(null); setInput(value) } }} language="json" placeholder="Paste JSON…" label="JSON input" issue={!input.trim() || result.ok ? null : result} onRun={formatInput} className="!rounded-none !border-0" />
+            <CodeEditor value={input} onChange={(value) => { if (value !== input) { setUndo(null); setInput(value) } }} language="json" placeholder={uiText('Paste JSON…')} label="JSON input" issue={!input.trim() || result.ok ? null : result} onRun={formatInput} className="!rounded-none !border-0" />
           </div>
         </div>
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
           <ToolToolbar label="JSON output actions" className="max-h-[45%] overflow-y-auto !px-2 !py-2">
-            <SegmentedControl label="JSON output view" value={view} onChange={setView} options={[{ value: 'tree', label: 'Tree' }, { value: 'raw', label: 'Raw' }]} />
-            <CopyButton text={outputText} label="Copy output" />
-            <ToolOptions label="Export">
+            <SegmentedControl label="JSON output view" value={view} onChange={setView} options={[{ value: 'tree', label: uiText('Tree') }, { value: 'raw', label: uiText('Raw') }]} />
+            <CopyButton text={outputText} label={uiText('Copy output')} />
+            <ToolOptions label={uiText('Export')}>
               <SaveToBoxButton type="json" content={result.ok ? outputText || input : input} disabled={!input.trim() || !result.ok} />
               <TextInputActions value={input} onChange={setInput} output={outputText} fileName="formatted.json" accept=".json,.txt,application/json" actions={['download']} />
             </ToolOptions>

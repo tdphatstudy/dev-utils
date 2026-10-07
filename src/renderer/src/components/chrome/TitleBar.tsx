@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, X, Search, Moon, Sun } from 'lucide-react'
 import { useAppStore } from '@renderer/store/app-store'
@@ -5,6 +6,7 @@ import { cn, modShortcut } from '@renderer/lib/utils'
 import { AppLogo } from './AppLogo'
 
 export function TitleBar(): JSX.Element {
+  useUiLocale()
   const setCommandOpen = useAppStore((s) => s.setCommandOpen)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
@@ -59,10 +61,10 @@ export function TitleBar(): JSX.Element {
   }
 
   return (
-    <header
+    <header dir="ltr"
       className={cn(
         'titlebar-drag relative z-50 flex h-12 shrink-0 items-center border-b border-mac-separator',
-        'bg-mac-sidebar'
+        'mac-glass bg-mac-sidebar'
       )}
     >
       <div
@@ -77,7 +79,7 @@ export function TitleBar(): JSX.Element {
       <div className="flex min-w-0 flex-1 items-center justify-center gap-3 px-1 sm:px-2">
         <button
           type="button"
-          aria-label="Search tools"
+          aria-label={uiText('Search tools')}
           title={`Search tools (${shortcut})`}
           onClick={() => setCommandOpen(true)}
           className={cn(
@@ -89,8 +91,8 @@ export function TitleBar(): JSX.Element {
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">
-            <span className="sm:hidden">Search…</span>
-            <span className="hidden sm:inline">Search tools…</span>
+            <span className="sm:hidden">{uiText('Search…')}</span>
+            <span className="hidden sm:inline">{uiText('Search tools…')}</span>
           </span>
           <kbd className="mac-kbd hidden shrink-0 sm:inline">{shortcut}</kbd>
         </button>
@@ -109,13 +111,13 @@ export function TitleBar(): JSX.Element {
 
         {!isMac && (
           <div className="ml-0.5 flex items-center">
-            <WindowBtn onClick={() => void act('minimize')} title="Minimize" disabled={!desktop}>
+            <WindowBtn onClick={() => void act('minimize')} title={uiText('Minimize')} disabled={!desktop}>
               <Minus className="h-3.5 w-3.5" />
             </WindowBtn>
-            <WindowBtn onClick={() => void act('maximize')} title={maximized ? 'Restore window' : 'Maximize'} disabled={!desktop}>
+            <WindowBtn onClick={() => void act('maximize')} title={maximized ? uiText('Restore window') : uiText('Maximize')} disabled={!desktop}>
               {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
             </WindowBtn>
-            <WindowBtn onClick={() => void act('close')} title="Close" danger disabled={!desktop}>
+            <WindowBtn onClick={() => void act('close')} title={uiText('Close')} danger disabled={!desktop}>
               <X className="h-3.5 w-3.5" />
             </WindowBtn>
           </div>
@@ -139,6 +141,7 @@ function WindowBtn({
   danger?: boolean
   disabled?: boolean
 }): JSX.Element {
+  useUiLocale()
   return (
     <button
       type="button"

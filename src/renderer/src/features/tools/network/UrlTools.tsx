@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import {
   decodeUri,
@@ -14,6 +15,7 @@ import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
 type Mode = 'parse' | 'encode' | 'decode'
 
 export default function UrlTools(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('parse')
   const [encoding, setEncoding] = useState<UriEncoding>('component')
   const [input, setInput] = useState(
@@ -54,8 +56,8 @@ export default function UrlTools(): JSX.Element {
           onChange={setMode}
           options={[
             { value: 'parse', label: 'Parse' },
-            { value: 'encode', label: 'Encode' },
-            { value: 'decode', label: 'Decode' }
+            { value: 'encode', label: uiText('Encode') },
+            { value: 'decode', label: uiText('Decode') }
           ]}
         />
         {mode !== 'parse' && <label className="flex items-center gap-2 text-[12px]">

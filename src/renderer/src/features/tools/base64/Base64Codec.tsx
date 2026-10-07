@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { SplitPane } from '@renderer/components/ui/SplitPane'
@@ -13,6 +14,7 @@ import { ArrowDownUp } from 'lucide-react'
 type Mode = 'encode' | 'decode'
 
 export default function Base64Codec(): JSX.Element {
+  useUiLocale()
   const [mode, setMode] = useState<Mode>('encode')
   const [variant, setVariant] = useState<Base64Variant>('standard')
   const [decodedFormat, setDecodedFormat] = useState<'text' | 'hex'>('text')
@@ -49,12 +51,11 @@ export default function Base64Codec(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'encode', label: 'Encode' },
-            { value: 'decode', label: 'Decode' }
+            { value: 'encode', label: uiText('Encode') },
+            { value: 'decode', label: uiText('Decode') }
           ]}
         />
-        {mode === 'decode' && <label className="flex items-center gap-2 text-[12px]">Output
-          <select aria-label="Output" className="mac-input !w-auto" value={decodedFormat} onChange={(e) => setDecodedFormat(e.target.value as 'text' | 'hex')}>
+        {mode === 'decode' && <label className="flex items-center gap-2 text-[12px]">{uiText('Output')}<select aria-label={uiText('Output')} className="mac-input !w-auto" value={decodedFormat} onChange={(e) => setDecodedFormat(e.target.value as 'text' | 'hex')}>
             <option value="text">UTF-8 text</option><option value="hex">Hex bytes</option>
           </select>
         </label>}

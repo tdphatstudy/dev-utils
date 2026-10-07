@@ -34,6 +34,9 @@
   --ease-mac: cubic-bezier(0.25, 0.1, 0.25, 1);
   --duration-fast: 120ms;
   --duration-normal: 180ms;
+  --mac-glass: rgba(238, 241, 245, 0.88);
+  --mac-glass-dialog: rgba(255, 255, 255, 0.94);
+  --mac-glass-edge: rgba(255, 255, 255, 0.7);
 }
 
 .dark {
@@ -63,6 +66,9 @@
   --mac-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
   --mac-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
   --mac-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  --mac-glass: rgba(29, 32, 38, 0.88);
+  --mac-glass-dialog: rgba(36, 40, 47, 0.96);
+  --mac-glass-edge: rgba(255, 255, 255, 0.09);
 }
 
 * {
@@ -110,6 +116,10 @@ body {
     grid-auto-rows: minmax(0, 1fr);
   }
   .mac-split-pane > * { min-height: 0; }
+}
+@container workspace (min-width: 800px) {
+  .mac-workflow-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mac-env-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .mac-tool-toolbar > .flex {
@@ -375,6 +385,70 @@ pre,
   }
 }
 
+/* Glass belongs to the control layer; code and document surfaces stay opaque. */
+.mac-app-shell {
+  background-image: radial-gradient(ellipse at 0% 0%, var(--mac-accent-soft), transparent 55%);
+}
+.mac-glass { background: var(--mac-sidebar); }
+.mac-glass-dialog { background: var(--mac-surface); }
+@supports (backdrop-filter: blur(20px)) {
+  :root[data-surface='glass'] .mac-glass,
+  :root[data-surface='glass'] .mac-glass-dialog {
+    backdrop-filter: blur(20px) saturate(125%);
+    box-shadow: inset 0 1px 0 var(--mac-glass-edge);
+  }
+  :root[data-surface='glass'] .mac-glass { background: var(--mac-glass); }
+  :root[data-surface='glass'] .mac-glass-dialog {
+    background: var(--mac-glass-dialog);
+    box-shadow: inset 0 1px 0 var(--mac-glass-edge), var(--mac-shadow-lg);
+  }
+}
+.mac-home-hero {
+  background: linear-gradient(125deg, var(--mac-accent-soft), var(--mac-surface) 65%);
+  border: 1px solid var(--mac-separator);
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 var(--mac-glass-edge), var(--mac-shadow-sm);
+}
+.mac-page-enter { animation: mac-page-in 180ms var(--ease-mac) both; }
+.mac-modal-enter { animation: mac-modal-in 180ms var(--ease-mac) both; }
+@keyframes mac-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mac-modal-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (hover: hover) {
+  .mac-tool-card:hover { transform: translateY(-2px); }
+}
+/* Explicit preference also works on hosts without these media features. */
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+:root[data-motion='reduced'] .mac-tool-card:hover,
+:root[data-motion='reduced'] .mac-card:active,
+:root[data-motion='reduced'] .mac-btn:active:not(:disabled) { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mac-page-enter, .mac-modal-enter { animation: none !important; }
+  .mac-tool-card:hover { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  :root[data-surface='glass'] .mac-glass {
+    background: var(--mac-sidebar);
+    backdrop-filter: none;
+  }
+  :root[data-surface='glass'] .mac-glass-dialog {
+    background: var(--mac-surface);
+    backdrop-filter: none;
+  }
+  .mac-app-shell, .mac-home-hero { background-image: none; }
+}
+
 /* The search row owns keyboard focus; its inset ring stays inside the rounded dialog. */
 .mac-command-dialog {
   top: min(14dvh, 72px);
@@ -442,3 +516,16 @@ pre,
     animation: none !important;
   }
 }
+
+/* Mask vault UI and portalled editors synchronously before React remounts. */
+html[data-vault-masked='true'] [data-vault-content],
+html[data-vault-masked='true'] .mac-overlay-enter,
+html[data-vault-masked='true'] [role='dialog'],
+html[data-vault-masked='true'] [role='alertdialog']:not([aria-labelledby='vault-lock-title']),
+html[data-vault-masked='true'] [role='menu'] { display: none !important; }
+
+/* Keep technical values readable inside a right-to-left interface. */
+html[dir='rtl'] .font-mono,
+html[dir='rtl'] input[type='url'],
+html[dir='rtl'] input[type='email'],
+html[dir='rtl'] input[type='number'] { direction: ltr; text-align: left; }

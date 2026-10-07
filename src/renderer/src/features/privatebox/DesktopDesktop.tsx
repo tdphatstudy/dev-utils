@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight,
@@ -18,6 +19,7 @@ import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TypeFileEditor } from './editors/TypeFileEditor'
 import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
+import { useVaultDraftRecovery } from '@renderer/hooks/useVaultDraftRecovery'
 
 type NamePrompt =
   | { kind: 'file'; type: DocType; initial: string }
@@ -41,6 +43,7 @@ function isMod(e: KeyboardEvent | React.KeyboardEvent): boolean {
 
 /** Classic macOS Finder folder (yellow tab + body, soft shadow). */
 function MacFolderGlyph({ className }: { className?: string }): JSX.Element {
+  useUiLocale()
   // Unique gradient ids per instance (many folders on desktop)
   const uid = useMemo(() => Math.random().toString(36).slice(2, 9), [])
   return (
@@ -102,6 +105,7 @@ function MacFolderGlyph({ className }: { className?: string }): JSX.Element {
 }
 
 function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
+  useUiLocale()
   if (entry.kind === 'dir') {
     return <MacFolderGlyph />
   }
@@ -191,6 +195,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
 }
 
 export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Props): JSX.Element {
+  useUiLocale()
   const sessionId = status.sessionId ?? ''
   const listVersion = useRef(0)
   const openVersion = useRef(0)
@@ -211,6 +216,19 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const [busy, setBusy] = useState(false)
   const [namePrompt, setNamePrompt] = useState<NamePrompt | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; target: DirEntry | null; opener: HTMLElement } | null>(null)
+  const recoveryDialog = useVaultDraftRecovery(sessionId, 'document', () =>
+    doc && !isBinaryKind(doc.type) && draftRef.current !== doc.content
+      ? { kind: 'document', path: doc.relativePath, content: draftRef.current } : null,
+    async (checkpoint, restoredSession) => {
+      if (!checkpoint.path) throw new Error('Draft document path is missing.')
+      const version = openVersion.current
+      const file = await window.devutils.privateBox.readFile(checkpoint.path, restoredSession)
+      if (version !== openVersion.current) throw new Error('View changed during recovery.')
+      if (isBinaryKind(file.type) || file.encoding === 'base64') throw new Error('This document is not editable text.')
+      setCwd(file.relativePath.split('/').slice(0, -1).join('/'))
+      setDoc(file); setDraft(checkpoint.content); draftRef.current = checkpoint.content
+      setSelectedId(file.id); setDirty(checkpoint.content !== file.content)
+    })
 
   const crumbs = useMemo(() => (cwd ? cwd.split('/').filter(Boolean) : []), [cwd])
   const selected = entries.find((e) => e.id === selectedId) ?? null
@@ -532,6 +550,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
   return (
     <div ref={desktopRef} className="relative flex h-full min-h-0 flex-col overflow-hidden bg-mac-bg">
+      {recoveryDialog}
       <NameDialog
         open={!!namePrompt}
         title={
@@ -590,7 +609,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
       {/* macOS-style path bar */}
       <div className="flex shrink-0 items-center gap-1 border-b border-mac-separator bg-mac-surface/70 px-2 py-1.5">
-        <button type="button" className="mac-btn-ghost !px-2 !py-1" onClick={() => goTo('')} title="Home">
+        <button type="button" className="mac-btn-ghost !px-2 !py-1" onClick={() => goTo('')} title={uiText('Home')}>
           <Home className="h-3.5 w-3.5" />
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-mac bg-mac-control/60 px-1 py-0.5 text-[12px]">
@@ -707,7 +726,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
               <button
                 type="button"
                 className="h-3 w-3 rounded-full bg-[#ff5f57] hover:brightness-110"
-                title="Close"
+                title={uiText('Close')}
                 onClick={closeEditor}
               />
               <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
@@ -746,10 +765,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 onClick={() => void save()}
               >
                 <Save className="h-3.5 w-3.5" />
-                Save
-              </button>
+                {uiText('Save')}</button>
             )}
-            <button type="button" className="mac-btn-ghost !p-1.5" onClick={closeEditor} title="Close">
+            <button type="button" className="mac-btn-ghost !p-1.5" onClick={closeEditor} title={uiText('Close')}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -776,7 +794,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           {error ? (
             <span className="text-mac-danger">{error}</span>
           ) : (
-            <span className="text-mac-label-tertiary">Working…</span>
+            <span className="text-mac-label-tertiary">{uiText('Working…')}</span>
           )}
         </footer>
       )}

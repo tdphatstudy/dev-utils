@@ -13,12 +13,21 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((done) => { server.close(() => done()); server.closeAllConnections() })))
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
 })
-async function port(): Promise<number> {
-  const server = createServer()
-  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
-  const value = (server.address() as { port: number }).port
-  await new Promise<void>((done) => server.close(() => done()))
-  return value
+async function ports(count: number): Promise<number[]> {
+  const reservations: Server[] = []
+  try {
+    const values: number[] = []
+    for (let index = 0; index < count; index++) {
+      const server = createServer(); reservations.push(server)
+      await new Promise<void>((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done) })
+      values.push((server.address() as { port: number }).port)
+    }
+    return values
+  } finally {
+    // Keep all reservations live until selection finishes; Windows can reuse
+    // a just-released ephemeral port on the next listen(0).
+    await Promise.all(reservations.map((server) => new Promise<void>((done) => server.close(() => done()))))
+  }
 }
 function memoryHosts(initial = '# Original hosts\r\n127.0.0.1 localhost\r\n') {
   const state = { text: initial, deny: false, edits: 0 }
@@ -47,8 +56,9 @@ async function fixture(initial?: string) {
   return { directory, hosts, certs, clear, service }
 }
 async function configured(f: Awaited<ReturnType<typeof fixture>>) {
-  await f.service.setPorts({ http: await port(), https: await port() })
-  const status = await f.service.add({ domain: 'toi.vn', targetPort: await port(), https: false })
+  const [http, https, targetPort] = await ports(3)
+  await f.service.setPorts({ http, https })
+  const status = await f.service.add({ domain: 'toi.vn', targetPort, https: false })
   return status.entries[0]
 }
 const fetch = (port: number) => new Promise<number>((resolve, reject) => {

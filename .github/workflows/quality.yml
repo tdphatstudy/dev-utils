@@ -1,0 +1,64 @@
+name: Desktop quality
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Verify ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4, version from packageManager
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test --maxWorkers=4
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Allow Chromium sandbox namespaces on the ephemeral Linux runner
+        if: runner.os == 'Linux'
+        run: |
+          if sysctl kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - run: pnpm test:ui:enterprise
+      - run: pnpm test:ui:security-testing
+      - run: node tests/ux-review-ui.smoke.mjs
+      - name: Native security smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm test:electron:security
+      - name: Native security smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: pnpm test:electron:security
+      - name: Package with fuse verification
+        run: pnpm exec electron-builder --dir --publish never
+      - name: Packaged native security smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm test:electron:packaged
+      - name: Packaged native security smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: pnpm test:electron:packaged
+      - name: Retain build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-diagnostics-${{ runner.os }}
+          path: release/builder-debug.yml
+          if-no-files-found: ignore
+          retention-days: 7

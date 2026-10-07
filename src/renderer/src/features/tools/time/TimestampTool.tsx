@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { formatZonedInstant, parseInstant, parseTimestamp, unixSeconds, type TimestampUnit } from '@shared/time'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -8,6 +9,7 @@ type InputMode = 'timestamp' | 'date'
 const TIMEZONES = ['UTC', 'Asia/Ho_Chi_Minh', 'Asia/Bangkok', 'Asia/Tokyo', 'Asia/Kolkata', 'Asia/Shanghai', 'Europe/London', 'Europe/Paris', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney']
 
 export default function TimestampTool(): JSX.Element {
+  useUiLocale()
   const [initial] = useState(() => Date.now())
   const [mode, setMode] = useState<InputMode>('timestamp')
   const [unit, setUnit] = useState<TimestampUnit>('seconds')
@@ -67,7 +69,7 @@ export default function TimestampTool(): JSX.Element {
           <div className="flex flex-wrap items-center gap-2"><label htmlFor="timestamp-zone" className="text-[12px] text-mac-label-secondary">Display timezone</label><input id="timestamp-zone" list="timestamp-zones" className="mac-input min-w-[180px] flex-1 font-mono text-[12px]" maxLength={100} value={timezone} onChange={(event) => setTimezone(event.target.value)} /><datalist id="timestamp-zones">{TIMEZONES.map((zone) => <option key={zone} value={zone} />)}</datalist><button type="button" className="mac-btn-secondary" onClick={() => setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}>Local</button><button type="button" className="mac-btn-secondary" onClick={() => setTimezone('UTC')}>UTC</button></div>
         </div>
         {result.error && <p role="alert" className="text-[13px] text-mac-danger">{result.error}</p>}
-        <dl className="space-y-2">{rows.map(([label, value]) => <div key={label} className="flex flex-wrap items-center gap-3 rounded-mac-lg border border-mac-separator bg-mac-surface px-4 py-3"><div className="min-w-0 flex-1"><dt className="mb-1 text-[11px] font-semibold text-mac-label-secondary">{label}</dt><dd className="select-text break-all font-mono text-[13px] text-mac-label">{value}</dd></div><CopyButton text={value} label="Copy" /></div>)}</dl>
+        <dl className="space-y-2">{rows.map(([label, value]) => <div key={label} className="flex flex-wrap items-center gap-3 rounded-mac-lg border border-mac-separator bg-mac-surface px-4 py-3"><div className="min-w-0 flex-1"><dt className="mb-1 text-[11px] font-semibold text-mac-label-secondary">{label}</dt><dd className="select-text break-all font-mono text-[13px] text-mac-label">{value}</dd></div><CopyButton text={value} label={uiText('Copy')} /></div>)}</dl>
         <p className="text-[12px] leading-relaxed text-mac-label-tertiary">The chosen timezone changes the display of the same instant. DST and historical offsets follow this app’s timezone database. Offset-less local date-times are rejected to avoid ambiguous clock changes.</p>
       </div>
       <footer className="border-t border-mac-separator px-4 py-2"><ToolStatus tone={result.error ? 'danger' : 'success'}>{result.error || 'Same instant · seconds, milliseconds and timezone formats'}</ToolStatus></footer>

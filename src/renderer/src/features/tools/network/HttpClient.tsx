@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Send, Code2 } from 'lucide-react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -35,6 +36,7 @@ const BODY_MODES: { value: BodyMode; label: string }[] = [
 ]
 
 export default function HttpClient(): JSX.Element {
+  useUiLocale()
   const [method, setMethod] = useState<HttpMethod>('GET')
   const [url, setUrl] = useState('https://httpbin.org/get')
   const [query, setQuery] = useState<KeyValueRow[]>([newRow()])
@@ -217,7 +219,7 @@ export default function HttpClient(): JSX.Element {
             <span className="hidden sm:inline">{busy ? 'Sending…' : 'Send'}</span>
             <span className="sm:hidden">{busy ? '…' : 'Go'}</span>
           </button>
-          {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : 'Cancel'}</button>}
+          {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : uiText('Cancel')}</button>}
         </div>
       </ToolToolbar>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-3 py-2 text-[12px] text-mac-label-secondary">
@@ -365,7 +367,7 @@ export default function HttpClient(): JSX.Element {
                   />
                   <CopyButton
                     text={responseTab === 'headers' ? responseHeadersJson : prettyBody}
-                    label={response?.bodyEncoding === 'base64' && responseTab === 'body' ? 'Copy Base64' : 'Copy'}
+                    label={response?.bodyEncoding === 'base64' && responseTab === 'body' ? 'Copy Base64' : uiText('Copy')}
                   />
                 </>
               )}
@@ -429,6 +431,7 @@ function TabBtn({
   disabled?: boolean
   children: React.ReactNode
 }): JSX.Element {
+  useUiLocale()
   return (
     <button
       id={id}

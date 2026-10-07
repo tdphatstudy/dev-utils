@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn, copyText } from '@renderer/lib/utils'
@@ -19,6 +20,7 @@ interface TreeViewProps {
 }
 
 export function TreeView({ data, className, showControls = true }: TreeViewProps): JSX.Element {
+  useUiLocale()
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set())
   const [filter, setFilter] = useState('')
   const [scrollTop, setScrollTop] = useState(0)
@@ -112,11 +114,9 @@ export function TreeView({ data, className, showControls = true }: TreeViewProps
             onChange={(e) => setFilter(e.target.value)}
           />
           <button type="button" className="mac-btn-ghost !text-[11px] !py-1" onClick={expandAll}>
-            Expand
-          </button>
+            {uiText('Expand')}</button>
           <button type="button" className="mac-btn-ghost !text-[11px] !py-1" onClick={collapseAll}>
-            Collapse
-          </button>
+            {uiText('Collapse')}</button>
           <span className="ml-auto text-[10px] text-mac-label-tertiary">
             {filtered.length.toLocaleString()} rows
           </span>
@@ -150,6 +150,7 @@ function TreeRow({
   onToggle: (path: string, open: boolean) => void
   onCopyPath: (path: string) => Promise<void>
 }): JSX.Element {
+  useUiLocale()
   return (
     <div
       className="flex items-center gap-1 rounded px-1 hover:bg-mac-control"
@@ -161,7 +162,7 @@ function TreeRow({
           className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-mac-label-tertiary"
           onClick={() => onToggle(row.path, row.isOpen)}
           aria-expanded={row.isOpen}
-          aria-label={`${row.isOpen ? 'Collapse' : 'Expand'} ${row.isRoot ? 'root' : row.path}`}
+          aria-label={`${row.isOpen ? uiText('Collapse') : uiText('Expand')} ${row.isRoot ? 'root' : row.path}`}
         >
           {row.isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
