@@ -5,6 +5,8 @@ import { Command } from 'cmdk'
 import { Clock3, Search, Star } from 'lucide-react'
 import { getToolById, searchTools, toolGroups, type ToolDefinition } from '@renderer/registry/tools'
 import { useAppStore } from '@renderer/store/app-store'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 
 const GROUP_CLASS = '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[12px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-mac-label-secondary'
 
@@ -57,11 +59,12 @@ function PaletteItem({ tool, onSelect, badge }: { tool: ToolDefinition; onSelect
   const Icon = tool.icon
   const descriptionId = useId()
   const groupName = toolGroups.find((group) => group.id === tool.group)?.name
+  const shortcut = useShortcut(tool.id === 'app.settings' ? 'app.settings' : 'tool.' + tool.id)
   return (
     <Command.Item value={tool.id} aria-label={uiText(tool.name)} aria-describedby={descriptionId} onSelect={() => onSelect(tool.id)} className="group flex cursor-pointer items-start gap-3 rounded-mac px-3 py-3 data-[selected=true]:bg-mac-accent-soft aria-selected:bg-mac-accent-soft">
       <span className="mac-icon-tile-accent !h-9 !w-9"><Icon aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} /></span>
       <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-[14px] font-semibold text-mac-label">{uiText(tool.name)}{badge}</div><div id={descriptionId} className="mt-0.5 text-[13px] leading-relaxed text-mac-label-secondary">{uiText(tool.description)}</div></div>
-      <span className="max-w-[110px] shrink-0 pt-0.5 text-right text-[11px] text-mac-label-secondary">{groupName}</span>
+      <span className="max-w-[110px] shrink-0 pt-0.5 text-right text-[11px] text-mac-label-secondary">{groupName}{shortcut.binding && <kbd className="mac-kbd mt-1 block">{formatShortcut(shortcut.binding, shortcut.platform)}</kbd>}</span>
     </Command.Item>
   )
 }

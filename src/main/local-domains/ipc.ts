@@ -1,6 +1,7 @@
 import { ipcMain, session, shell, dialog } from 'electron'
 import { assertTrustedIpc } from '../ipc-trust'
 import type { LocalDomainsService } from './service'
+import { localDomainBrowserIssue } from '@shared/local-domains/types'
 
 export function registerLocalDomainsIpc(service: LocalDomainsService): void {
   const methods = {
@@ -33,6 +34,8 @@ export function registerLocalDomainsIpc(service: LocalDomainsService): void {
     const status = await service.status()
     const entry = status.entries.find((item) => item.id === id && item.active && item.hostsMapped)
     if (!entry) throw new Error('Enable this mapping before opening it.')
+    const browserIssue = localDomainBrowserIssue(entry)
+    if (browserIssue) throw new Error(browserIssue)
     await shell.openExternal(entry.url)
   })
   ipcMain.handle('local-domains:mkcert-help', (event) => {

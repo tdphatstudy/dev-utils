@@ -26,7 +26,7 @@ let confirmations = 0
 page.on('pageerror', error => errors.push(error.message))
 page.on('dialog', async dialog => { confirmations++; await dialog.dismiss() })
 await page.addInitScript(() => {
-  const state = window.__menuFixture = { reads: [], removes: [], exports: [] }
+  const state = window.__menuFixture = { reads: [], removes: [], exports: [], writes: [] }
   const entry = { id: 'fixture-file', kind: 'file', type: 'text', name: 'Fixture document.txt', relativePath: 'fixture.putl' }
   const vault = { id: 'fixture-box', name: 'Fixture box', mode: 'device', rootPath: 'C:/fixture-only', createdAt: '2026-10-05T00:00:00Z' }
   window.devutils = {
@@ -38,6 +38,7 @@ await page.addInitScript(() => {
       getStatus: async () => ({ configured: true, hasAccess: true, mode: 'device', rootPath: vault.rootPath, activeId: vault.id, vaults: [vault], sessionId: 'fixture-session' }),
       list: async () => [entry],
       readFile: async (path, sessionId) => { state.reads.push(path); return { ...entry, content: 'Fixture text', updatedAt: vault.createdAt, sessionId } },
+      writeFile: async (path, content, sessionId) => { state.writes.push({ path, content }); return { ...entry, content, updatedAt: vault.createdAt, sessionId } },
       remove: async path => { state.removes.push(path) },
       exportToDisk: async path => { state.exports.push(path); return null },
       clearAccess: async () => {}
@@ -117,6 +118,8 @@ try {
   await page.keyboard.press('Control+n')
   assert.equal(await rename.count(), 1, 'Shortcut replaced the visible dialog')
   await rename.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await rename.waitFor({ state: 'hidden' })
+  await page.waitForFunction(element => element === document.activeElement, await file().elementHandle())
   assert.equal(await file().evaluate(element => element === document.activeElement), true)
   await openKeyboard()
   await page.keyboard.press('Control+k')
@@ -140,6 +143,7 @@ try {
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 })
   await page.waitForFunction(() => window.visualViewport?.scale === 2)
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   await bounds()
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
   await page.keyboard.press('Escape')
@@ -151,6 +155,51 @@ try {
   assert.equal(await page.getByRole('button', { name: 'New box', exact: true }).evaluate(element => element === document.activeElement), true, 'Menu stole outside focus')
   assert.deepEqual(errors, [])
   console.log('PASS outside focus dismisses without stealing focus; no renderer errors or real vault access')
+
+  await page.setViewportSize({ width: 1180, height: 800 })
+  await page.goto(url + '#/tool/app.settings')
+  for (const [id, binding] of [['app.palette', 'Mod+Alt+P'], ['vault.rename', 'Mod+Alt+R'], ['vault.delete', 'Mod+Alt+9'], ['vault.save', 'Mod+Alt+S']]) {
+    await page.locator(`[data-shortcut-id="${id}"]`).getByRole('button').first().click()
+    await page.getByRole('textbox', { name: 'Shortcut combination', exact: true }).fill(binding)
+    await page.getByRole('button', { name: 'Save shortcut', exact: true }).click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  }
+  await page.goto(url + '#/tool/privatebox.home')
+  await file().click()
+  await file().focus()
+  await page.keyboard.press('F2')
+  assert.equal(await page.getByRole('dialog', { name: 'Rename', exact: true }).count(), 0, 'Old rename binding still active')
+  await page.keyboard.press('Control+Alt+r')
+  await rename.waitFor()
+  await page.keyboard.press('Control+Alt+s')
+  await page.keyboard.press('Control+Alt+9')
+  assert.deepEqual(await page.evaluate(() => window.__menuFixture.writes), [])
+  assert.equal(confirmations, 0, 'Custom Delete leaked behind Rename')
+  await rename.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await rename.waitFor({ state: 'hidden' })
+  await openKeyboard()
+  await page.keyboard.press('Control+k')
+  assert.equal(await menu().count(), 1, 'Old palette binding closed the menu')
+  await page.keyboard.press('Control+Alt+p')
+  await page.getByRole('dialog', { name: 'Search tools', exact: true }).waitFor()
+  assert.equal(await menu().count(), 0)
+  await page.keyboard.press('Escape')
+  await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  await file().focus()
+  await page.keyboard.press('Delete')
+  assert.equal(confirmations, 0, 'Old delete binding still active')
+  await page.keyboard.press('Control+Alt+9')
+  assert.equal(confirmations, 1, 'Custom delete must retain the confirmation')
+  assert.deepEqual(await page.evaluate(() => window.__menuFixture.removes), [])
+  await file().dblclick()
+  await page.getByRole('button', { name: 'Save', exact: true }).waitFor()
+  const editor = page.getByRole('textbox', { name: 'Input text editor', exact: true })
+  await editor.fill('Changed fixture text')
+  await editor.press('Control+Alt+s')
+  await page.waitForFunction(() => window.__menuFixture.writes.length === 1)
+  assert.deepEqual(await page.evaluate(() => window.__menuFixture.writes), [{ path: 'fixture.putl', content: 'Changed fixture text' }])
+  assert.deepEqual(errors, [])
+  console.log('PASS custom Box rename/delete/save, configured palette from menu, retained confirmation and no background writes')
 } finally {
   await browser.close()
   await new Promise(done => server.close(done))

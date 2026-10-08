@@ -66,6 +66,7 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 | Local Domains / HTTPS | `src/shared/local-domains`, `src/main/local-domains`, `src/main/platform/local-domains` | named `localDomains` preload/IPC, lazy `network.local-domains`, loopback proxy, tagged hosts, dedicated mkcert CA; [usage and cleanup](local-domains.md) |
 | API giữa UI và OS | `src/preload/index.ts` | `index.d.ts`, shared types, main handlers |
 | Route, shell, phím tắt, theme | `src/renderer/src/App.tsx`, `layouts/AppShell.tsx` | `main.tsx`, `components/chrome` |
+| Quản lý phím tắt | `src/shared/shortcuts`, `src/renderer/src/shortcuts`, `components/settings/ShortcutSettings.tsx` | Settings, app-store metadata, contextual handlers; [phạm vi và cách kiểm tra](shortcuts.md) |
 | Thêm/sửa tool và tìm kiếm | `src/renderer/src/registry/tools.ts` | `pages/ToolPage.tsx`, `features/tools/<group>` |
 | Logic xử lý dữ liệu | `src/shared/<domain>` | test cạnh module, UI gọi logic |
 | Settings và recent tools | `src/renderer/src/store/app-store.ts` | Zustand persist/localStorage |
@@ -195,6 +196,7 @@ khỏi UI của app khi kho đã mở.
 | Dữ liệu | Nơi lưu | Đặc tính |
 |---|---|---|
 | Preferences, recent ID, SSH paths | localStorage `devutils-app` | Persist; không lưu payload tool |
+| Shortcut overrides | localStorage `devutils-app` | Command ID + tổ hợp/null; không ghi lại chuỗi phím đã gõ |
 | Draft/history tool | Zustand session-store | Chỉ RAM; security, vault/Keep, SSH, HTTP, URL và QR không lưu payload trong draft/history |
 | Danh sách/active vault | `app.getPath('userData')/privatebox-registry.json` | JSON plaintext chứa tên/path |
 | Default vault | `userData/data/default-secret-box` | Dùng chung Keep và Save to Box |
@@ -705,7 +707,16 @@ one guarded hosts mutation, also usable with corrupt metadata or orphaned entrie
 Platform adapters pass fixed inline code to UAC/osascript/pkexec, never elevate a
 user-writable script file. They check the original hosts hash while holding a
 file lock, back up original bytes, preserve unrelated entries, verify ownership
-after the write, and flush OS DNS caches when supported. DNS verification is an
+after the write, and flush OS DNS caches when supported. Inline commands carry
+only a domain operation or all-marker cleanup, with hashes of both the original
+and expected result; they never embed the full hosts file. Windows uses an
+unencoded fixed UAC wrapper around one encoded child script, so hosts up to the
+1 MiB bound do not exceed process command limits. Shared and native patch results
+must agree before a backup/write. Explicit repair of an externally removed hosts
+entry retains the already-running proxy even when authorization is cancelled.
+The interface and browser-open IPC explain known `.app`/`.dev`/`.page` HTTPS
+requirements; existing HTTP metadata is preserved for cleanup/nonbrowser clients.
+DNS verification is an
 explicit operation. The app clears its own resolver cache; browser DNS/service
 workers/HSTS state remains outside its control.
 

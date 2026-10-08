@@ -150,6 +150,25 @@ describe('local domain lifecycle and recovery', () => {
     expect(f.hosts.state.text).toBe(original)
     await expect(fetch(status.ports.http)).rejects.toThrow()
   })
+  it('repairs externally removed hosts entries without rebinding or stopping an existing proxy', async () => {
+    const f = await fixture(), entry = await configured(f)
+    const active = await f.service.enable(entry.id)
+    await f.service.enable(entry.id)
+    expect(f.hosts.state.edits).toBe(1)
+    f.hosts.state.text = patchManagedHosts(f.hosts.state.text, entry.domain, false)
+    expect((await f.service.status()).entries[0]).toMatchObject({ active: true, hostsMapped: false })
+    const repaired = await f.service.enable(entry.id)
+    expect(repaired.entries[0]).toMatchObject({ active: true, hostsMapped: true })
+    expect(f.hosts.state.edits).toBe(2)
+    expect(await fetch(active.ports.http)).toBe(502)
+    f.hosts.state.text = patchManagedHosts(f.hosts.state.text, entry.domain, false)
+    f.hosts.state.deny = true
+    await expect(f.service.enable(entry.id)).rejects.toThrow(/cancelled/)
+    expect((await f.service.status()).entries[0]).toMatchObject({ active: true, hostsMapped: false })
+    expect(await fetch(active.ports.http)).toBe(502)
+    f.hosts.state.deny = false
+    expect((await f.service.enable(entry.id)).entries[0]).toMatchObject({ active: true, hostsMapped: true })
+  })
   it('refuses invalid IDs and payloads before modifying the OS', async () => {
     const f = await fixture()
     await expect(f.service.enable('../hosts')).rejects.toThrow(/ID/)

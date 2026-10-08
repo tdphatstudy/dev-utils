@@ -10,6 +10,7 @@ import type { SurfaceMode, MotionMode } from '@renderer/store/app-preferences'
 import { VAULT_IDLE_MINUTES, type VaultIdleMinutes } from '@shared/security-policy'
 import { LOCALES, type LanguageSetting } from '@shared/i18n/locales'
 import { setInterfaceLanguage, useI18n } from '@renderer/i18n'
+import { ShortcutSettings } from '@renderer/components/settings/ShortcutSettings'
 
 export function SettingsPage(): JSX.Element {
   const { t } = useI18n()
@@ -247,18 +248,7 @@ export function SettingsPage(): JSX.Element {
           <p className="text-[13px] text-mac-label-secondary">{t('{count} cached inputs in RAM. Clear removes drafts; saved files and preferences are kept.', { count: draftCount })}</p>
         </section>
 
-        <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
-          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-mac-label-tertiary">
-            {uiText('Shortcuts')}</h2>
-          <ul className="space-y-2 text-[14px] text-mac-label-secondary">
-            <li className="flex items-center gap-2">
-              <kbd className="mac-kbd">⌘/Ctrl+K</kbd>
-              <span>{uiText('Open command palette')}</span>
-            </li>
-            <li className="flex items-center gap-2"><kbd className="mac-kbd">⌘/Ctrl+Enter</kbd><span>{uiText('Run in supported editors and HTTP requests')}</span></li>
-            <li>In JSON/YAML trees, click a key to copy its path. Use the filter to find paths and values.</li>
-          </ul>
-        </section>
+        <ShortcutSettings />
       </div>
     </div>
   )

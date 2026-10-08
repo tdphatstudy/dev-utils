@@ -2,6 +2,7 @@ import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Upload, ScanText, Monitor, Crop, Copy, Download, X, FileText } from 'lucide-react'
 import { MAX_OCR_BYTES, validateOcrInput, type OcrLanguage, type OcrResult, type OcrProgress, type CaptureMode } from '@shared/ocr/types'
+import { useToolShortcuts } from '@renderer/shortcuts/useShortcuts'
 
 export default function OcrTool(): JSX.Element {
   useUiLocale()
@@ -62,6 +63,7 @@ export default function OcrTool(): JSX.Element {
     } catch (e) { if (alive.current && request.current === id) setError(e instanceof Error ? e.message : 'Could not extract text. Try another file.') }
     finally { if (alive.current && request.current === id) { request.current = null; setBusy(false); setProgress(null) } }
   }
+  useToolShortcuts({ 'ocr.region': () => { void run('region') }, 'ocr.screen': () => { void run('screen') } }, desktop && !busy)
   const cancel = async (): Promise<void> => {
     const id = request.current
     if (!id) return

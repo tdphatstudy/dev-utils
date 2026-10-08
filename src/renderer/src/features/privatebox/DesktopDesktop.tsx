@@ -20,6 +20,7 @@ import { TypeFileEditor } from './editors/TypeFileEditor'
 import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
 import { useVaultDraftRecovery } from '@renderer/hooks/useVaultDraftRecovery'
+import { useShortcutSet } from '@renderer/shortcuts/useShortcuts'
 
 type NamePrompt =
   | { kind: 'file'; type: DocType; initial: string }
@@ -35,10 +36,6 @@ interface Props {
 
 function isNeedsAccess(e: unknown): boolean {
   return isVaultAccessError(e)
-}
-
-function isMod(e: KeyboardEvent | React.KeyboardEvent): boolean {
-  return e.metaKey || e.ctrlKey
 }
 
 /** Classic macOS Finder folder (yellow tab + body, soft shadow). */
@@ -195,6 +192,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
 }
 
 export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Props): JSX.Element {
+  const shortcuts = useShortcutSet()
   useUiLocale()
   const sessionId = status.sessionId ?? ''
   const listVersion = useRef(0)
@@ -435,7 +433,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           t.isContentEditable ||
           t.closest('.cm-editor'))
 
-      if (isMod(e) && e.key.toLowerCase() === 's') {
+      if (shortcuts.matches('vault.save', e)) {
         if (doc) {
           e.preventDefault()
           void save()
@@ -443,36 +441,34 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
         return
       }
 
-      if (typing && !isMod(e)) return
+      if (typing && !e.metaKey && !e.ctrlKey && !e.altKey) return
 
-      if (isMod(e) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
+      if (shortcuts.matches('vault.new-text', e)) {
         e.preventDefault()
         startCreateFile('text')
         return
       }
-      if (isMod(e) && e.shiftKey && e.key.toLowerCase() === 'n') {
+      if (shortcuts.matches('vault.new-folder', e)) {
         e.preventDefault()
         setNamePrompt({ kind: 'folder', initial: 'New Folder' })
         return
       }
-      if (isMod(e) && e.key.toLowerCase() === 'j') {
+      if (shortcuts.matches('vault.new-json', e)) {
         e.preventDefault()
         startCreateFile('json')
         return
       }
-      if (e.key === 'F2' && selected) {
+      if (shortcuts.matches('vault.rename', e) && selected && !typing) {
         e.preventDefault()
         setNamePrompt({ kind: 'rename', initial: selected.name, entry: selected })
         return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !typing) {
-        if (isMod(e) || e.key === 'Delete') {
-          e.preventDefault()
-          void removeEntry(selected)
-        }
+      if (shortcuts.matches('vault.delete', e) && selected && !typing) {
+        e.preventDefault()
+        void removeEntry(selected)
         return
       }
-      if (e.key === 'Enter' && selected && !typing) {
+      if (shortcuts.matches('vault.open', e) && selected && !typing) {
         e.preventDefault()
         void openEntry(selected)
         return
@@ -486,27 +482,27 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, dirty, selected, namePrompt, menu, busy, draft, cwd])
+  }, [doc, dirty, selected, namePrompt, menu, busy, draft, cwd, shortcuts])
 
   const emptyMenuItems: ContextMenuItem[] = [
-    { id: 'new-text', label: 'New Text File', shortcut: '⌘N' },
+    { id: 'new-text', label: 'New Text File', shortcut: shortcuts.label('vault.new-text') },
     { id: 'new-md', label: 'New Markdown' },
-    { id: 'new-json', label: 'New JSON', shortcut: '⌘J' },
+    { id: 'new-json', label: 'New JSON', shortcut: shortcuts.label('vault.new-json') },
     { id: 'sep1', label: '', separator: true },
-    { id: 'new-folder', label: 'New Folder', shortcut: '⇧⌘N' },
+    { id: 'new-folder', label: 'New Folder', shortcut: shortcuts.label('vault.new-folder') },
     { id: 'import', label: 'Import file / media…' },
     { id: 'sep2', label: '', separator: true },
     { id: 'refresh', label: 'Refresh' }
   ]
 
   const itemMenuItems = (entry: DirEntry): ContextMenuItem[] => [
-    { id: 'open', label: 'Open', shortcut: 'Enter' },
+    { id: 'open', label: 'Open', shortcut: shortcuts.label('vault.open') },
     ...(entry.kind === 'file'
       ? [{ id: 'export', label: 'Export as plain…' } as ContextMenuItem]
       : []),
     { id: 'sep1', label: '', separator: true },
-    { id: 'rename', label: 'Rename', shortcut: 'F2' },
-    { id: 'delete', label: 'Delete', shortcut: 'Del', danger: true },
+    { id: 'rename', label: 'Rename', shortcut: shortcuts.label('vault.rename') },
+    { id: 'delete', label: 'Delete', shortcut: shortcuts.label('vault.delete'), danger: true },
     { id: 'sep2', label: '', separator: true },
     { id: 'new-text', label: 'New Text File' },
     { id: 'new-json', label: 'New JSON' },
@@ -738,9 +734,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 {dirty ? <span className="text-mac-warning"> •</span> : null}
               </div>
               <div className="text-[10px] text-mac-label-tertiary">
-                {doc.type === 'markdown' && 'Notion blocks · type / · Enter new block · ⌘S'}
-                {doc.type === 'json' && 'Format · Minify · Tree · ⌘S'}
-                {doc.type === 'text' && 'Plain text · LF/CRLF · ⌘S'}
+                {doc.type === 'markdown' && `Notion blocks · type / · Enter new block${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
+                {doc.type === 'json' && `Format · Minify · Tree${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
+                {doc.type === 'text' && `Plain text · LF/CRLF${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
                 {doc.type === 'image' && 'Image preview · encrypted · Export to save out'}
                 {doc.type === 'video' && 'Video player · encrypted · Export to save out'}
                 {doc.type === 'audio' && 'Audio player · encrypted · Export to save out'}

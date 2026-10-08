@@ -1,4 +1,5 @@
 import { isLanguage, type LanguageSetting } from '@shared/i18n/locales'
+import { readShortcutOverrides, type ShortcutOverrides } from '@shared/shortcuts'
 export type ToolLoadingMode = 'on-demand' | 'preload'
 export type SurfaceMode = 'glass' | 'solid'
 export type MotionMode = 'system' | 'reduced'
@@ -8,6 +9,7 @@ export const MAX_RECENT_TOOLS = 10
 export const MAX_FAVORITE_TOOLS = 12
 
 export interface AppPreferences {
+  shortcutOverrides: ShortcutOverrides
   language: LanguageSetting
   theme: 'dark' | 'light' | 'system'
   surfaceMode: SurfaceMode
@@ -42,6 +44,7 @@ export function readAppPreferences(value: unknown): Partial<AppPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const raw = value as Record<string, unknown>
   const result: Partial<AppPreferences> = {}
+  if (raw.shortcutOverrides && typeof raw.shortcutOverrides === 'object' && !Array.isArray(raw.shortcutOverrides)) result.shortcutOverrides = readShortcutOverrides(raw.shortcutOverrides)
   if (isLanguage(raw.language)) result.language = raw.language
   if (raw.theme === 'dark' || raw.theme === 'light' || raw.theme === 'system') result.theme = raw.theme
   if (raw.surfaceMode === 'glass' || raw.surfaceMode === 'solid') result.surfaceMode = raw.surfaceMode

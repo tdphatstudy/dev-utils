@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hostDomainConflicts, managedHostDomains, patchManagedHosts } from './hosts'
-import { localDomainUrl, normalizeLocalDomain, readLocalDomainId, readLocalDomainInput, readLocalDomainPorts } from './types'
+import { hostDomainConflicts, managedHostDomains, patchManagedHosts, removeManagedHosts } from './hosts'
+import { localDomainBrowserIssue, localDomainUrl, normalizeLocalDomain, readLocalDomainId, readLocalDomainInput, readLocalDomainPorts } from './types'
 
 describe('local domain contracts', () => {
   it('normalizes domains and creates URLs with the selected ports', () => {
@@ -20,6 +20,14 @@ describe('local domain contracts', () => {
     expect(() => readLocalDomainPorts({ http: 80, https: 80 })).toThrow()
     expect(() => readLocalDomainId('-'.repeat(36))).toThrow()
     expect(readLocalDomainId('b4626fbb-eaab-48f9-b6d7-354f9ca46a95')).toBe('b4626fbb-eaab-48f9-b6d7-354f9ca46a95')
+  })
+  it('explains browser HTTPS requirements without rejecting existing HTTP metadata', () => {
+    for (const domain of ['uctalent.app', 'www.example.dev', 'Example.PAGE']) {
+      expect(localDomainBrowserIssue({ domain, https: false })).toMatch(/require HTTPS/)
+      expect(localDomainBrowserIssue({ domain, https: true })).toBeNull()
+      expect(readLocalDomainInput({ domain, https: false, targetPort: 3000 }).https).toBe(false)
+    }
+    for (const domain of ['app.test', 'app.com', 'application.test', 'app.dev.test']) expect(localDomainBrowserIssue({ domain, https: false })).toBeNull()
   })
 })
 
@@ -47,5 +55,10 @@ describe('owned hosts entries', () => {
   })
   it('refuses adding a newline to an unrelated unterminated file', () => {
     expect(() => patchManagedHosts('127.0.0.1 localhost', 'app.test', true)).toThrow(/final newline/)
+  })
+  it('batch-removes interleaved orphan entries while preserving unrelated bytes and an unterminated last line', () => {
+    const text = '# before\r\n127.0.0.1\tapp.test\t# DevFusion local-domain app.test\r# between\n::1\tother.test\t# DevFusion local-domain other.test\n192.0.2.1 alias.test # unterminated'
+    expect(removeManagedHosts(text)).toBe('# before\r\n# between\n192.0.2.1 alias.test # unterminated')
+    expect(() => removeManagedHosts('127.0.0.1 app.test alias.test # DevFusion local-domain app.test\n')).toThrow(/modified/)
   })
 })

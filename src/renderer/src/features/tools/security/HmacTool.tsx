@@ -55,7 +55,7 @@ export default function HmacTool(): JSX.Element {
         </p>
       </div>
 
-      <div className="flex min-h-[200px] flex-1 flex-col">
+      <div className="flex min-h-[200px] flex-1 flex-col [@media(max-height:300px)]:min-h-[175px]">
       <SplitPane labels={[uiText('Input'), uiText('Output')]} activePane={activePane} onPaneChange={setActivePane}>
         <CodeEditor value={message} onChange={setMessage} language="text" label="HMAC message (UTF-8)" />
         <div className="h-full min-h-0 min-w-0" aria-busy={calculating}>

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { isPreferenceToolId, MAX_FAVORITE_TOOLS, MAX_RECENT_TOOLS, readAppPreferences, type ToolLoadingMode, type SurfaceMode, type MotionMode, type InputRetention } from './app-preferences'
 import { useSessionStore } from './session-store'
 import { isLanguage, isLocale, type LanguageSetting, type LocaleId } from '@shared/i18n/locales'
+import { isShortcutCommandId, normalizeShortcut, type ShortcutOverrides } from '@shared/shortcuts'
 
 export type { ToolLoadingMode } from './app-preferences'
 
@@ -12,6 +13,10 @@ export type ThemeMode = 'dark' | 'light' | 'system'
 export type LaunchMode = 'home' | 'last'
 
 interface AppState {
+  shortcutOverrides: ShortcutOverrides
+  setShortcutBinding: (id: string, binding: string | null) => void
+  resetShortcut: (id: string) => void
+  resetAllShortcuts: () => void
   language: LanguageSetting
   systemLocale: LocaleId | null
   setLanguage: (language: LanguageSetting) => void
@@ -60,6 +65,15 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      shortcutOverrides: {},
+      setShortcutBinding: (id, binding) => {
+        if (!isShortcutCommandId(id)) return
+        const normalized = binding === null ? null : normalizeShortcut(binding)
+        if (binding !== null && !normalized) return
+        set(state => ({ shortcutOverrides: { ...state.shortcutOverrides, [id]: normalized } }))
+      },
+      resetShortcut: id => set(state => ({ shortcutOverrides: Object.fromEntries(Object.entries(state.shortcutOverrides).filter(([key]) => key !== id)) })),
+      resetAllShortcuts: () => set({ shortcutOverrides: {} }),
       language: 'system',
       systemLocale: null,
       setLanguage: language => { if (isLanguage(language)) set({ language }) },
@@ -119,6 +133,7 @@ export const useAppStore = create<AppState>()(
         return next
       },
       partialize: (s) => ({
+        shortcutOverrides: s.shortcutOverrides,
         language: s.language,
         theme: s.theme,
         surfaceMode: s.surfaceMode,

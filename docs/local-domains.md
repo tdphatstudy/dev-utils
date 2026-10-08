@@ -87,6 +87,14 @@ từ trước: browser có thể bắt buộc HTTPS ngay cả khi chọn HTTP tr
 Dùng HTTPS đã trust cho domain đó hoặc dùng một domain `.test` khác. DevFusion
 không gỡ chính sách HSTS có sẵn của browser và không xóa cookies/site data tự động.
 
+Các đuôi `.app`, `.dev` và `.page` bắt buộc HTTPS trong browser do HSTS preload
+cho toàn đuôi ([Google Registry](https://developers.googleblog.com/en/build-security-into-your-next-website/)).
+Ví dụ `uctalent.app` → HTTP không mở được trong Chrome dù hosts và proxy đúng.
+Tool hiển thị hướng dẫn khi nhập/lưu các tên này với HTTP và khóa nút Open;
+mapping HTTP vẫn dùng được cho client không áp dụng HSTS. Với mapping HTTP đã lưu,
+Remove rồi lưu lại với **Use HTTPS**, chạy **Setup HTTPS** và Enable; hoặc dùng
+`uctalent.test` nếu chỉ cần HTTP. Không tự đổi giao thức hoặc sửa metadata cũ.
+
 ## Lifecycle, dữ liệu và recovery
 
 Mở hoặc preload giao diện không bind port, sửa hosts, chạy mkcert hay thêm trust.
@@ -117,9 +125,15 @@ Storage trong `<userData>/local-domains`:
 Thao tác hosts giữ nguyên bytes/comment/alias/dòng không thuộc DevFusion, kiểm tra
 hash trước ghi để từ chối race khi chờ quyền, khóa file, tạo backup cạnh hosts và
 rollback lỗi ghi. Không chạy script tạm có thể sửa bằng quyền admin; code helper
-được truyền inline. Hosts quá lớn cho command inline an toàn hoặc không có newline
-cuối file bị từ chối, có hướng dẫn xử lý. Backup không tự dùng để ghi đè các thay
-đổi hosts mới của người dùng. Main xác minh membership sau mỗi thao tác.
+được truyền inline. Lệnh chỉ chứa thao tác cho domain (hoặc gỡ toàn bộ marker),
+không chứa toàn bộ hosts. Helper sửa snapshot đang khóa và kiểm tra hash kết quả
+so với shared logic trước backup/ghi; kích thước hosts không làm tăng độ dài lệnh.
+Windows chỉ mã hóa child script, tránh nhân đôi encoding ở wrapper UAC.
+Hosts trên 1 MiB hoặc thêm mapping vào file không có newline cuối bị từ chối.
+Backup không tự dùng để ghi đè các thay đổi hosts mới của người dùng. Main xác minh
+membership sau mỗi thao tác. Nếu hosts entry bị xóa ngoài app khi proxy vẫn chạy,
+**Restore hosts entry** sửa entry mà không bind lại listener; hủy quyền vẫn giữ
+route đang chạy để có thể retry hoặc Disable.
 
 Windows dùng PowerShell + UAC; macOS dùng osascript + Perl; Linux cần pkexec và
 Perl. Browser/service-worker cache và trust store khác hệ thống vẫn cần người

@@ -20,6 +20,8 @@ import type {
 } from '@shared/http/types'
 import { cn, formatBytes } from '@renderer/lib/utils'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { useShortcut, useToolShortcuts } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 
 type RequestTab = 'params' | 'headers' | 'body'
 type ResponseTab = 'body' | 'headers' | 'code'
@@ -176,6 +178,8 @@ export default function HttpClient(): JSX.Element {
         ? `${response.status} ${response.statusText} · ${response.timeMs}ms · ${formatBytes(response.size)}`
         : canceled ? 'Canceled · no response retained' : !available ? 'Open the desktop app to send HTTP requests.' : 'User-initiated · 5 MB response limit · redirects returned for inspection'
 
+  const runShortcut = useShortcut('editor.run')
+  useToolShortcuts({ 'editor.run': () => { void send() } }, available && !busy && !validationError)
   return (
     <div className="flex h-full flex-col">
       <ToolToolbar className="gap-2">
@@ -205,9 +209,6 @@ export default function HttpClient(): JSX.Element {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://api.example.com/v1/…"
             spellCheck={false}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send()
-            }}
           />
           <button
             type="button"
@@ -246,7 +247,7 @@ export default function HttpClient(): JSX.Element {
               Body
             </TabBtn>
             <span className="ml-auto hidden pr-2 text-[12px] text-mac-label-tertiary sm:inline">
-              ⌘/Ctrl+Enter to send
+              {runShortcut.binding && `${formatShortcut(runShortcut.binding, runShortcut.platform)} to send`}
             </span>
           </div>
           <div id="http-request-panel" role="tabpanel" aria-labelledby={`http-request-tab-${requestTab}`} tabIndex={0} className="min-h-0 flex-1 overflow-hidden p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
@@ -384,7 +385,7 @@ export default function HttpClient(): JSX.Element {
               <div className="flex h-full flex-col items-center justify-center gap-2 rounded-mac-lg border border-dashed border-mac-separator px-5 text-center text-[14px] text-mac-label-secondary">
                 <Send className="mb-1 h-6 w-6 opacity-40" strokeWidth={1.5} />
                 {busy ? 'Waiting for response…' : canceled ? 'Request canceled. Send again to retry.' : !available ? 'Desktop app required to send requests' : 'Send a request to see the response'}
-                {!busy && !canceled && available && <p className="text-[13px]">Set the URL, add any headers or query parameters, then press Send or Ctrl/⌘ + Enter.</p>}
+                {!busy && !canceled && available && <p className="text-[13px]">Set the URL, add any headers or query parameters, then press Send{runShortcut.binding ? ` or ${formatShortcut(runShortcut.binding, runShortcut.platform)}` : ''}.</p>}
               </div>
             ) : error && !response ? (
               <div className="flex h-full items-center justify-center rounded-mac-lg border border-mac-danger/30 bg-mac-danger/5 px-4 text-center text-[14px] text-mac-danger">

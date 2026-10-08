@@ -26,12 +26,22 @@ describe('local domains IPC', () => {
   })
   it('opens only an active, hosts-mapped URL derived from the service, never a caller URL', async () => {
     const f = fixture()
-    f.service.status.mockResolvedValue({ entries: [{ id: 'fixture', active: true, hostsMapped: true, url: 'https://app.test' }, { id: 'disabled', active: false, hostsMapped: false, url: 'http://disabled.test' }] })
+    f.service.status.mockResolvedValue({ entries: [{ id: 'fixture', domain: 'app.test', https: true, active: true, hostsMapped: true, url: 'https://app.test' }, { id: 'disabled', domain: 'disabled.test', https: false, active: false, hostsMapped: false, url: 'http://disabled.test' }] })
     const handler = mocks.handlers.get('local-domains:open')!
     await handler(f.event, 'fixture'); expect(mocks.open).toHaveBeenCalledWith('https://app.test')
     await expect(handler(f.event, 'https://evil.test')).rejects.toThrow(/Enable/)
     await expect(handler(f.event, 'disabled')).rejects.toThrow(/Enable/)
     expect(mocks.open).toHaveBeenCalledTimes(1)
+  })
+  it('explains why an HTTP .app mapping cannot be opened in a browser, while permitting trusted HTTPS', async () => {
+    const f = fixture(), handler = mocks.handlers.get('local-domains:open')!
+    const entry = { id: 'fixture', domain: 'uctalent.app', https: false, active: true, hostsMapped: true, url: 'http://uctalent.app' }
+    f.service.status.mockResolvedValue({ entries: [entry] })
+    await expect(handler(f.event, entry.id)).rejects.toThrow(/require HTTPS/)
+    expect(mocks.open).not.toHaveBeenCalled()
+    f.service.status.mockResolvedValue({ entries: [{ ...entry, https: true, url: 'https://uctalent.app' }] })
+    await handler(f.event, entry.id)
+    expect(mocks.open).toHaveBeenCalledWith('https://uctalent.app')
   })
   it('requires the native explicit trust confirmation before setting up HTTPS', async () => {
     const f = fixture(), handler = mocks.handlers.get('local-domains:setup-https')!

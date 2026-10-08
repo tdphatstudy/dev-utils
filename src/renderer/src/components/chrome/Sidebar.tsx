@@ -1,4 +1,6 @@
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -14,6 +16,7 @@ function navClass(isActive: boolean, compact: boolean): string {
 }
 
 export function Sidebar(): JSX.Element {
+  const paletteShortcut = useShortcut('app.palette')
   const { locale } = useUiLocale()
   const collapsed = useAppStore((state) => state.sidebarCollapsed)
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed)
@@ -70,7 +73,7 @@ export function Sidebar(): JSX.Element {
       {!compact && <div className="px-3 pb-3">
         <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mac-label-secondary" /><input ref={filterInput} aria-label={uiText('Filter sidebar tools')} type="search" placeholder={uiText('Filter tools…')} className="mac-input !ps-8 !pe-8 !text-[12px]" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.stopPropagation(); setQuery('') } }} />{query && <button type="button" aria-label={uiText('Clear sidebar filter')} className="mac-btn-ghost absolute end-1 top-1/2 !h-6 !w-6 !min-h-0 -translate-y-1/2 !p-0" onClick={() => { setQuery(''); filterInput.current?.focus() }}><X aria-hidden="true" className="h-3.5 w-3.5" /></button>}</div>
       </div>}
-      {compact && <div className="px-2 pb-2"><button type="button" aria-label={uiText('Search tools')} title="Search tools (Ctrl/⌘ K)" className="mac-btn-ghost w-full !px-0" onClick={() => setCommandOpen(true)}><Search aria-hidden="true" className="h-4 w-4" /></button></div>}
+      {compact && <div className="px-2 pb-2"><button type="button" aria-label={uiText('Search tools')} title={uiText('Search tools') + (paletteShortcut.binding ? ` (${formatShortcut(paletteShortcut.binding, paletteShortcut.platform)})` : '')} className="mac-btn-ghost w-full !px-0" onClick={() => setCommandOpen(true)}><Search aria-hidden="true" className="h-4 w-4" /></button></div>}
       <nav ref={inDrawer ? drawerNavRef : navRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" aria-label={uiText('Tools')}>
         <NavLink to="/" end title={uiText('Home')} aria-label={uiText('Home')} onClick={closeDrawer} className={({ isActive }) => navClass(isActive, compact)}><Home aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />{!compact && <span>{uiText('Home')}</span>}</NavLink>
         {currentTool && !compact && ((filtering && !matchedIds.has(currentTool.id)) || (!filtering && closedGroups.has(currentTool.group))) && <div className="mt-3"><p className="px-2.5 py-1.5 text-[11px] font-semibold text-mac-label-secondary">{uiText('Current tool')}</p>{toolLink(currentTool, false)}</div>}

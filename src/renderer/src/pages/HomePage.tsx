@@ -13,7 +13,9 @@ import {
   type ToolDefinition,
   type ToolGroupId
 } from '@renderer/registry/tools'
-import { cn, modShortcut } from '@renderer/lib/utils'
+import { cn } from '@renderer/lib/utils'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import { CrashBanner } from '@renderer/components/CrashBanner'
 import { LoadingState } from '@renderer/components/ui/LoadingState'
@@ -43,12 +45,8 @@ export function HomePage(): JSX.Element {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<ToolGroupId | 'all'>('all')
   const [ready, setReady] = useState(false)
-  const [platform, setPlatform] = useState('win32')
+  const paletteShortcut = useShortcut('app.palette')
   const searchInput = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    window.devutils?.platform().then(setPlatform).catch(() => undefined)
-  }, [])
 
   useEffect(() => {
     try {
@@ -82,7 +80,7 @@ export function HomePage(): JSX.Element {
     tools: filtered.filter((tool) => tool.group === group.id)
   })).filter((group) => group.tools.length), [filtered])
   const openTool = (id: string): void => { navigate(`/tool/${id}`) }
-  const shortcut = modShortcut('K', platform === 'darwin' ? 'Mac' : platform)
+  const shortcut = formatShortcut(paletteShortcut.binding, paletteShortcut.platform)
   const browsing = !query.trim() && category === 'all'
   const clearFilters = (): void => {
     setQuery('')
@@ -139,7 +137,7 @@ export function HomePage(): JSX.Element {
             {query ? (
               <button type="button" aria-label={uiText('Clear tool search')} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => { setQuery(''); searchInput.current?.focus() }}>{uiText('Clear')}</button>
             ) : (
-              <button type="button" aria-label={`Open tool search (${shortcut})`} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => setCommandOpen(true)}><kbd className="mac-kbd">{shortcut}</kbd></button>
+              <button type="button" aria-label={shortcut ? `Open tool search (${shortcut})` : uiText('Search tools')} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => setCommandOpen(true)}>{shortcut ? <kbd className="mac-kbd">{shortcut}</kbd> : uiText('Search tools')}</button>
             )}
           </div>
           <p id="home-search-hint" className="mt-2 text-[12px] text-mac-label-secondary">{uiText('Search by name or task. Press Enter to open the first result.')}</p>

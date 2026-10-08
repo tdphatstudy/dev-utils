@@ -5,6 +5,8 @@ import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { Modal } from '@renderer/components/ui/Modal'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 import {
   MOCK_CONDITION_OPERATORS, MOCK_CONDITION_SOURCES, MOCK_EXAMPLE_YAML, MOCK_LIMITS, MOCK_METHODS,
   matchMockRequest, parseMockConfig, parseMockTarget, serializeMockConfig, validateMockConfig, validateMockJson,
@@ -33,6 +35,7 @@ function conditionLabel(condition: MockCondition): string {
 }
 
 export default function MockApiTool(): JSX.Element {
+  const runShortcut = useShortcut('editor.run')
   useUiLocale()
   const [yaml, setYaml] = useState(MOCK_EXAMPLE_YAML)
   const [tab, setTab] = useState<Tab>('Endpoints')
@@ -177,7 +180,7 @@ export default function MockApiTool(): JSX.Element {
       </div>
       </div>
       <div id="mock-api-panel" role="tabpanel" aria-label={tab} aria-labelledby={`mock-api-tab-${tabs.indexOf(tab)}`} tabIndex={0} className="min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
-        {tab === 'YAML' && <div className="flex h-full min-h-[320px] flex-col gap-2"><p className="text-[13px] text-mac-label-secondary">Version 1 · first matching response wins · last response is the fallback. Ctrl/⌘ + Enter {status.running ? 'applies changes' : 'starts the server'}.</p><CodeEditor value={yaml} onChange={(value) => { importVersion.current++; setUndo(null); setYaml(value) }} language="yaml" label="Mock API YAML" issue={parsed.error ? { error: parsed.error } : null} onRun={() => { if (config && ready && !portChanged && (!status.running || hasPendingChanges)) void run(status.running ? 'apply' : 'start') }} /><button className="mac-btn-secondary self-start" onClick={() => { importVersion.current++; setUndo(null); setYaml(MOCK_EXAMPLE_YAML); setError('') }}>Load example configuration</button></div>}
+        {tab === 'YAML' && <div className="flex h-full min-h-[320px] flex-col gap-2"><p className="text-[13px] text-mac-label-secondary">Version 1 · first matching response wins · last response is the fallback. {runShortcut.binding && `${formatShortcut(runShortcut.binding, runShortcut.platform)} ${status.running ? 'applies changes' : 'starts the server'}.`}</p><CodeEditor value={yaml} onChange={(value) => { importVersion.current++; setUndo(null); setYaml(value) }} language="yaml" label="Mock API YAML" issue={parsed.error ? { error: parsed.error } : null} onRun={() => { if (config && ready && !portChanged && (!status.running || hasPendingChanges)) void run(status.running ? 'apply' : 'start') }} /><button className="mac-btn-secondary self-start" onClick={() => { importVersion.current++; setUndo(null); setYaml(MOCK_EXAMPLE_YAML); setError('') }}>Load example configuration</button></div>}
         {tab === 'Endpoints' && config && <div className="space-y-5">
           <ServerSettings key={config.name + config.port + config.cors.enabled + config.cors.origins.join(',')} config={config} onSave={update} />
           <div className="grid min-w-0 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">

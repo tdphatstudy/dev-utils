@@ -57,7 +57,7 @@ describe('favorite tool preferences', () => {
     saved = ''
     useSessionStore.getState().setRetention(true)
     useAppStore.persist.setOptions({ storage: createJSONStorage(() => storage) })
-    useAppStore.setState({ theme: 'dark', inputRetention: 'session', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', toolLoadingMode: 'on-demand', sshDir: null, sshConfigPath: null, commandOpen: false })
+    useAppStore.setState({ shortcutOverrides: {}, theme: 'dark', inputRetention: 'session', sidebarCollapsed: false, lastToolId: null, recentToolIds: [], favoriteToolIds: [], launchMode: 'home', toolLoadingMode: 'on-demand', sshDir: null, sshConfigPath: null, commandOpen: false })
   })
   it('enforces Off during hydration and never hydrates input content or replaces actions', async () => {
     useSessionStore.getState().setDraft('json.studio', 'private cached input')
@@ -91,8 +91,26 @@ describe('favorite tool preferences', () => {
     useAppStore.getState().setCommandOpen(true)
     const persisted = JSON.parse(saved).state
     expect(persisted.favoriteToolIds).toEqual(['text.ocr'])
-    expect(Object.keys(persisted).sort()).toEqual(['language', 'favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme', 'toolLoadingMode', 'surfaceMode', 'motionMode', 'inputRetention'].sort())
+    expect(Object.keys(persisted).sort()).toEqual(['shortcutOverrides', 'language', 'favoriteToolIds', 'lastToolId', 'launchMode', 'recentToolIds', 'sidebarCollapsed', 'sshConfigPath', 'sshDir', 'theme', 'toolLoadingMode', 'surfaceMode', 'motionMode', 'inputRetention'].sort())
     expect(persisted).not.toHaveProperty('commandOpen')
+  })
+
+  it('persists, validates, disables and resets shortcut metadata without recording typed content', async () => {
+    const state = useAppStore.getState()
+    state.setShortcutBinding('app.palette', 'control+shift+p')
+    state.setShortcutBinding('vault.save', null)
+    state.setShortcutBinding('content.secret', 'Ctrl+7')
+    state.setShortcutBinding('app.home', 'private typed content')
+    expect(JSON.parse(saved).state.shortcutOverrides).toEqual({ 'app.palette': 'Ctrl+Shift+P', 'vault.save': null })
+    saved = JSON.stringify({ state: { shortcutOverrides: { 'tool.text.ocr': 'Alt+8', 'vault.save': null, 'app.theme': { content: 'secret' } }, setShortcutBinding: null }, version: 0 })
+    await useAppStore.persist.rehydrate()
+    expect(useAppStore.getState().shortcutOverrides).toEqual({ 'tool.text.ocr': 'Alt+8', 'vault.save': null })
+    expect(useAppStore.getState().setShortcutBinding).toBeTypeOf('function')
+    state.resetShortcut('vault.save')
+    expect(useAppStore.getState().shortcutOverrides).toEqual({ 'tool.text.ocr': 'Alt+8' })
+    state.resetAllShortcuts()
+    expect(useAppStore.getState().shortcutOverrides).toEqual({})
+    expect(readAppPreferences({ shortcutOverrides: [] })).toEqual({})
   })
 
   it('retains callable actions after hydrating untrusted persisted metadata', async () => {

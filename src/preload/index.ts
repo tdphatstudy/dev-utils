@@ -67,6 +67,7 @@ const api = {
     }
   },
   security: {
+    lock: (): Promise<void> => ipcRenderer.invoke('security:lock'),
     state: (): Promise<SecurityState> => ipcRenderer.invoke('security:state'),
     setIdleMinutes: (minutes: VaultIdleMinutes): Promise<SecurityState> => ipcRenderer.invoke('security:setIdleMinutes', minutes),
     preserveDraft: (id: string, content: string): Promise<void> => ipcRenderer.invoke('security:preserveDraft', id, content),

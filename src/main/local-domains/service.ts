@@ -105,18 +105,22 @@ export class LocalDomainsService {
       const id = readLocalDomainId(value), config = await this.load()
       const entry = config.entries.find((item) => item.id === id)
       if (!entry) throw new Error('This mapping no longer exists.')
-      if (hostDomainConflicts(await this.hosts.read(), entry.domain)) throw new Error('An unmanaged hosts entry now uses this domain. It was left unchanged.')
-      if (this.proxy?.has(entry.domain)) return this.snapshot()
-      const certificate = entry.https ? await this.certificates.issue(entry.id, entry.domain) : undefined
-      this.proxy ??= new LocalDomainProxy(config.ports)
-      // Bind listeners before changing DNS. A bind failure cannot hijack a domain.
-      await this.proxy.add(entry, certificate)
+      const hosts = await this.hosts.read()
+      if (hostDomainConflicts(hosts, entry.domain)) throw new Error('An unmanaged hosts entry now uses this domain. It was left unchanged.')
+      const alreadyActive = this.proxy?.has(entry.domain) ?? false
+      if (alreadyActive && managedHostDomains(hosts).includes(entry.domain)) return this.snapshot()
+      if (!alreadyActive) {
+        const certificate = entry.https ? await this.certificates.issue(entry.id, entry.domain) : undefined
+        this.proxy ??= new LocalDomainProxy(config.ports)
+        // Bind listeners before changing DNS. A bind failure cannot hijack a domain.
+        await this.proxy.add(entry, certificate)
+      }
       try {
         const warning = await this.hosts.set(entry.domain, true)
         this.warnings = warning ? [warning] : []
         await this.clearResolverCache().catch(() => { this.warnings.push('DevFusion could not clear its resolver cache. External browsers manage their own DNS caches.') })
       } catch (error) {
-        this.proxy.remove(entry.domain)
+        if (!alreadyActive) this.proxy?.remove(entry.domain)
         throw error
       }
       return this.snapshot()

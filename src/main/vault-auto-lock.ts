@@ -121,6 +121,7 @@ export class VaultAutoLock {
 }
 
 export function registerVaultSecurityIpc(ipc: Pick<typeof import('electron').ipcMain, 'handle'>, policy: VaultAutoLock): void {
+  ipc.handle('security:lock', (event) => { assertTrustedIpc(event); policy.lock('manual') })
   ipc.handle('security:state', (event) => { assertTrustedIpc(event); return policy.state(event.sender.id) })
   ipc.handle('security:setIdleMinutes', async (event, minutes: unknown) => { assertTrustedIpc(event); await policy.setIdleMinutes(minutes); return policy.state(event.sender.id) })
   ipc.handle('security:preserveDraft', (event, id: unknown, content: unknown) => { assertTrustedIpc(event); policy.preserve(event, id, content) })

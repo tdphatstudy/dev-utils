@@ -80,8 +80,16 @@ const measure = async (tool, theme, width) => {
   report.layouts.push({ tool, theme, width, ...bounds })
 }
 const reachable = async (locator) => {
-  const box = await locator.boundingBox()
-  assert.ok(box && box.width > 0 && box.height > 0 && box.x >= 0 && box.x + box.width <= page.viewportSize().width + 1 && box.y >= 48 && box.y + box.height <= page.viewportSize().height + 1, 'Control or output is not reachable in the desktop viewport')
+  // CodeMirror document content can exceed its internally scrolling viewport.
+  // Verify the visible editor frame, rather than requiring the whole document to fit.
+  const box = await locator.evaluate(element => {
+    const frame = element.closest('.cm-editor') ?? element
+    const bounds = frame.getBoundingClientRect()
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+  })
+  const valid = box && box.width > 0 && box.height > 0 && box.x >= 0 && box.x + box.width <= page.viewportSize().width + 1 && box.y >= 48 && box.y + box.height <= page.viewportSize().height + 1
+  if (!valid && process.env.BRAND_SCREENSHOT_DIR) await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'crypto-reachability-failure.png') })
+  assert.ok(valid, `Control or output is not reachable: ${JSON.stringify({ box, viewport: page.viewportSize(), label: await locator.getAttribute('aria-label') })}`)
 }
 const assertEditor = async (label) => {
   await reachable(editor(label))
@@ -266,6 +274,7 @@ try {
       const resultLabel = tool === 'aes' ? 'Encrypted output (Base64)' : 'HMAC-SHA-256 (Hex)'
       assert.ok(await editor(resultLabel).evaluate((element) => element.closest('.cm-editor').clientHeight >= 64), 'Logical short viewport zeroed output')
       await editor(resultLabel).scrollIntoViewIfNeeded()
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
       await reachable(editor(resultLabel))
       await measure(tool + '-logical-short', 'light',360)
       await screenshot(`ux-crypto-${tool}-logical-360-250`)

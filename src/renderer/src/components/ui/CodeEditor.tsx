@@ -25,6 +25,8 @@ import type { SqlDialectId } from '@shared/sql'
 import { parseJson } from '@shared/json'
 import { parseYaml } from '@shared/yaml'
 import { AlertCircle, ArrowDownToLine } from 'lucide-react'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut, shortcutAria } from '@shared/shortcuts'
 
 export interface EditorIssue {
   error: string
@@ -127,6 +129,7 @@ export function CodeEditor({
 }: Props): JSX.Element {
   const { t, locale } = useI18n()
   const theme = useAppStore((s) => s.theme)
+  const runShortcut = useShortcut('editor.run')
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)
   const viewRef = useRef<EditorView | null>(null)
@@ -169,10 +172,10 @@ export function CodeEditor({
           'aria-label': label ? t(label) : `${t(readOnly ? 'Output' : 'Input')} ${language} editor`,
           ...(readOnly ? { 'aria-readonly': 'true' } : {}),
           ...(diagnostic ? { 'aria-invalid': 'true', 'aria-describedby': diagnosticId } : {}),
-          ...(onRun ? { 'aria-keyshortcuts': 'Control+Enter Meta+Enter' } : {})
+          ...(onRun && runShortcut.binding ? { 'aria-keyshortcuts': shortcutAria(runShortcut.binding, runShortcut.platform)! } : {})
         }),
         Prec.highest(EditorView.domEventHandlers({ keydown(event) {
-          if (onRun && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          if (onRun && !readOnly && runShortcut.matches(event)) {
             event.preventDefault()
             onRun()
             return true
@@ -180,7 +183,7 @@ export function CodeEditor({
           return false
         } }))].flat()
     },
-    [locale, language, sqlDialect, errorOffset, value, diagnostic, diagnosticId, readOnly, label, onRun, maxLength]
+    [locale, language, sqlDialect, errorOffset, value, diagnostic, diagnosticId, readOnly, label, onRun, maxLength, runShortcut.binding, runShortcut.platform, runShortcut.matches]
   )
 
   const jumpToError = (): void => {
@@ -203,7 +206,7 @@ export function CodeEditor({
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-mac-separator px-3 py-2">
           <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-mac-label">{t(label)}</span>
           {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title="Select and copy text from this output">{uiText('Read only')}</span>}
-          {onRun && <kbd className="text-[11px] text-mac-label-secondary" title="Run from this editor with Ctrl or Command + Enter" aria-hidden>Ctrl/⌘ ↵</kbd>}
+          {onRun && runShortcut.binding && <kbd className="text-[11px] text-mac-label-secondary" aria-hidden>{formatShortcut(runShortcut.binding, runShortcut.platform)}</kbd>}
           <span className="text-[11px] tabular-nums text-mac-label-secondary" aria-hidden>{value.length.toLocaleString()} chars</span>
         </div>
       )}

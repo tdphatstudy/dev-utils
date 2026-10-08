@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { Shield, Keyboard, WifiOff } from 'lucide-react'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import { APP_NAME } from '@shared/brand'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
+import { Link } from 'react-router-dom'
 
 export function AboutPage(): JSX.Element {
   useUiLocale()
@@ -10,6 +13,7 @@ export function AboutPage(): JSX.Element {
   const [platform, setPlatform] = useState('')
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const desktop = !!window.devutils
+  const paletteShortcut = useShortcut('app.palette')
 
   useEffect(() => {
     let current = true
@@ -55,10 +59,11 @@ export function AboutPage(): JSX.Element {
             body={
               <ul className="mt-1 space-y-1 font-mono text-[13px] text-mac-label-secondary">
                 <li>
-                  <kbd className="rounded border border-mac-separator bg-mac-control px-1.5">⌘/Ctrl+K</kbd>{' '}
+                  <kbd className="rounded border border-mac-separator bg-mac-control px-1.5">{formatShortcut(paletteShortcut.binding, paletteShortcut.platform) || uiText('Not assigned')}</kbd>{' '}
                   Command palette
                 </li>
                 <li>Click JSON/YAML tree keys to copy paths</li>
+                <li><Link className="text-mac-accent underline" to="/tool/app.settings">{uiText('Manage shortcuts in Settings')}</Link></li>
               </ul>
             }
           />

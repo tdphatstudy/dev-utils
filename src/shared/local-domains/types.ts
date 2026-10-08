@@ -69,3 +69,10 @@ export function localDomainUrl(entry: LocalDomainInput, ports: LocalDomainPorts)
   const port = entry.https ? ports.https : ports.http
   return `${entry.https ? 'https' : 'http'}://${entry.domain}${port === (entry.https ? 443 : 80) ? '' : ':' + port}`
 }
+/** Known registry-wide HSTS suffixes; individual sites may also require HTTPS. */
+export function localDomainBrowserIssue(entry: Pick<LocalDomainInput, 'domain' | 'https'>): string | null {
+  if (entry.https) return null
+  const domain = entry.domain.trim().toLowerCase()
+  const suffix = ['.app', '.dev', '.page'].find((value) => domain.endsWith(value))
+  return suffix ? `Browsers require HTTPS for ${suffix} domains. Use HTTPS with Setup HTTPS, or use a .test domain for HTTP.` : null
+}

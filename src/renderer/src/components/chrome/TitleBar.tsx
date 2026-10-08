@@ -2,7 +2,9 @@ import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, X, Search, Moon, Sun } from 'lucide-react'
 import { useAppStore } from '@renderer/store/app-store'
-import { cn, modShortcut } from '@renderer/lib/utils'
+import { cn } from '@renderer/lib/utils'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 import { AppLogo } from './AppLogo'
 
 export function TitleBar(): JSX.Element {
@@ -46,7 +48,8 @@ export function TitleBar(): JSX.Element {
   const isMac = platform === 'darwin'
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)
 
-  const shortcut = modShortcut('K', platform === 'darwin' ? 'Mac' : platform)
+  const paletteShortcut = useShortcut('app.palette')
+  const shortcut = formatShortcut(paletteShortcut.binding, paletteShortcut.platform)
   const desktop = Boolean(window.devutils?.window)
   const act = async (action: 'minimize' | 'maximize' | 'close'): Promise<void> => {
     setWindowError(null)
@@ -80,7 +83,7 @@ export function TitleBar(): JSX.Element {
         <button
           type="button"
           aria-label={uiText('Search tools')}
-          title={`Search tools (${shortcut})`}
+          title={shortcut ? `Search tools (${shortcut})` : 'Search tools'}
           onClick={() => setCommandOpen(true)}
           className={cn(
             'titlebar-no-drag group flex h-9 w-full max-w-[min(400px,52vw)] items-center gap-2 rounded-mac',
@@ -94,7 +97,7 @@ export function TitleBar(): JSX.Element {
             <span className="sm:hidden">{uiText('Search…')}</span>
             <span className="hidden sm:inline">{uiText('Search tools…')}</span>
           </span>
-          <kbd className="mac-kbd hidden shrink-0 sm:inline">{shortcut}</kbd>
+          {shortcut && <kbd className="mac-kbd hidden shrink-0 sm:inline">{shortcut}</kbd>}
         </button>
       </div>
 

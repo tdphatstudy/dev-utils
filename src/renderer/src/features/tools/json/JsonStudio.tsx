@@ -11,6 +11,8 @@ import { formatJson } from '@shared/json'
 import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 
 const SAMPLE = `{
   "name": "DevFusion",
@@ -22,6 +24,7 @@ const SAMPLE = `{
 type ViewMode = 'tree' | 'raw'
 
 export default function JsonStudio(): JSX.Element {
+  const runShortcut = useShortcut('editor.run')
   useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [indent, setIndent] = useState(2)
@@ -61,7 +64,7 @@ export default function JsonStudio(): JSX.Element {
       <SplitPane labels={[uiText('Input'), uiText('Output')]}>
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator bg-mac-surface">
           <ToolToolbar label="JSON input actions" className="max-h-[45%] overflow-y-auto !px-2 !py-2">
-            <button type="button" className="mac-btn-primary" disabled={!input.trim() || !result.ok} title="Format JSON (Ctrl/⌘ + Enter in the input editor)" onClick={formatInput}>{uiText('Format')}</button>
+            <button type="button" className="mac-btn-primary" disabled={!input.trim() || !result.ok} title={runShortcut.binding ? `Format JSON (${formatShortcut(runShortcut.binding, runShortcut.platform)})` : 'Format JSON'} onClick={formatInput}>{uiText('Format')}</button>
             <button type="button" className="mac-btn-secondary" disabled={!input.trim() || !result.ok} onClick={() => {
               const minified = formatJson(input, { minify: true })
               if (minified.ok && minified.text) replaceInput(minified.text, 'minify')

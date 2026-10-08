@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@renderer/lib/utils'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { matchesShortcut } from '@shared/shortcuts'
+import { useAppStore } from '@renderer/store/app-store'
 
 export interface ContextMenuItem {
   id: string
@@ -22,6 +25,7 @@ interface Props {
 }
 
 export function ContextMenu({ x, y, items, opener, label = 'File actions', onSelect, onClose }: Props): JSX.Element {
+  const paletteShortcut = useShortcut('app.palette')
   const ref = useRef<HTMLDivElement>(null)
   const callbacks = useRef({ onSelect, onClose })
   callbacks.current = { onSelect, onClose }
@@ -88,11 +92,13 @@ export function ContextMenu({ x, y, items, opener, label = 'File actions', onSel
   }, [x, y, opener])
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    if (paletteShortcut.enabled && matchesShortcut(event.nativeEvent, paletteShortcut.binding, paletteShortcut.platform)) {
       // Global tool search remains available, but replaces this menu layer.
       restoreFocus.current = false
       if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true })
       callbacks.current.onClose()
+      event.preventDefault()
+      useAppStore.getState().setCommandOpen(true)
       return
     }
     // The desktop's Enter/Delete/F2 shortcuts must not run behind this layer.

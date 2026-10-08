@@ -27,6 +27,10 @@ export function hostDomainConflicts(text: string, domain: string): boolean {
     return aliases.some((alias) => alias.toLowerCase().replace(/\.$/, '') === normalized)
   })
 }
+export function removeManagedHosts(text: string): string {
+  managedHostDomains(text)
+  return lines(text).filter((line) => !ownedLine.test(line.replace(/[\r\n]+$/, ''))).join('')
+}
 /** Preserve every unrelated byte (call with latin1), comment, alias and newline. */
 export function patchManagedHosts(text: string, domain: string, enabled: boolean): string {
   domain = normalizeLocalDomain(domain)

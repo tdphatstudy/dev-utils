@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pipette, Copy, Check, Palette } from 'lucide-react'
 import { colorFromHex, normalizeHex } from '@shared/color'
+import { useShortcut, useToolShortcuts } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut, shortcutAria } from '@shared/shortcuts'
 
 export default function ColorPicker(): JSX.Element {
   const [input, setInput] = useState('#6366F1')
@@ -44,6 +46,8 @@ export default function ColorPicker(): JSX.Element {
       if (alive.current) { setError(e instanceof Error ? e.message : 'Could not pick a screen color. Try a manual color.'); setMessage('Try again or enter a color below.') }
     } finally { if (alive.current) setBusy(false) }
   }
+  const pickShortcut = useShortcut('color.pick')
+  useToolShortcuts({ 'color.pick': () => { void pick() } }, desktop && !busy)
   const copy = async (value: string): Promise<void> => {
     try {
       await navigator.clipboard.writeText(value)
@@ -59,7 +63,7 @@ export default function ColorPicker(): JSX.Element {
             <h2 className="text-[18px] font-semibold tracking-tight text-mac-label">A color, ready for your code.</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-mac-label-secondary">Pick any pixel across your desktop, or enter a color below.</p>
           </div>
-          <button type="button" className="mac-btn-primary gap-2" disabled={!desktop || busy} onClick={() => void pick()}>
+          <button type="button" className="mac-btn-primary gap-2" disabled={!desktop || busy} aria-keyshortcuts={shortcutAria(pickShortcut.binding, pickShortcut.platform)} title={formatShortcut(pickShortcut.binding, pickShortcut.platform)} onClick={() => void pick()}>
             <Pipette className="h-4 w-4" />{busy ? 'Picking…' : 'Pick screen color'}
           </button>
         </div>

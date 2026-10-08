@@ -6,10 +6,13 @@ import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { SegmentedControl } from '@renderer/components/ui/SegmentedControl'
 import { SplitPane } from '@renderer/components/ui/SplitPane'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
+import { useShortcut } from '@renderer/shortcuts/useShortcuts'
+import { formatShortcut } from '@shared/shortcuts'
 
 type Mode = 'encrypt' | 'decrypt'
 
 export default function AesTool(): JSX.Element {
+  const runShortcut = useShortcut('editor.run')
   useUiLocale()
   const [mode, setMode] = useState<Mode>('encrypt')
   const [password, setPassword] = useState('')
@@ -125,7 +128,7 @@ export default function AesTool(): JSX.Element {
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : hasResult ? 'success' : 'neutral'}>
-          {error ?? (busy ? 'Working on current input…' : hasResult ? `${mode === 'encrypt' ? 'Encrypted' : 'Decrypted'} successfully${output === '' ? ' · empty plaintext' : ''}` : !password ? 'Enter a password to get started.' : mode === 'decrypt' && !input.trim() ? 'Paste the complete DevFusion AES ciphertext.' : 'Ready · Ctrl/⌘ + Enter to run')}
+          {error ?? (busy ? 'Working on current input…' : hasResult ? `${mode === 'encrypt' ? 'Encrypted' : 'Decrypted'} successfully${output === '' ? ' · empty plaintext' : ''}` : !password ? 'Enter a password to get started.' : mode === 'decrypt' && !input.trim() ? 'Paste the complete DevFusion AES ciphertext.' : runShortcut.binding ? `Ready · ${formatShortcut(runShortcut.binding, runShortcut.platform)} to run` : 'Ready')}
         </ToolStatus>
       </footer>
     </div>

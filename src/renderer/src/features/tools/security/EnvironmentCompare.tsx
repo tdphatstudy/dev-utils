@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { ArrowLeftRight, Trash2 } from 'lucide-react'
 import { compareEnvironments, formatEnvironmentReport, MAX_ENV_LENGTH, type EnvComparison, type EnvStatus } from '@shared/env/compare'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
+import { useToolShortcuts } from '@renderer/shortcuts/useShortcuts'
 
 const LABELS: Record<EnvStatus, string> = { same: 'Same', changed: 'Changed', missing: 'Missing in target', extra: 'Target only' }
 const EXAMPLE_BASE = 'APP_ENV=staging\nAPI_URL=https://staging.example.test\nLOG_LEVEL=debug\nFEATURE_CHECKOUT=true'
@@ -24,7 +25,8 @@ export default function EnvironmentCompare(): JSX.Element {
   }
   const duplicateCount = result ? result.duplicateKeys.baseline.length + result.duplicateKeys.target.length : 0
   const rows = result?.rows.filter((row) => !differencesOnly || row.status !== 'same') ?? []
-  return <div className="h-full" onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); compare() } }}><ToolWorkspace purpose="Compare environment files. Reports hide variable values." hasResult={Boolean(result)} error={error}
+  useToolShortcuts({ 'editor.run': compare })
+  return <div className="h-full"><ToolWorkspace purpose="Compare environment files. Reports hide variable values." hasResult={Boolean(result)} error={error}
     toolbar={<div className="flex flex-wrap items-center gap-2">
         <button type="button" className="mac-btn-primary" onClick={compare}><ArrowLeftRight aria-hidden="true" className="h-4 w-4" />{uiText('Compare environments')}</button>
         <button type="button" className="mac-btn-secondary" onClick={() => { setBaseline(EXAMPLE_BASE); setTarget(EXAMPLE_TARGET); invalidate() }}>{uiText('Load example')}</button>

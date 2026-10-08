@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Globe, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
 import { Modal } from '@renderer/components/ui/Modal'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
-import { readLocalDomainInput, type LocalDomainRow, type LocalDomainsStatus, type DomainResolution } from '@shared/local-domains/types'
+import { localDomainBrowserIssue, readLocalDomainInput, type LocalDomainRow, type LocalDomainsStatus, type DomainResolution } from '@shared/local-domains/types'
 
 type Confirmation = { kind: 'enable' | 'remove'; entry: LocalDomainRow } | { kind: 'cleanup' | 'ca' }
 export default function LocalDomainsTool(): JSX.Element {
@@ -83,6 +83,7 @@ export default function LocalDomainsTool(): JSX.Element {
   }
   const recovery = status?.entries.filter((entry) => entry.hostsMapped && !entry.active).length || 0
   const overrides = (status?.entries.filter((entry) => entry.hostsMapped).length || 0) + (status?.orphanedDomains.length || 0)
+  const browserIssue = localDomainBrowserIssue({ domain, https })
 
   return (
     <div className="h-full overflow-auto p-4 sm:p-6">
@@ -108,6 +109,7 @@ export default function LocalDomainsTool(): JSX.Element {
             </label>
           </div>
           <p id="domain-help" className="mt-2 text-[12px] leading-relaxed text-mac-label-tertiary">Use app.test for an isolated test name, or a real domain such as toi.vn when required. Enabling a real domain overrides its normal address on this machine until disabled.</p>
+          {browserIssue && <p role="status" className="mt-2 text-[12px] leading-relaxed text-mac-label-secondary">{browserIssue}</p>}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <label className="flex items-center gap-2 text-[13px] text-mac-label-secondary"><input type="checkbox" checked={https} onChange={(event) => setHttps(event.target.checked)} disabled={busy || !available} />Use HTTPS</label>
             <button type="submit" className="mac-btn-primary" disabled={busy || !available || !domain.trim() || !targetPort || (status?.entries.length || 0) >= 16}><Plus className="h-3.5 w-3.5" aria-hidden />Save mapping</button>
@@ -124,13 +126,14 @@ export default function LocalDomainsTool(): JSX.Element {
                   <div className="min-w-0 flex-1"><p className="break-all font-mono text-[14px] font-semibold text-mac-label">{entry.domain}</p><p className="mt-1 text-[12px] text-mac-label-secondary">localhost:{entry.targetPort} · {entry.https ? 'HTTPS' : 'HTTP'} · {entry.active ? entry.hostsMapped ? 'Active' : 'Hosts entry missing' : entry.hostsMapped ? 'Cleanup needed' : 'Disabled'}</p><p className="mt-2 break-all font-mono text-[12px] text-mac-label-secondary">{entry.url}</p></div>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className={entry.active || entry.hostsMapped ? 'mac-btn-secondary' : 'mac-btn-primary'} disabled={busy || (!entry.active && !entry.hostsMapped && entry.https && !status.caInstalled)} onClick={() => entry.active || entry.hostsMapped ? disable(entry) : setConfirm({ kind: 'enable', entry })}>{entry.active || entry.hostsMapped ? 'Disable' : 'Enable'}<span className="sr-only"> {entry.domain}</span></button>
-                    <button type="button" className="mac-btn-secondary" disabled={busy || !entry.active || !entry.hostsMapped} onClick={() => { void action(async () => { await window.devutils.localDomains.open(entry.id) }) }}>{uiText('Open')}<span className="sr-only"> {entry.domain}</span></button>
+                    <button type="button" className="mac-btn-secondary" disabled={busy || !entry.active || !entry.hostsMapped || !!localDomainBrowserIssue(entry)} onClick={() => { void action(async () => { await window.devutils.localDomains.open(entry.id) }) }}>{uiText('Open')}<span className="sr-only"> {entry.domain}</span></button>
                     <CopyButton text={entry.url} label={`Copy URL for ${entry.domain}`} />
                     <button type="button" className="mac-btn-ghost" disabled={busy} aria-label={`Remove ${entry.domain}`} onClick={() => setConfirm({ kind: 'remove', entry })}><Trash2 className="h-4 w-4" aria-hidden /></button>
                   </div>
                 </div>
+                {localDomainBrowserIssue(entry) && <p className="mt-2 text-[12px] leading-relaxed text-mac-label-secondary">{localDomainBrowserIssue(entry)} To change this saved mapping, remove it and save it again with Use HTTPS.</p>}
                 {entry.hostsMapped && !entry.active && <button type="button" className="mac-btn-secondary mt-3 !text-[12px]" disabled={busy || (entry.https && !status.caInstalled)} onClick={() => setConfirm({ kind: 'enable', entry })}>Resume mapping<span className="sr-only"> {entry.domain}</span></button>}
-                {entry.active && !entry.hostsMapped && <p className="mt-2 text-[12px] text-mac-label-secondary">The hosts override was removed outside DevFusion. Disable this route before enabling it again.</p>}
+                {entry.active && !entry.hostsMapped && <div className="mt-2"><p className="text-[12px] text-mac-label-secondary">The hosts override was removed outside DevFusion. Restore it to use this domain again.</p><button type="button" className="mac-btn-secondary mt-2 !text-[12px]" disabled={busy} onClick={() => setConfirm({ kind: 'enable', entry })}>Restore hosts entry<span className="sr-only"> {entry.domain}</span></button></div>}
               </li>
             ))}
           </ul>
