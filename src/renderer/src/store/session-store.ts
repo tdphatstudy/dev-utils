@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 export const NO_HISTORY_TOOLS = new Set([
+  'text.clipboard',
   'hacking.stress', 'hacking.hash', 'hacking.headers', 'hacking.cors', 'hacking.jwt',
   'json.schema',
   'json.reconcile',

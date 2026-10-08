@@ -59,6 +59,7 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 |---|---|---|
 | Startup, cửa sổ, lifecycle | `src/main/index.ts` | preload, IPC registrars |
 | Brand / native tray / quick actions | `src/shared/brand.ts`, `src/main/branding.ts`, `src/main/tray.ts` | shared quick-actions, App router subscription, resource exports |
+| Quick widgets / global shortcuts / Clipboard Manager | `src/shared/quick-tools.ts`, `src/shared/clipboard`, `src/main/quick-tools.ts`, `src/main/global-shortcuts.ts`, `src/main/clipboard` | isolated `src/preload/quick-tools.ts`, `quick.html`, lazy `text.clipboard`, Settings; [usage, research and privacy](quick-tools-clipboard-2026-10-08.md) |
 | Color Picker | `src/shared/color`, `src/main/color-picker.ts`, `src/main/screen-snapshot.ts` | app color bridge, isolated `src/preload/color-picker.ts`, tool UI, resource HTML/JS |
 | OCR ảnh/PDF và chụp màn hình | `src/shared/ocr/types.ts`, `src/main/ocr.ts`, `src/renderer/src/ocr-helper` | `text.ocr`, app OCR bridge, isolated preload, local assets plugin, lightweight resource popup |
 | Lorem và time/date | `src/shared/lorem`, `src/shared/time` | lazy `text.lorem`, `time.timestamp`, `time.date`, tool components |
@@ -469,15 +470,17 @@ DesktopTray retains a native Tray/Menu and one optional main BrowserWindow.
 Closing the main window destroys its renderer and zeroes vault keys through the
 existing owner lifecycle. A native will-prevent-unload dialog honors Keep's dirty
 guard before allowing explicit discard. No hidden renderer is retained for the
-tray, and no background screen/clipboard monitor or auto-start setting is added.
+tray. No background screen monitor or auto-start setting is added. The optional
+Clipboard Manager described below captures eligible clipboard content automatically
+while the app runs; users can pause it or disable capture in its settings.
 Tray failure falls back to normal last-window exit on Windows/Linux. Quit disposes
 tray/picker and clears keys; native menu/Settings provide an explicit Quit action.
 Minimize keeps the window and its in-memory state. Electron's base main/GPU/system
 process memory remains; tray mode is not zero-memory operation.
 
-Tray routing uses fixed shared QUICK_TOOLS IDs. Initial routes load directly;
-existing windows receive app:openTool via a named preload subscription and React
-Router navigation, preserving Keep's route blocker. UUID copy uses crypto.randomUUID
+Tray routing uses fixed shared QUICK_TOOLS IDs mapped to transient widgets. Home
+and Settings reuse the main window; its named app:openTool subscription and React
+Router preserve Keep's route blocker. UUID copy uses crypto.randomUUID
 directly in main, with no renderer or clipboard read. Color picking captures the
 OS desktop with desktopCapturer before opening overlays, matches display_id to
 screen bounds and uses full-resolution images with DIP-to-image coordinate mapping.
@@ -870,6 +873,84 @@ unchanged. Additional interface labels and count/state summaries are in
 `src/shared/i18n/analysis-messages.ts`; backend diagnostics and some detailed
 technical findings continue to use English fallback.
 See [the workspace review and verification notes](tool-workspace-2026-10-07.md).
+
+### Quick widgets, global shortcuts and clipboard history (2026-10-08)
+
+`QuickTools` owns one transient, branded BrowserWindow, allocated only when opened.
+Its separate `quick.html` entry mounts Clipboard, UUID, Timestamp, JSON, Base64,
+QR, OCR, Mock API and text transforms without AppShell, the main router or editors.
+All nine tray Open tool entries route to their widget. Color starts the existing
+screen eyedropper immediately, with no intermediate widget or full app window.
+QR/OCR/Mock widgets are lazy imports; OCR workers/models load only on extraction.
+Blur destroys an unpinned widget; Escape/Close destroys it after closing an open
+preview/menu/dialog. OCR and native file dialogs temporarily retain the calling
+widget. OCR retention counts are separate from the user's manual pin choice.
+All visible main/OCR/color/widget windows use `appWindowIcon()`. Native tray
+glyphs are colored PNGs rasterized from installed Lucide vectors with square
+geometry and light/dark variants. Logo images use contain sizing. Native menu
+images retain aspect ratio and color, including macOS; the menu refreshes with theme.
+
+Widgets have a nonpersistent partition, denied permissions/remote requests,
+sandbox/contextIsolation/webSecurity, no Node integration and a minimal named
+`window.quickTools` bridge. Main validates exact active WebContents, main frame,
+fixed renderer URL and payloads. Network denial includes WebSockets; file requests
+stay inside bundled renderer resources. Image CSP allows local blob URLs for QR file decode, without
+loosening script or connection policy. Clipboard handlers also admit the existing
+trusted main app. `quick:copyText` accepts bounded manual/generated quick-tool
+input separately from history access. Bounded PNG copy and fixed OCR/Mock API
+methods are widget-only; Mock YAML reuses the existing validated loopback service.
+There is no arbitrary command or network proxy. History content remains masked during
+vault access or screen lock. Sandboxed preloads inline their small bridge objects
+so Rollup cannot introduce unsupported local `require` chunks.
+
+`GlobalShortcuts` registers four fixed action IDs in main, after app ready, and
+retains registration while every renderer is closed. Only Clipboard has a
+default binding (`Mod+Shift+Space`); Color/OCR/text transforms are opt-in bindings.
+Validated `global-shortcuts.json` contains versioned binding metadata only.
+Writes are serialized and atomic; OS refusal or write failure attempts to restore
+the previous registrations. Settings detects overlaps with focused-app commands
+and offers a temporary OS registration probe. OS refusal does not identify the
+other owner; registration can later change. Quit releases DevFusion registrations.
+Linux desktop/executable identity matches `com.devutils.app.desktop` for Wayland
+portals; native Linux/macOS behavior still needs platform verification.
+
+`ClipboardManager` owns capture and history in main. Capture defaults on; startup
+records eligible current content and polling runs every 500 ms with a five-second
+read deadline and no idle renderer. Resume/unlock establishes a privacy baseline
+that skips existing content. Explicit
+Save current clipboard adds that content. The native reader checks confidentiality
+markers and Windows history opt-out before bounded async reads, accepts one text/
+HTML/PNG item and never renders saved HTML. Recognizable secrets and user exclusion
+phrases are filtered; images and unrecognized secrets require user judgment.
+Vault access, screen lock and suspend mask reads and stop capture; awaited reads
+use revision guards. Read failure pauses capture rather than retrying endlessly.
+
+History defaults to RAM, 200 entries and one-day retention. Preferences allow
+20–300 entries and 1/7/30 days; text/HTML are each limited to 256 KiB, PNG to 4 MiB
+and 16 million pixels. The retained serialized content budget is 24 MiB, including
+Base64/escaping (not a bound on total Electron RAM). At most 20 entries are pinned;
+pins also expire. Deduplication, full-content search, labels, ordered merging and
+pure local transforms preserve original content. JSON transforms retain large
+integer lexemes and duplicate keys. Image OCR reuses the bundled local engine
+only on explicit action. The single-column history uses grouped, typed rows,
+search and filter pills. One click or Enter copies the original and closes the
+widget; Alt+Enter opens preview, Ctrl/Command+Shift+Enter copies plain text and
+Ctrl/Command+1…9 copies a visible entry. Preview/transform and multi-selection
+are explicit modes; settings use a modal. Pasting into another app remains explicit.
+
+`clipboard-preferences.json` stores versioned feature preferences, never captured
+data. Version 1 opt-in preferences adopt the user-requested automatic capture;
+version 2 (written on Save) retains explicit capture disable across restarts.
+Encrypted history stays at version 1 and is not migrated. Optional
+`clipboard-history.enc` uses OS safeStorage (async on Windows/macOS;
+Linux refuses insecure `basic_text`/unknown backends), atomic writes and bounded,
+validated restore. There is no plaintext persistence fallback. Unreadable history
+is retained and requires explicit disable/clear before replacement. Turning off
+persistence or Clear removes only this feature's encrypted file. `text.clipboard`
+is excluded from generic tool drafts/history; widgets never store browser drafts.
+Changed events contain no clipboard content. There are no uploads, link previews,
+cloud/AI calls or source-application monitoring. Polling can miss rapid changes.
+See [research, usage and verification](quick-tools-clipboard-2026-10-08.md).
 
 ### Security workspace usability (2026-10-07)
 

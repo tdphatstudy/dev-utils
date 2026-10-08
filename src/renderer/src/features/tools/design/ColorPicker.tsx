@@ -3,8 +3,10 @@ import { Pipette, Copy, Check, Palette } from 'lucide-react'
 import { colorFromHex, normalizeHex } from '@shared/color'
 import { useShortcut, useToolShortcuts } from '@renderer/shortcuts/useShortcuts'
 import { formatShortcut, shortcutAria } from '@shared/shortcuts'
+import { useI18n } from '@renderer/i18n'
 
 export default function ColorPicker(): JSX.Element {
+  const { t } = useI18n()
   const [input, setInput] = useState('#6366F1')
   const [recent, setRecent] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -63,9 +65,12 @@ export default function ColorPicker(): JSX.Element {
             <h2 className="text-[18px] font-semibold tracking-tight text-mac-label">A color, ready for your code.</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-mac-label-secondary">Pick any pixel across your desktop, or enter a color below.</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          {window.devutils?.quickTools && <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => { void window.devutils.quickTools.open('color').catch(() => setError('The color widget could not open. Try again.')) }}>{t('Open quick widget')}</button>}
           <button type="button" className="mac-btn-primary gap-2" disabled={!desktop || busy} aria-keyshortcuts={shortcutAria(pickShortcut.binding, pickShortcut.platform)} title={formatShortcut(pickShortcut.binding, pickShortcut.platform)} onClick={() => void pick()}>
             <Pipette className="h-4 w-4" />{busy ? 'Picking…' : 'Pick screen color'}
           </button>
+          </div>
         </div>
         {!desktop && <p className="rounded-mac-lg border border-mac-separator bg-mac-surface px-4 py-3 text-[14px] text-mac-label-secondary">Screen sampling requires the desktop app. Manual colors and conversions work here.</p>}
         <div className="grid gap-5 md:grid-cols-[minmax(220px,1fr)_minmax(0,1fr)]">

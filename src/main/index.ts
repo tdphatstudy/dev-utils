@@ -2,7 +2,7 @@ import { LocalDomainsService } from './local-domains/service'
 import { MkcertCertificates } from './local-domains/certificates'
 import { SystemHosts } from './platform/local-domains/hosts'
 import { registerLocalDomainsIpc, clearLocalResolverCache } from './local-domains/ipc'
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol, powerMonitor } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, protocol, powerMonitor, nativeTheme } from 'electron'
 import { VaultAutoLock, registerVaultSecurityIpc } from './vault-auto-lock'
 import { join } from 'path'
 import { stat } from 'fs/promises'
@@ -20,7 +20,7 @@ import { registerCryptoAndSshIpc } from './ssh/ipc'
 import { pathToFileURL } from 'url'
 import { configureWindowSecurity, configureAppPermissions } from './window-security'
 import { APP_NAME } from '@shared/brand'
-import { configureBrand, resourcePath } from './branding'
+import { appWindowIcon, configureBrand } from './branding'
 import { DesktopTray } from './tray'
 import { LanguagePreferences, registerLanguageIpc } from './language'
 import { translate } from '@shared/i18n/catalog'
@@ -30,6 +30,9 @@ import { clearAccess, clearAccessForOwner, getAccess, observeAccess } from './se
 import { DesktopOcr, registerOcrIpc } from './ocr'
 import { MockApiServer } from './mock-api-server'
 import { registerMockApiIpc } from './mock-api-ipc'
+import { ClipboardManager } from './clipboard/service'
+import { QuickTools } from './quick-tools'
+import { GlobalShortcuts } from './global-shortcuts'
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'devfusion-ocr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
 
@@ -66,15 +69,25 @@ let domainsCleanupPending = false
 const colorPicker: ScreenColorPicker = new ScreenColorPicker((selected) => { desktopTray?.refresh(); if (selected) desktopTray?.notifyColor(selected) }, (): boolean => !desktopOcr.isBusy())
 const desktopOcr: DesktopOcr = new DesktopOcr(() => desktopTray?.refresh(), (): boolean => !colorPicker.isBusy())
 const mockApi = new MockApiServer(() => desktopTray?.refresh())
+const clipboardManager = new ClipboardManager(app.getPath('userData'), () => {
+  quickTools.notify(); desktopTray?.refresh()
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && mainOwners.has(win.webContents.id)) win.webContents.send('clipboard:changed')
+  }
+}, () => !!getAccess())
+const quickTools = new QuickTools(clipboardManager, colorPicker, desktopOcr, () => language.state().resolved, mockApi)
+const globalQuickShortcuts = new GlobalShortcuts(app.getPath('userData'), action => {
+  const result = action === 'ocr' ? quickTools.capture('region') : quickTools.open(action)
+  void result.catch(() => { void dialog.showMessageBox({ title: APP_NAME, type: 'warning', message: translate(language.state().resolved, 'This action could not be completed. Open the matching tool and retry.') }).catch(() => {}) })
+}, () => {
+  desktopTray?.refresh(); quickTools.notifyShortcuts()
+  for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed() && mainOwners.has(win.webContents.id)) win.webContents.send('quick:shortcutsChanged')
+})
 const localDomainsDirectory = join(app.getPath('userData'), 'local-domains')
 const localDomains = new LocalDomainsService(localDomainsDirectory, new SystemHosts(), new MkcertCertificates(localDomainsDirectory), clearLocalResolverCache)
 
-function resolveAppIcon(): string | undefined {
-  return resourcePath(process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-}
-
 function createWindow(route = '/'): BrowserWindow {
-  const icon = resolveAppIcon()
+  const icon = appWindowIcon()
   const mainWindow = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -223,6 +236,7 @@ function registerIpc(): void {
   registerOcrIpc(desktopOcr)
   registerMockApiIpc(mockApi)
   registerLocalDomainsIpc(localDomains)
+  quickTools.register(globalQuickShortcuts)
 
   ipcMain.handle('app:platform', (event) => { assertTrustedIpc(event); return process.platform })
   ipcMain.handle('app:version', (event) => { assertTrustedIpc(event); return app.getVersion() })
@@ -241,7 +255,7 @@ if (!gotLock) {
     if (domainsCleanupPending) return
     domainsCleanupPending = true
     localDomains.beginQuit()
-    void localDomains.cleanup().then(() => {
+    void localDomains.cleanup().then(() => clipboardManager.flush()).then(() => {
       domainsCleanupPending = false
       domainsCleanedForQuit = true
       app.quit()
@@ -263,9 +277,13 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
+    const dockIcon = appWindowIcon()
+    if (process.platform === 'darwin' && dockIcon) app.dock?.setIcon(dockIcon)
     await language.start()
     vaultPolicy = new VaultAutoLock(powerMonitor, (owner) => BrowserWindow.getAllWindows().find((win) => win.webContents.id === owner) ?? null, app.getPath('userData'), () => mainOwners.values().next().value)
     await vaultPolicy.start()
+    await clipboardManager.start()
+    await globalQuickShortcuts.start()
     registerIpc()
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : [{ label: APP_NAME, submenu: [{ label: 'Quit DevFusion', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() }] }]),
@@ -274,8 +292,15 @@ if (!gotLock) {
     desktopTray = new DesktopTray(createWindow, colorPicker, () => app.quit(), desktopOcr, mockApi, {
       language: () => language.state(), setLanguage: setting => language.set(setting),
       vaultUnlocked: () => !!getAccess(), lockVault: () => vaultPolicy?.lock('manual')
+    }, {
+      open: kind => quickTools.open(kind), clipboardState: () => clipboardManager.state(), pauseClipboard: value => clipboardManager.pause(value), shortcuts: () => globalQuickShortcuts.state()
     })
-    stopObservingAccess = observeAccess(() => desktopTray?.refresh())
+    stopObservingAccess = observeAccess(() => { clipboardManager.privacyChanged(); quickTools.close(); desktopTray?.refresh() })
+    powerMonitor.on('lock-screen', () => { clipboardManager.screenLock(true); quickTools.close() })
+    powerMonitor.on('unlock-screen', () => clipboardManager.screenLock(false))
+    powerMonitor.on('suspend', () => { clipboardManager.screenLock(true); quickTools.close() })
+    powerMonitor.on('resume', () => clipboardManager.screenLock(false))
+    nativeTheme.on('updated', () => desktopTray?.refresh())
     desktopTray.start()
     // Window first — do not block cold start on vault disk I/O
     desktopTray.open()
@@ -293,5 +318,5 @@ if (!gotLock) {
   app.on('window-all-closed', () => {
     if (!desktopTray?.hasTray() && process.platform !== 'darwin') app.quit()
   })
-  app.on('will-quit', () => { stopObservingAccess?.(); securityTesting.dispose(); vaultPolicy?.dispose(); mockApi.dispose(); localDomains.dispose(); desktopTray?.dispose(); clearAccess() })
+  app.on('will-quit', () => { stopObservingAccess?.(); quickTools.close(); globalQuickShortcuts.dispose(); void clipboardManager.dispose(); securityTesting.dispose(); vaultPolicy?.dispose(); mockApi.dispose(); localDomains.dispose(); desktopTray?.dispose(); clearAccess() })
 }

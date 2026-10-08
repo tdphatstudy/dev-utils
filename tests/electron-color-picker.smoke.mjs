@@ -12,7 +12,7 @@ const root = await mkdtemp(join(tmpdir(), 'devfusion-color-picker-'))
 try {
   await mkdir(join(root, 'main', 'resources'), { recursive: true })
   await mkdir(join(root, 'preload'))
-  for (const name of ['color-picker.html', 'color-picker.js']) await copyFile(resolve('resources', name), join(root, 'main', 'resources', name))
+  for (const name of ['color-picker.html', 'color-picker.js', 'icon.png', 'icon.ico']) await copyFile(resolve('resources', name), join(root, 'main', 'resources', name))
   await copyFile(resolve('out/preload/colorPicker.js'), join(root, 'preload', 'colorPicker.js'))
   const entry = join(root, 'main', 'smoke.cjs')
   const source = `
@@ -50,6 +50,7 @@ try {
         const formats = await popup.webContents.executeJavaScript('Array.from(document.querySelectorAll(".field input"),input=>input.value)')
         assert(formats.length===4 && formats[0]==='#FF8800' && formats[1]==='rgb(255, 136, 0)', 'Format popup incomplete')
         assert(await popup.webContents.executeJavaScript('!!document.getElementById("repick") && !!window.screenPicker && !window.devutils'), 'Helper bridge/UI missing or toolbox API exposed')
+        assert(await popup.webContents.executeJavaScript('(()=>{const image=document.querySelector(".brand img"),r=image.getBoundingClientRect();return image.naturalWidth>0&&r.width===24&&r.height===24&&getComputedStyle(image).objectFit==="contain"})()'), 'Color result product logo missing or distorted')
         console.log('PASS native result popup with HEX/RGB/HSL/HSV and Repick; minimal sandboxed preload')
         await popup.webContents.executeJavaScript('document.getElementById("repick").click()')
         const next = await until(()=>BrowserWindow.getAllWindows().find(win=>win!==fixture && !win.isDestroyed() && win.isVisible() && win.getBounds().width===display.bounds.width))

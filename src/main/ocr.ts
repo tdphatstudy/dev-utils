@@ -2,7 +2,7 @@ import { BrowserWindow, clipboard, dialog, ipcMain, net, screen, session, type I
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { resourcePath } from './branding'
+import { appWindowIcon, resourcePath } from './branding'
 import { assertTrustedIpc, isRendererUrl } from './ipc-trust'
 import { is } from './env'
 import { captureDesktopFrames } from './screen-snapshot'
@@ -91,7 +91,7 @@ export class DesktopOcr {
     const dev = is.dev && process.env['ELECTRON_RENDERER_URL']
     const url = view.kind === 'run' ? (dev ? new URL('ocr.html', dev).href : 'devfusion-ocr://local/ocr.html') : pathToFileURL(file!).href
     const win = new BrowserWindow({
-      width: 620, height: view.kind === 'run' ? 260 : 510, ...bounds, show: false, frame: !overlay,
+      width: 620, height: view.kind === 'run' ? 260 : 510, ...bounds, icon: appWindowIcon(), show: false, frame: !overlay,
       fullscreen: overlay && process.platform !== 'darwin', thickFrame: false, resizable: !overlay, minimizable: false, maximizable: false,
       alwaysOnTop: true, skipTaskbar: true, autoHideMenuBar: true, backgroundColor: '#171923', title: 'DevFusion · OCR',
       webPreferences: { preload: join(__dirname, '../preload/ocrHelper.js'), sandbox: true, contextIsolation: true, webSecurity: true, nodeIntegration: false,

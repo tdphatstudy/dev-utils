@@ -1,0 +1,41 @@
+body { margin:0; background:var(--mac-bg); color:var(--mac-label) } #root { height:100vh }
+.quick-shell { display:flex; flex-direction:column; height:100%; font:13px system-ui,sans-serif; border:1px solid var(--mac-separator); border-radius:14px; overflow:hidden }
+.quick-shell * { box-sizing:border-box }.quick-shell svg { flex-shrink:0; aspect-ratio:1 }
+.quick-header { -webkit-app-region:drag; display:flex; align-items:center; gap:9px; padding:11px 14px; border-bottom:1px solid var(--mac-separator) }
+.quick-header img { width:24px; height:24px; aspect-ratio:1; object-fit:contain; flex-shrink:0 }
+.quick-header strong { font-size:12px; font-weight:600 }.quick-spacer { flex:1 }
+.quick-shell button { font:inherit; display:inline-flex; align-items:center; justify-content:center; gap:7px; color:inherit; border:1px solid var(--mac-separator); border-radius:8px; padding:7px 10px; background:var(--mac-control); cursor:pointer }
+.quick-shell button:hover { background:var(--mac-raised) }.quick-shell button:disabled { opacity:.5; cursor:default }
+.quick-header button { -webkit-app-region:no-drag; padding:5px; background:transparent; border:0 }
+.quick-header button[aria-pressed=true] { color:#007aff; background:#007aff1a }
+.quick-title { display:flex; align-items:center; gap:10px; padding:12px 16px 2px }
+.quick-tool-icon { width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0 }
+.quick-title h1 { font-size:16px; font-weight:600; margin:0; flex:1; min-width:0 }
+.quick-switcher { position:relative; z-index:12; flex-shrink:0 }
+.quick-switcher summary { list-style:none; display:flex; align-items:center; justify-content:center; cursor:pointer; width:28px; height:28px; border-radius:6px; color:var(--mac-label-secondary) }
+.quick-switcher summary::-webkit-details-marker { display:none }.quick-switcher[open] summary { background:var(--mac-control) }
+.quick-switcher nav { position:absolute; inset-inline-end:0; top:33px; width:235px; max-height:calc(100vh - 130px); overflow:auto; display:flex; flex-direction:column; gap:2px; padding:7px; border:1px solid var(--mac-separator); border-radius:11px; background:var(--mac-surface); box-shadow:0 8px 28px #0003 }
+.quick-shell .quick-switcher button { text-align:start; justify-content:flex-start; font-size:12px; background:transparent; border:0; padding:9px }
+.quick-switcher button[aria-current] { background:#007aff12 !important }.quick-shell .quick-switcher button:hover { background:var(--mac-control) }
+.quick-content { overflow:auto; flex:1; min-height:0; padding:14px 16px; scrollbar-width:thin }
+.quick-content.quick-clipboard { overflow:hidden; padding-top:9px; padding-bottom:12px }
+.quick-card { display:flex; flex-direction:column; gap:12px }
+.quick-card p { font-size:12px; color:var(--mac-label-secondary); line-height:1.6; margin:0 }
+.quick-card p.clip-error { color:var(--mac-danger,#d73737) }
+.quick-card label { display:flex; flex-direction:column; gap:6px; font-size:12px }
+.quick-card input:not([hidden]),.quick-card select,.quick-card textarea { font:12px/1.6 ui-monospace,monospace; color:inherit; border:1px solid var(--mac-separator); border-radius:8px; background:var(--mac-surface); padding:8px; min-width:0; width:100% }
+.quick-card textarea { resize:vertical }.quick-actions { display:flex; flex-wrap:wrap; gap:8px }
+.quick-shell button.primary { background:#007aff; color:white; border-color:#007aff }
+.quick-notice { margin:0; padding:0 16px 10px; font-size:11px; color:var(--mac-label-secondary); overflow-wrap:anywhere }
+.quick-bottom { text-align:center; font-size:10px; color:var(--mac-label-tertiary); padding:8px }
+.quick-shell .quick-value { display:flex; justify-content:space-between; text-align:start; gap:8px; padding:11px 10px; font-size:11px }
+.quick-value code { flex:1; overflow-wrap:anywhere; min-width:0 }.quick-value span { color:var(--mac-label-secondary); min-width:55px }
+.quick-shell :focus-visible { outline:2px solid #007aff; outline-offset:2px }
+.quick-time-controls { display:flex; gap:8px; align-items:center }.quick-time-controls select { flex:1 }
+.quick-qr { display:flex; justify-content:center; align-items:center; min-height:220px; border-radius:10px; background:var(--mac-surface); border:1px solid var(--mac-separator); padding:10px }
+.quick-qr img { width:220px; height:220px; object-fit:contain; aspect-ratio:1; max-width:100%; image-rendering:pixelated }
+.quick-file { display:flex; gap:8px; align-items:center }.quick-file span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--mac-label-secondary); font-size:11px }
+.quick-server { display:flex; align-items:center; gap:8px }.quick-server>span:last-child { margin-inline-start:auto; color:var(--mac-label-secondary); font-size:11px }.quick-server .running { background:#30a46c }
+.quick-log { display:flex; justify-content:space-between; gap:10px; overflow-wrap:anywhere; font-size:10px !important }
+.quick-card progress { flex:1; min-width:80px; align-self:center }
+@media(max-width:480px) { .quick-content { padding-inline:12px }.quick-title { padding-inline:12px; gap:8px }.quick-title h1 { font-size:15px } }

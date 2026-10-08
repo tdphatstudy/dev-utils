@@ -1,13 +1,16 @@
+import type { QuickWidget } from './quick-tools'
 export const QUICK_TOOLS = [
-  { id: 'design.color', name: 'Color Picker' },
-  { id: 'text.ocr', name: 'OCR · Image / PDF' },
-  { id: 'network.mock-api', name: 'Mock API' },
-  { id: 'time.timestamp', name: 'Timestamp Converter' },
-  { id: 'json.studio', name: 'JSON Studio' },
-  { id: 'base64.codec', name: 'Base64 Encode / Decode' },
-  { id: 'security.random', name: 'Secure Random / UUID' },
-  { id: 'text.qr', name: 'QR Code' }
+  { id: 'design.color', name: 'Color Picker', widget: 'color' },
+  { id: 'text.ocr', name: 'OCR · Image / PDF', widget: 'ocr' },
+  { id: 'text.clipboard', name: 'Clipboard Manager', widget: 'clipboard' },
+  { id: 'network.mock-api', name: 'Mock API', widget: 'mock' },
+  { id: 'time.timestamp', name: 'Timestamp Converter', widget: 'timestamp' },
+  { id: 'json.studio', name: 'JSON Studio', widget: 'json' },
+  { id: 'base64.codec', name: 'Base64 Encode / Decode', widget: 'base64' },
+  { id: 'security.random', name: 'Secure Random / UUID', widget: 'random' },
+  { id: 'text.qr', name: 'QR Code', widget: 'qr' }
 ] as const
+export function quickWidgetForTool(value: unknown): QuickWidget | null { return QUICK_TOOLS.find(tool => tool.id === value)?.widget ?? null }
 
 export type QuickToolId = typeof QUICK_TOOLS[number]['id']
 export type QuickTarget = QuickToolId | 'home' | 'app.settings'

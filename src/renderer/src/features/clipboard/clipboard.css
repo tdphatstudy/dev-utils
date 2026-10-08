@@ -1,0 +1,91 @@
+.clip-panel { display:flex; flex-direction:column; gap:10px; min-height:0; color:var(--mac-label); font:13px system-ui,sans-serif; position:relative }
+.clip-panel * { box-sizing:border-box }
+.clip-panel svg { flex-shrink:0; aspect-ratio:1 }
+.clip-panel button,.clip-panel input,.clip-panel select,.clip-panel textarea { font:inherit }
+.clip-panel button { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:7px 10px; border:1px solid var(--mac-separator); border-radius:8px; background:var(--mac-control); color:var(--mac-label); cursor:pointer; flex-shrink:0 }
+.clip-panel button:hover { background:var(--mac-raised) }
+.clip-panel button.primary { background:#007aff; color:white; border-color:#007aff }
+.clip-panel button:disabled { opacity:.45; cursor:default }
+.clip-panel :focus-visible { outline:2px solid #007aff; outline-offset:2px }
+.clip-top,.clip-footer { display:flex; align-items:center; justify-content:space-between; gap:8px }
+.clip-top h2 { display:flex; align-items:center; gap:8px; font-size:16px; font-weight:600; margin:0 }
+.clip-top h2 svg { color:#007aff }
+.clip-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px }
+.clip-panel .clip-icon-button { padding:6px; border:0; background:transparent; border-radius:6px }
+.clip-panel .clip-icon-button:hover { background:var(--mac-selection,#007aff19) }
+.clip-panel .clip-capture { gap:7px; font-size:11px; border:0; background:transparent; color:var(--mac-label-secondary); padding:4px 0 }
+.clip-led { width:6px; height:6px; border-radius:50%; background:#8e8e93; flex-shrink:0 }
+.clip-capture.active .clip-led { background:#30a46c; box-shadow:0 0 0 3px #30a46c16 }
+.clip-capture.active { color:#218651 !important }
+.dark .clip-capture.active { color:#58cf8c !important }
+.clip-more { position:relative }
+.clip-more summary { list-style:none; cursor:pointer; padding:5px; display:flex; align-items:center; border-radius:6px }
+.clip-more summary::-webkit-details-marker { display:none }
+.clip-more[open] summary { background:var(--mac-control) }
+.clip-menu { position:absolute; inset-inline-end:0; top:32px; z-index:8; display:flex; flex-direction:column; gap:4px; min-width:205px; padding:6px; border:1px solid var(--mac-separator); background:var(--mac-surface); border-radius:10px; box-shadow:0 8px 24px #0002 }
+.clip-panel .clip-menu button { border:0; justify-content:flex-start; background:transparent; font-size:12px }
+.clip-panel .clip-menu button:hover { background:var(--mac-selection,#007aff19) }
+.clip-search { display:flex; align-items:center; gap:9px; padding:8px 11px; border:1px solid var(--mac-separator); background:var(--mac-surface); border-radius:10px; color:var(--mac-label-secondary) }
+.clip-search:focus-within { border-color:#007aff; box-shadow:0 0 0 2px #007aff12 }
+.clip-search input { flex:1; width:0; min-width:0; border:0; outline:none !important; background:transparent; color:var(--mac-label); padding:4px 0; font-size:14px }
+.clip-filters { display:flex; align-items:center; flex-wrap:wrap; gap:4px }
+.clip-panel .clip-filters button,.clip-filters select { border:0; border-radius:6px; padding:5px 9px; font-size:11px; background:transparent; color:var(--mac-label-secondary); cursor:pointer }
+.clip-panel .clip-filters button[aria-pressed=true] { color:#007aff; background:#007aff18; font-weight:600 }
+.clip-filters select { max-width:110px; color:var(--mac-label) }
+.clip-filters option { background:var(--mac-surface); color:var(--mac-label) }
+.clip-workspace { flex:1; min-height:230px; border:1px solid var(--mac-separator); border-radius:11px; overflow:hidden; background:var(--mac-surface); display:flex; flex-direction:column }
+.clip-list { overflow:auto; flex:1; max-height:560px; padding:4px 6px; scrollbar-width:thin; min-height:0 }
+.clip-group { margin:12px 8px 5px; font-size:10px; font-weight:600; color:var(--mac-label-secondary); letter-spacing:.04em }
+.clip-row { display:flex; align-items:center; gap:10px; padding:3px 8px; border-radius:8px; min-height:61px; border:1px solid transparent }
+.clip-row.selected { background:var(--mac-selection,#007aff12); border-color:#007aff20 }
+.clip-row>input { flex-shrink:0 }
+.clip-kind { width:33px; height:33px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#62718b; background:#62718b12 }
+.clip-kind-json { color:#a57709; background:#e9b30818 }
+.clip-kind-url { color:#007aff; background:#007aff13 }
+.clip-kind-color { color:#ae55dd; background:#ae55dd14 }
+.clip-kind-image { color:#199565; background:#19956514 }
+.dark .clip-kind-text { color:#a5b2c8 }.dark .clip-kind-json { color:#e5b855 }.dark .clip-kind-image { color:#50c99a }.dark .clip-kind-color { color:#c78ce9 }
+.clip-panel .clip-row-body { border:0; background:transparent; display:flex; flex-direction:column; align-items:flex-start; min-width:0; flex:1; padding:8px 0; gap:2px; text-align:start; border-radius:4px }
+.clip-row-body strong,.clip-snippet { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; font-size:12px; font-weight:500; line-height:1.6 }
+.clip-snippet { font-size:11px; font-weight:400; color:var(--mac-label-secondary) }
+.clip-meta { color:var(--mac-label-secondary); font-size:10px; line-height:1.6; margin:0; display:flex; gap:6px; flex-wrap:wrap }
+.clip-row .clip-meta { font-size:9px; opacity:.8 }
+.clip-row-actions { display:flex; gap:1px; opacity:0 }
+.clip-row:hover .clip-row-actions,.clip-row:focus-within .clip-row-actions,.clip-row.selected .clip-row-actions { opacity:1 }
+.clip-row-actions button[aria-pressed=true] { color:#007aff; opacity:1 }
+.clip-row kbd { font:10px system-ui,sans-serif; color:var(--mac-label-tertiary); min-width:14px; text-align:center }
+.clip-preview { display:flex; flex-direction:column; gap:12px; min-width:0; padding:12px; overflow:auto; flex:1; min-height:0 }
+.clip-preview-head { display:flex; align-items:center; gap:8px }
+.clip-preview-head .clip-badge { margin-inline-start:auto; color:var(--mac-label-secondary); font-size:10px }
+.clip-label-row { display:flex; gap:8px }
+.clip-label-row input { flex:1; width:0; min-width:0; padding:8px; color:inherit; border:1px solid var(--mac-separator); border-radius:7px; background:var(--mac-bg) }
+.clip-transform { display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:11px; color:var(--mac-label-secondary) }
+.clip-transform select { flex:1; min-width:0; border:1px solid var(--mac-separator); border-radius:7px; background:var(--mac-control); color:var(--mac-label); padding:6px }
+.clip-text { width:100%; min-height:140px; flex:1; resize:vertical; border:1px solid var(--mac-separator); border-radius:8px; padding:10px; background:var(--mac-bg); color:inherit; font:12px/1.6 ui-monospace,monospace !important; white-space:pre-wrap; overflow-wrap:anywhere }
+.clip-image { max-width:100%; max-height:200px; object-fit:contain; background:var(--mac-bg); border-radius:8px }
+.clip-preview:has(.clip-image) .clip-text:empty { display:none }
+.clip-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px 18px; min-height:220px; flex:1; color:var(--mac-label-secondary); font-size:12px }
+.clip-empty>svg { color:#007aff; opacity:.65 }.clip-empty h3 { margin:0; font-size:14px; font-weight:500; color:var(--mac-label) }.clip-empty p { margin:0; line-height:1.6; max-width:360px }
+.clip-selection { display:flex; align-items:center; gap:7px; font-size:11px }.clip-selection>span { margin-inline-end:auto }
+.clip-footer { font-size:10px; color:var(--mac-label-secondary); flex-wrap:wrap; line-height:1.5 }
+.clip-error { color:var(--mac-danger,#d73737); font-size:12px; line-height:1.5; margin:0; overflow-wrap:anywhere }
+.clip-notice { font-size:11px; margin:0; color:var(--mac-label-secondary); overflow-wrap:anywhere }
+.clip-notice:empty { display:none }
+.quick-content>.clip-widget { height:100% }
+.clip-widget .clip-workspace { min-height:0 }
+.clip-widget .clip-list { max-height:none }
+.clip-widget .clip-text { min-height:60px; resize:none }
+.clip-dialog { color:var(--mac-label); background:var(--mac-surface); border:1px solid var(--mac-separator); border-radius:14px; padding:20px; width:440px; max-width:calc(100vw - 32px); max-height:calc(100vh - 32px); margin:auto; box-shadow:0 16px 48px #0003 }
+.clip-dialog:not([open]) { display:none }.clip-dialog::backdrop { background:#0005; backdrop-filter:blur(3px) }
+.clip-dialog-head { display:flex; align-items:center; justify-content:space-between; gap:12px }
+.clip-dialog h3 { margin:0; font-size:15px; font-weight:600 }
+.clip-settings { display:grid; gap:16px; font-size:12px }
+.clip-settings p,.clip-confirm p { margin:0; line-height:1.6; font-size:11px; color:var(--mac-label-secondary) }
+.clip-settings label { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+.clip-settings label:has(textarea) { display:grid }
+.clip-settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+.clip-settings-grid label { display:grid; gap:6px }
+.clip-settings textarea,.clip-settings select { width:100%; padding:8px; border:1px solid var(--mac-separator); border-radius:7px; background:var(--mac-bg); color:inherit }
+.clip-confirm[open] { display:grid; gap:16px }
+@media(max-width:480px) { .clip-top { flex-wrap:wrap }.clip-top h2 { flex:1; font-size:14px }.clip-row { gap:7px; padding-inline:5px }.clip-kind { width:28px; height:28px }.clip-row kbd { display:none }.clip-panel .clip-filters button { padding:5px 7px }.clip-footer { font-size:9px; gap:4px }.clip-widget .clip-top { flex-wrap:nowrap }.clip-preview { gap:10px; padding:10px } }
+@media(prefers-reduced-motion:no-preference) { .clip-row-actions { transition:opacity .12s } }

@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pencil, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@renderer/store/app-store'
 import { Modal } from '@renderer/components/ui/Modal'
 import { useI18n } from '@renderer/i18n'
 import { shortcutCommands } from '@renderer/shortcuts/catalog'
 import { useShortcutPlatform } from '@renderer/shortcuts/useShortcuts'
+import { GLOBAL_ACTIONS, type GlobalShortcutState } from '@shared/quick-tools'
 import { formatShortcut, normalizeShortcut, sameShortcutCommands, shortcutBinding, shortcutConflicts, shortcutFromEvent, shortcutProblem, type ShortcutCommand } from '@shared/shortcuts'
 
 const scopeLabels = { app: 'App window', editor: 'Supported editors / HTTP', vault: 'Private Box', color: 'Color Picker', ocr: 'OCR' }
@@ -19,21 +20,34 @@ export function ShortcutSettings(): JSX.Element {
   const [dialog, setDialog] = useState<ShortcutCommand | 'check' | 'reset' | null>(null)
   const [candidate, setCandidate] = useState(''), [notice, setNotice] = useState('')
   const recorder = useRef<HTMLInputElement>(null)
+  const [global, setGlobal] = useState<GlobalShortcutState | null>(null)
+  useEffect(() => {
+    let live = true
+    const api = window.devutils?.quickTools
+    const refresh = (): void => { void api?.shortcuts().then(value => { if (live) setGlobal(value) }).catch(() => {}) }
+    refresh(); const off = api?.onShortcutsChanged(refresh)
+    return () => { live = false; off?.() }
+  }, [])
+  const allCommands: readonly ShortcutCommand[] = [...shortcutCommands, ...(global ? GLOBAL_ACTIONS.map(action => ({ id: 'global.' + action.id, label: action.label, group: 'App' as const, scope: 'app' as const, defaultBinding: global.bindings[action.id] })) : [])]
   const issues = (command: ShortcutCommand): boolean => {
     const binding = shortcutBinding(command, overrides, platform)
-    return !!binding && (!!shortcutProblem(binding, command, platform) || !!shortcutConflicts(command, binding, shortcutCommands, overrides, platform).length)
+    return !!binding && (!!shortcutProblem(binding, command, platform) || !!shortcutConflicts(command, binding, allCommands, overrides, platform).length)
   }
   const conflictCount = shortcutCommands.filter(issues).length
+  const resetConflicts = [...new Map(shortcutCommands.flatMap(command => {
+    const binding = shortcutBinding(command, {}, platform)
+    return binding ? shortcutConflicts(command, binding, allCommands, {}, platform).filter(other => other.id.startsWith('global.')) : []
+  }).map(command => [command.id, command])).values()]
   const visible = useMemo(() => shortcutCommands.filter(command => {
     const binding = shortcutBinding(command, overrides, platform)
     const normalized = query.trim().normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
     const text = `${t(command.label)} ${command.id} ${t(scopeLabels[command.scope])} ${formatShortcut(binding, platform)}`.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
     return (group === 'all' || command.group === group) && (!conflictsOnly || issues(command)) && (!normalized || text.includes(normalized))
-  }), [query, group, conflictsOnly, overrides, platform, locale, t])
+  }), [query, group, conflictsOnly, overrides, platform, locale, t, global])
   const editing = dialog && typeof dialog === 'object' ? dialog : null
   const normalized = normalizeShortcut(candidate)
-  const assigned = normalized ? sameShortcutCommands(normalized, shortcutCommands, overrides, platform) : []
-  const blocking = editing && normalized ? shortcutConflicts(editing, normalized, shortcutCommands, overrides, platform) : []
+  const assigned = normalized ? sameShortcutCommands(normalized, allCommands, overrides, platform) : []
+  const blocking = editing && normalized ? shortcutConflicts(editing, normalized, allCommands, overrides, platform) : []
   const problem = normalized ? shortcutProblem(normalized, editing, platform) : candidate ? t('Choose a valid key combination.') : null
   const open = (command: ShortcutCommand | 'check'): void => {
     setCandidate(command === 'check' ? '' : shortcutBinding(command, overrides, platform) ?? '')
@@ -45,7 +59,7 @@ export function ShortcutSettings(): JSX.Element {
   }
   const resetOne = (command: ShortcutCommand): void => {
     const binding = shortcutBinding(command, {}, platform)
-    const conflicts = binding ? shortcutConflicts(command, binding, shortcutCommands, overrides, platform) : []
+    const conflicts = binding ? shortcutConflicts(command, binding, allCommands, overrides, platform) : []
     if (conflicts.length) {
       setNotice(t('Already used in an overlapping context: {actions}', { actions: conflicts.map(other => t(other.label)).join(', ') }))
       return
@@ -69,7 +83,7 @@ export function ShortcutSettings(): JSX.Element {
     {!visible.length && <p className="mt-3 text-[13px] text-mac-label-secondary">{t('No shortcuts match your search.')}</p>}
     <p role="status" aria-live="polite" className="mt-2 text-[12px] text-mac-label-secondary">{notice}</p>
     <Modal open={dialog !== null} title={dialog === 'reset' ? t('Reset all shortcuts?') : editing ? t('Change shortcut for {action}', { action: t(editing.label) }) : t('Check a shortcut')} description={dialog === 'reset' ? t('Restore the default bindings and remove your custom tool shortcuts.') : t('Focus the recorder and press a combination, or type it below. Escape cancels; Tab moves between controls.')} initialFocusRef={dialog === 'reset' ? undefined : recorder} onClose={() => setDialog(null)}>
-      {dialog === 'reset' ? <div className="flex flex-wrap justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={() => setDialog(null)}>{t('Cancel')}</button><button type="button" className="mac-btn-primary" onClick={() => { resetAll(); setDialog(null); setNotice(t('Shortcuts reset.')) }}>{t('Reset all shortcuts')}</button></div> : <div data-shortcut-recording className="space-y-4">
+      {dialog === 'reset' ? <div className="space-y-3">{!!resetConflicts.length && <p role="alert" className="text-[13px] text-mac-danger">{t('Already used in an overlapping context: {actions}', { actions: resetConflicts.map(command => t(command.label)).join(', ') })}</p>}<div className="flex flex-wrap justify-end gap-2"><button type="button" className="mac-btn-secondary" onClick={() => setDialog(null)}>{t('Cancel')}</button><button type="button" className="mac-btn-primary" disabled={resetConflicts.length > 0} onClick={() => { resetAll(); setDialog(null); setNotice(t('Shortcuts reset.')) }}>{t('Reset all shortcuts')}</button></div></div> : <div data-shortcut-recording className="space-y-4">
         <label className="block text-[13px] font-medium">{t('Press shortcut keys')}<input ref={recorder} readOnly className="mac-input mt-2 !w-full font-mono" aria-label={t('Press shortcut keys')} value={normalized ? formatShortcut(normalized, platform) : candidate} placeholder={t('Press your key combination')} onKeyDown={event => {
           if (event.key === 'Escape' || event.key === 'Tab') return
           event.preventDefault(); event.stopPropagation()

@@ -79,7 +79,7 @@ export default defineConfig({
       target: 'node20',
       reportCompressedSize: false,
       rollupOptions: {
-        input: { index: resolve('src/preload/index.ts'), colorPicker: resolve('src/preload/color-picker.ts'), ocrHelper: resolve('src/preload/ocr-helper.ts') },
+        input: { index: resolve('src/preload/index.ts'), colorPicker: resolve('src/preload/color-picker.ts'), ocrHelper: resolve('src/preload/ocr-helper.ts'), quickTools: resolve('src/preload/quick-tools.ts') },
         output: {
           format: 'cjs',
           entryFileNames: '[name].js'
@@ -110,7 +110,7 @@ export default defineConfig({
       reportCompressedSize: false,
       chunkSizeWarningLimit: 900,
       rollupOptions: {
-        input: { index: resolve('src/renderer/index.html'), ocr: resolve('src/renderer/ocr.html') },
+        input: { index: resolve('src/renderer/index.html'), ocr: resolve('src/renderer/ocr.html'), quick: resolve('src/renderer/quick.html') },
         output: {
           manualChunks(id) {
             return vendorChunk(id)

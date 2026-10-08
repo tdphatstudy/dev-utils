@@ -11,6 +11,7 @@ import { VAULT_IDLE_MINUTES, type VaultIdleMinutes } from '@shared/security-poli
 import { LOCALES, type LanguageSetting } from '@shared/i18n/locales'
 import { setInterfaceLanguage, useI18n } from '@renderer/i18n'
 import { ShortcutSettings } from '@renderer/components/settings/ShortcutSettings'
+import { GlobalShortcutSettings } from '@renderer/components/settings/GlobalShortcutSettings'
 
 export function SettingsPage(): JSX.Element {
   const { t } = useI18n()
@@ -249,6 +250,7 @@ export function SettingsPage(): JSX.Element {
         </section>
 
         <ShortcutSettings />
+        <GlobalShortcutSettings />
       </div>
     </div>
   )

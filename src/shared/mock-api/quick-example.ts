@@ -1,0 +1,1 @@
+export const QUICK_MOCK_YAML = 'version: 1\nname: Quick API\nport: 3100\ncors:\n  enabled: false\n  origins: []\nendpoints:\n  - id: health\n    name: Health\n    method: GET\n    path: /health\n    responses:\n      - id: ok\n        name: OK\n        status: 200\n        body:\n          status: ok\n'

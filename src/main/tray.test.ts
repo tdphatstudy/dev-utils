@@ -6,8 +6,11 @@ import type { DesktopOcr } from './ocr'
 import type { MockApiServer } from './mock-api-server'
 import { QUICK_TOOLS } from '@shared/quick-actions'
 import type { LanguageState } from '@shared/i18n/locales'
+import { DEFAULT_GLOBAL_BINDINGS } from '@shared/quick-tools'
+import { DEFAULT_CLIPBOARD } from '@shared/clipboard/types'
 
 const fixture = vi.hoisted(() => ({ tray: null as any, menu: [] as any[], clipboard: vi.fn(), empty: false }))
+vi.mock('./menu-icons', () => ({ menuIcon: (name: string) => 'icon:' + name }))
 vi.mock('./branding', () => ({ resourcePath: (name: string) => '/fixture/' + name }))
 vi.mock('electron', () => ({
   Tray: class extends EventEmitter {
@@ -140,5 +143,31 @@ it('contains failed picker actions and keeps a working menu if native refresh fa
   expect(JSON.stringify(vi.mocked(dialog.showMessageBox).mock.calls)).not.toContain('private network detail')
   fixture.tray.setContextMenu.mockImplementationOnce(() => { throw new Error('shutting down') })
   expect(() => desktop.refresh()).not.toThrow()
+  desktop.dispose()
+})
+it('gives native tool actions icons, displays only registered hotkeys and opens widgets without the main window', () => {
+  const create = vi.fn(() => windowFixture()), open = vi.fn().mockResolvedValue(undefined), pause = vi.fn()
+  const desktop = new DesktopTray(create, pickerFixture(), vi.fn(), undefined, undefined, undefined, {
+    open, pauseClipboard: pause,
+    clipboardState: () => ({ preferences: { ...DEFAULT_CLIPBOARD, enabled: true }, paused: false, blocked: null, encryptionAvailable: true, count: 12, bytes: 1200, skipped: 0, error: null }),
+    shortcuts: () => ({ bindings: DEFAULT_GLOBAL_BINDINGS, registered: ['clipboard'], failed: [], platform: 'win32' })
+  })
+  desktop.start()
+  for (const label of ['Open DevFusion', 'Quick actions', 'Pick screen color…', 'UUID widget', 'Timestamp widget', 'Quick text transforms', 'Settings', 'Quit DevFusion']) expect(items().find(item => item.label === label).icon).toBeTruthy()
+  const clipboard = items().find(item => item.label === 'Clipboard Manager · 12'); expect(clipboard.accelerator).toBe('Control+Shift+Space'); expect(clipboard.registerAccelerator).toBe(false)
+  clipboard.click(); items().find(item => item.label === 'UUID widget').click(); expect(open.mock.calls.map(call => call[0])).toEqual(['clipboard', 'random']); expect(create).not.toHaveBeenCalled()
+  items().find(item => item.label === 'Pause clipboard capture').click(); expect(pause).toHaveBeenCalledWith(true)
+  desktop.dispose()
+})
+it('routes every tray Open tool action to its standalone widget, including immediate screen color picking', () => {
+  const create = vi.fn(() => windowFixture()), open = vi.fn().mockResolvedValue(undefined)
+  const desktop = new DesktopTray(create, pickerFixture(), vi.fn(), undefined, undefined, undefined, {
+    open, pauseClipboard: vi.fn(), clipboardState: () => ({ preferences: DEFAULT_CLIPBOARD, paused: false, blocked: null, encryptionAvailable: true, count: 0, bytes: 0, skipped: 0, error: null }), shortcuts: () => ({ bindings: DEFAULT_GLOBAL_BINDINGS, registered: ['clipboard'], failed: [], platform: 'win32' })
+  })
+  desktop.start()
+  const tools = items().find(item => item.label === 'Open tool').submenu
+  for (const tool of tools) { expect(tool.icon).toBeTruthy(); tool.click() }
+  expect(open.mock.calls.map(call => call[0])).toEqual(QUICK_TOOLS.map(tool => tool.widget)); expect(create).not.toHaveBeenCalled()
+  items().find(item => item.label === 'Pick screen color…').click(); expect(open).toHaveBeenLastCalledWith('color'); expect(create).not.toHaveBeenCalled()
   desktop.dispose()
 })

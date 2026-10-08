@@ -22,6 +22,8 @@ files:
   - '!**/node_modules/.bin/**'
 
 extraResources:
+  - from: resources/menu-icons
+    to: menu-icons
   - from: resources/icon.png
     to: icon.png
   - from: resources/icon.ico
@@ -83,6 +85,8 @@ mac:
   # gatekeeperAssess: false
 
 linux:
+  # Match the reverse-DNS Wayland global-shortcut portal identity.
+  executableName: com.devutils.app
   icon: icon.png
   category: Development
   synopsis: Local developer toolbox

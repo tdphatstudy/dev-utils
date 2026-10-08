@@ -14,19 +14,29 @@ các thao tác trong editor/HTTP, Private Box, OCR và Color Picker.
   nhãn tổ hợp đang hiển thị, và dùng **Conflicts only** để xem cấu hình lỗi.
 - Có thể tắt hoặc reset riêng từng thao tác. Reset riêng bị từ chối nếu phím
   mặc định đang được thao tác khác giữ. Reset tất cả cần xác nhận.
+  Reset tất cả cũng bị chặn nếu default trong app trùng global shortcut hiện tại.
 - Thay đổi có hiệu lực ngay; nhãn trong palette, editor và menu Box cập nhật.
   Tắt phím không tắt nút hoặc thao tác bằng chuột.
 
-Phím chỉ hoạt động trong cửa sổ DevFusion đang được chọn. Một tổ hợp có thể dùng
+Phím trong danh mục **Keyboard shortcuts** hoạt động trong cửa sổ DevFusion đang
+được chọn. Một tổ hợp có thể dùng
 cho OCR và Color Picker vì hai màn hình không hoạt động đồng thời. Phím toàn app
 chồng phạm vi với mọi tool. Editor và Box chồng phạm vi vì editor nằm trong Box.
 Dialog/menu đang mở, lúc ghi phím, khóa UI, IME/AltGr và key repeat đều có guard.
 Context menu chỉ chuyển sang palette bằng phím palette được cấu hình; các phím
 điều hướng menu, Escape/Tab và thao tác soạn thảo chuẩn vẫn do control quản lý.
 
-Không đăng ký phím toàn hệ điều hành. Bộ kiểm tra nhận biết các binding trong app
-và danh sách phím phổ biến dành riêng; không thể liệt kê hoặc cam kết phát hiện
-mọi phím của ứng dụng khác, driver, layout hoặc OS do người dùng tự đặt.
+Phần **Global quick shortcuts** bên dưới đăng ký phím với hệ điều hành để mở
+Clipboard Manager, lấy màu, OCR vùng hoặc widget chuyển đổi text ngay từ app khác.
+Clipboard mặc định là **Ctrl+Shift+Space** trên Windows/Linux, **⌘+⇧+Space** trên
+macOS. Ba thao tác còn lại chưa gán mặc định. Có thể ghi/nhập tổ hợp, lưu, tắt và
+**Check OS availability**. Settings kiểm tra cả các binding trong app và global.
+Nếu OS từ chối tổ hợp mới, app thử khôi phục tổ hợp cũ và báo trạng thái đăng ký.
+
+Đóng cửa sổ chính vẫn dùng được global shortcut khi DevFusion còn chạy trong
+tray; **Quit** dừng phím tắt. Không tự khởi động lại app đã thoát. OS probe chỉ
+thử đăng ký tạm thời: không biết ứng dụng nào chiếm phím và không cam kết phím
+luôn sẵn sau đó. Wayland có thể cần quyền qua portal; cần QA native trên Linux.
 
 ## Mặc định
 
@@ -44,6 +54,7 @@ mọi phím của ứng dụng khác, driver, layout hoặc OS do người dùng
 | Xóa mục Box được chọn, có xác nhận | Delete | ⌘+Backspace |
 | Lấy màu trong Color Picker | Ctrl+Shift+C | ⌘+⇧+C |
 | Chụp vùng chữ trong OCR | Ctrl+Shift+A | ⌘+⇧+A |
+| Mở widget Clipboard Manager từ app bất kỳ | Ctrl+Shift+Space | ⌘+⇧+Space |
 
 Các tool khác và OCR toàn màn hình chưa gán mặc định; có thể gán trong Settings.
 `editor.run` chỉ gọi handler mà tool đã cung cấp; không chạy mọi nút trong mọi
@@ -58,8 +69,10 @@ hook tool chỉ có hiệu lực khi component đang mount và sẵn sàng. Bind
 về cú pháp nhưng bị trùng/dành riêng từ localStorage được báo và không thực thi.
 Field có ID/cú pháp sai bị loại lúc hydrate; binding mặc định được giữ.
 
-Chỉ `shortcutOverrides: { commandId: combination | null }` lưu trong preferences
-`devutils-app`. Không lưu chuỗi gõ, screen capture, clipboard hoặc input tool vào
+Binding trong cửa sổ lưu `shortcutOverrides: { commandId: combination | null }`
+ở preferences `devutils-app`. Binding global lưu metadata versioned trong
+`global-shortcuts.json` ở userData, qua main service và IPC trusted riêng.
+Không lưu chuỗi gõ, screen capture, clipboard hoặc input tool vào
 cấu hình phím. Dữ liệu legacy không cần migration. IPC mới `security:lock` kiểm
 tra trusted sender và gọi `VaultAutoLock.lock('manual')`, zero key buffers và
 giữ đường đi encrypted draft recovery; không expose command/channel tùy ý.

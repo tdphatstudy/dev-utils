@@ -1,6 +1,8 @@
 import type { LocalDomainInput, LocalDomainPorts, LocalDomainsStatus, DomainResolution } from '@shared/local-domains/types'
 import { isLanguageState, type LanguageSetting, type LanguageState } from '@shared/i18n/locales'
 import { contextBridge, ipcRenderer } from 'electron'
+import type { ClipboardApi } from '@shared/clipboard/types'
+import type { QuickToolsApi } from '@shared/quick-tools'
 import { isVaultLockEvent, type RecoveredVaultDraft, type SecurityState, type VaultIdleMinutes, type VaultLockEvent } from '@shared/security-policy'
 import type { HttpRequestPayload, HttpResponsePayload } from '@shared/http/types'
 import type { SecurityToolId, StressInput, StressProgress, ProbeInput, HeaderReport, CorsInput, CorsReport } from '@shared/security-testing/types'
@@ -52,7 +54,22 @@ export interface FileInfo {
   ctimeMs: number
 }
 
+// Kept inline in each sandboxed preload: sandbox require cannot load local chunks.
+const clipboardApi: ClipboardApi = {
+  state: () => ipcRenderer.invoke('clipboard:state'), configure: value => ipcRenderer.invoke('clipboard:configure', value), pause: value => ipcRenderer.invoke('clipboard:pause', value),
+  list: query => ipcRenderer.invoke('clipboard:list', query), content: id => ipcRenderer.invoke('clipboard:content', id),
+  copy: (id, mode, close) => ipcRenderer.invoke('clipboard:copy', id, mode, close), copyText: (text, close) => ipcRenderer.invoke('clipboard:copyText', text, close),
+  update: (id, value) => ipcRenderer.invoke('clipboard:update', id, value), remove: ids => ipcRenderer.invoke('clipboard:remove', ids), clear: () => ipcRenderer.invoke('clipboard:clear'), captureCurrent: () => ipcRenderer.invoke('clipboard:captureCurrent'), ocr: id => ipcRenderer.invoke('clipboard:ocr', id),
+  onChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('clipboard:changed', listener); return () => ipcRenderer.removeListener('clipboard:changed', listener) }
+}
+const quickToolsApi: QuickToolsApi = {
+  open: kind => ipcRenderer.invoke('quick:open', kind), shortcuts: () => ipcRenderer.invoke('quick:shortcuts'), setShortcuts: bindings => ipcRenderer.invoke('quick:setShortcuts', bindings), checkShortcut: binding => ipcRenderer.invoke('quick:checkShortcut', binding),
+  onShortcutsChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('quick:shortcutsChanged', listener); return () => ipcRenderer.removeListener('quick:shortcutsChanged', listener) }
+}
+
 const api = {
+  clipboard: clipboardApi,
+  quickTools: quickToolsApi,
   securityTesting: {
     accepted: (id: SecurityToolId): Promise<boolean> => ipcRenderer.invoke('securityTesting:accepted', id),
     accept: (id: SecurityToolId): Promise<void> => ipcRenderer.invoke('securityTesting:accept', id),

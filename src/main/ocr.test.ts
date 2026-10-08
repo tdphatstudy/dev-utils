@@ -4,7 +4,7 @@ import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const f = await vi.hoisted(async () => ({ windows: [] as any[], capture: vi.fn(), crop: vi.fn(), copy: vi.fn(), trust: vi.fn(), handlers: new Map<string, any>(), ocr: null as any, screen: new (await import('node:events')).EventEmitter(), nextId: 1, prepare: vi.fn(), fetch: vi.fn(), network: vi.fn() }))
-vi.mock('./branding', () => ({ resourcePath: () => '/fixture/ocr-helper.html' }))
+vi.mock('./branding', () => ({ resourcePath: () => '/fixture/ocr-helper.html', appWindowIcon: () => '/fixture/icon.ico' }))
 vi.mock('./env', () => ({ is: { dev: false } }))
 vi.mock('./screen-snapshot', () => ({ captureDesktopFrames: f.capture }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: f.trust, isRendererUrl: (a: string, b: string) => a === b }))
@@ -44,6 +44,7 @@ it('creates no idle renderer, starts on demand and destroys the entire engine re
   const pending = value.recognize({ id: 'job-1', bytes, kind: 'image', language: 'eng' }, source)
   await ready()
   expect(f.windows[0].options.webPreferences).toMatchObject({ sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, partition: 'ocr-transient' })
+  expect(f.windows[0].options.icon).toBe('/fixture/icon.ico')
   expect(value.view(event(f.windows[0]))).toMatchObject({ kind: 'run', input: { kind: 'image' } })
   await value.complete(event(f.windows[0]), output)
   expect(await pending).toEqual(output)

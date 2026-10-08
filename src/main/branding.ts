@@ -16,8 +16,14 @@ export function configureBrand(): void {
   app.setPath('sessionData', storage)
   app.setName(APP_NAME)
   if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
+  if (process.platform === 'linux') app.setDesktopName(`${APP_ID}.desktop`)
 }
 
 export function resourcePath(name: string): string | undefined {
   return [join(process.resourcesPath, name), join(app.getAppPath(), 'resources', name), join(__dirname, '../../resources', name)].find(existsSync)
+}
+
+/** Every visible native window uses the same installed product icon. */
+export function appWindowIcon(): string | undefined {
+  return resourcePath(process.platform === 'win32' ? 'icon.ico' : 'icon.png')
 }

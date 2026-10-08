@@ -4,7 +4,7 @@ import { pathToFileURL } from 'url'
 import { colorFromHex, type ColorValue, type ScreenColorResult } from '@shared/color'
 import { isColorFormat, type PickerView } from '@shared/color/picker'
 import { assertTrustedIpc, isRendererUrl } from './ipc-trust'
-import { resourcePath } from './branding'
+import { appWindowIcon, resourcePath } from './branding'
 import { captureDesktopFrames } from './screen-snapshot'
 
 type Helper = { win: BrowserWindow; view: PickerView; ready: Promise<void>; markReady: () => void }
@@ -86,7 +86,7 @@ export class ScreenColorPicker {
   private helper(job: Job, view: PickerView, bounds: { x: number; y: number; width: number; height: number }): Helper {
     const overlay = view.kind === 'overlay'
     const win = new BrowserWindow({
-      ...bounds, show: false, frame: !overlay, resizable: false, minimizable: false, maximizable: false,
+      ...bounds, icon: appWindowIcon(), show: false, frame: !overlay, resizable: false, minimizable: false, maximizable: false,
       thickFrame: false, fullscreen: overlay && process.platform !== 'darwin',
       movable: !overlay, alwaysOnTop: true, skipTaskbar: true, autoHideMenuBar: true, acceptFirstMouse: true,
       title: overlay ? 'DevFusion · Pick anywhere on your desktop' : 'DevFusion · Selected color',

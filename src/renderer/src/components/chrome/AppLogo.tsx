@@ -42,6 +42,8 @@ export function AppLogo({
         style={{
           width: size,
           height: size,
+          objectFit: 'contain',
+          aspectRatio: '1',
           borderRadius: radius,
           boxShadow:
             size >= 48

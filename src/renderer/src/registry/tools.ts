@@ -33,6 +33,7 @@ import {
   Pipette,
   Palette,
   ScanText,
+  ClipboardList,
   type LucideIcon
 } from 'lucide-react'
 
@@ -548,6 +549,15 @@ export const tools: ToolDefinition[] = [
     keywords: ['ocr', 'scan', 'text', 'image', 'pdf', 'screenshot', 'capture', 'vietnamese', 'extract'],
     icon: ScanText,
     ...createToolLoader(() => import('@renderer/features/tools/text/OcrTool'))
+  },
+  {
+    id: 'text.clipboard',
+    group: 'text',
+    name: 'Clipboard Manager',
+    description: 'Local clipboard history, pins and developer transforms with a global quick widget',
+    keywords: ['clipboard', 'history', 'copy', 'paste', 'snippet', 'pin', 'quick', 'widget'],
+    icon: ClipboardList,
+    ...createToolLoader(() => import('@renderer/features/tools/text/ClipboardManagerTool'))
   },
   {
     id: 'text.qr',

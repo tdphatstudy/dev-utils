@@ -4,7 +4,7 @@ import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const fixture = await vi.hoisted(async () => ({ windows: [] as any[], options: [] as any[], capture: vi.fn(), clipboard: vi.fn(), trust: vi.fn(), handlers: new Map<string, any>(), picker: null as any, screen: new (await import('events')).EventEmitter(), nextId: 1 }))
-vi.mock('./branding', () => ({ resourcePath: () => '/fixture/color-picker.html' }))
+vi.mock('./branding', () => ({ resourcePath: () => '/fixture/color-picker.html', appWindowIcon: () => '/fixture/icon.ico' }))
 vi.mock('./screen-snapshot', () => ({ captureDesktopFrames: fixture.capture }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: fixture.trust, isRendererUrl: (a: string, b: string) => a === b }))
 vi.mock('electron', () => ({
