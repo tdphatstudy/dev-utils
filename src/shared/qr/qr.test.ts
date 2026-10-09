@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import QRCode from 'qrcode'
 import { decodeQrFromDataUrl, decodeQrFromFile, decodeQrFromImageData, encodeQr } from './index'
 
@@ -23,6 +23,8 @@ describe('QR payload and image boundaries', () => {
     expect(small.ok).toBe(false)
     if (!small.ok) expect(small.error).toContain('at least')
     expect((await encodeQr('x'.repeat(3000), { errorCorrectionLevel: 'H' })).ok).toBe(false)
+    const amplified = await encodeQr('1'.repeat(7000), { errorCorrectionLevel: 'L', scale: 32 })
+    expect(amplified).toMatchObject({ ok: false, error: expect.stringContaining('2048') })
   })
 
   it('round trips real raster modules, including Unicode and exact whitespace', async () => {
@@ -47,5 +49,21 @@ describe('QR payload and image boundaries', () => {
       expect((await decodeQrFromDataUrl(source)).ok).toBe(false)
     }
     expect((await decodeQrFromFile({ size: 33 * 1024 * 1024 } as File)).ok).toBe(false)
+  })
+
+  it('rejects pixel bombs, truncated headers and disguised SVG before creating an image or blob URL', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL')
+    const bomb = Buffer.alloc(24)
+    bomb.set([137, 80, 78, 71, 13, 10, 26, 10])
+    bomb.writeUInt32BE(100_000, 16); bomb.writeUInt32BE(100_000, 20)
+    const payloads = [bomb, bomb.subarray(0, 12), Buffer.from('<svg width="100000" height="100000"/>')]
+    try {
+      for (const bytes of payloads) {
+        const file = { size: bytes.length, type: 'image/png', name: 'disguised.png', arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length) } as File
+        expect((await decodeQrFromFile(file)).ok).toBe(false)
+        expect((await decodeQrFromDataUrl(` data:image/png;base64,${bytes.toString('base64')} `)).ok).toBe(false)
+      }
+      expect(createUrl).not.toHaveBeenCalled()
+    } finally { createUrl.mockRestore() }
   })
 })

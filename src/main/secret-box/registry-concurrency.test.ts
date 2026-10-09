@@ -13,6 +13,7 @@ vi.mock('fs/promises', async (importOriginal) => {
 import { readRegistry, ensureDefaultSecretBox, renameVault, removeVaultFromList, setActiveVault, openExistingVaultPath } from './vault'
 import { clearAccess } from './session'
 import { defaultSecretBoxPath, secretBoxRegistryPath } from './paths'
+import { writeRegistry } from './registry'
 
 let root: string
 const config = () => ({ version: 1, mode: 'portable', kdf: 'scrypt', kdfParams: { ...SCRYPT_PARAMS }, salt: Buffer.alloc(16, 7).toString('base64'), createdAt: '2026-10-04T00:00:00.000Z' })
@@ -90,4 +91,14 @@ it('a failed transaction releases the queue and removal never gets reintroduced 
   expect(registry.vaults.some((v) => v.id === 'second')).toBe(false)
   expect(registry.vaults.find((v) => v.id === 'first')?.name).toBe('Survives')
   await expect(removeVaultFromList('unknown')).rejects.toThrow('Vault not found')
+})
+
+it('refuses invalid or oversized registry writes before touching the prior registry', async () => {
+  const current = await readRegistry(), original = await fs.readFile(secretBoxRegistryPath())
+  const item = current.vaults[0]!
+  const tooMany = { ...current, activeId: null, vaults: Array.from({ length: 1025 }, (_, index) => ({ ...item, id: String(index) })) }
+  await expect(writeRegistry(tooMany)).rejects.toThrow('invalid or unsupported')
+  const tooLarge = { ...current, activeId: null, vaults: Array.from({ length: 1024 }, (_, index) => ({ ...item, id: String(index), name: 'x'.repeat(4096) })) }
+  await expect(writeRegistry(tooLarge)).rejects.toThrow('exceeds 1 MiB')
+  expect((await fs.readFile(secretBoxRegistryPath())).equals(original)).toBe(true)
 })

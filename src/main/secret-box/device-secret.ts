@@ -1,9 +1,12 @@
 import { app, safeStorage } from 'electron'
 import { existsSync } from 'fs'
-import { readFile, mkdir, writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 import { authError } from './crypto'
 import { resolveHardwareDeviceSecret } from './machine-id'
 import { deviceSecretPath, hardwareSecretCachePath, userDataRoot } from './paths'
+import { readBoundedFile } from '../bounded-read'
+
+const MAX_DEVICE_SECRET_BYTES = 64 * 1024
 
 export type DeviceKeySource = 'hardware' | 'legacy-file' | 'hardware-cache'
 
@@ -41,7 +44,7 @@ export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
 
   try {
     if (safeStorage?.isEncryptionAvailable?.()) {
-      const raw = await readFile(hardwareSecretCachePath())
+      const raw = await readBoundedFile(hardwareSecretCachePath(), MAX_DEVICE_SECRET_BYTES)
       const keyA = safeStorage.decryptString(raw)
       if (keyA) out.push({ source: 'hardware-cache', keyA })
     }
@@ -102,7 +105,7 @@ async function tryLoadLegacyDeviceSecret(): Promise<string | null> {
 
   let raw: Buffer
   try {
-    raw = await readFile(file)
+    raw = await readBoundedFile(file, MAX_DEVICE_SECRET_BYTES)
   } catch {
     throw authError(
       'DEVICE_SECRET_UNREADABLE',

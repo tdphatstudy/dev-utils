@@ -55,3 +55,20 @@ it('rejects overlapping authentication without queuing KDF work', async () => {
   finish(); await first
   expect(mocks.service).toHaveBeenCalledTimes(1)
 })
+
+it('refuses bursts before dispatch and keeps Lock available while the task budget is occupied', async () => {
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  mocks.service.mockImplementation(() => pending)
+  const registered = handlers(), event = { sender: { id: 1 } }
+  const request = { relativePath: 'fixture.putl', sessionId: 'fixture-session' }
+  const active = Array.from({ length: 4 }, () => registered.get('privateBox:readFile')!(event, request))
+  const burst = await Promise.allSettled(Array.from({ length: 100 }, () => registered.get('privateBox:readFile')!(event, request)))
+  expect(burst.every(result => result.status === 'rejected')).toBe(true)
+  expect(mocks.service).toHaveBeenCalledTimes(4)
+  mocks.service.mockResolvedValueOnce(undefined)
+  await registered.get('privateBox:clearAccess')!(event)
+  release(); await Promise.all(active)
+  await registered.get('privateBox:readFile')!(event, request)
+  expect(mocks.service).toHaveBeenCalledTimes(6)
+})

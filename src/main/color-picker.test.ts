@@ -8,6 +8,7 @@ vi.mock('./branding', () => ({ resourcePath: () => '/fixture/color-picker.html',
 vi.mock('./screen-snapshot', () => ({ captureDesktopFrames: fixture.capture }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: fixture.trust, isRendererUrl: (a: string, b: string) => a === b }))
 vi.mock('electron', () => ({
+  app: { isPackaged: true },
   BrowserWindow: class extends EventEmitter {
     destroyed = false
     options: any

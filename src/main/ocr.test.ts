@@ -9,6 +9,7 @@ vi.mock('./env', () => ({ is: { dev: false } }))
 vi.mock('./screen-snapshot', () => ({ captureDesktopFrames: f.capture }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: f.trust, isRendererUrl: (a: string, b: string) => a === b }))
 vi.mock('electron', () => ({
+  app: { isPackaged: true },
   BrowserWindow: class extends EventEmitter {
     destroyed = false; webContents: any
     constructor(public options: any) {
@@ -27,7 +28,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (name: string, fn: unknown) => f.handlers.set(name, fn) }
 }))
 import { DesktopOcr, registerOcrIpc } from './ocr'
-function png(width: number, height: number): Uint8Array { const bytes = new Uint8Array(24); bytes.set([137, 80, 78, 71]); new DataView(bytes.buffer).setUint32(16, width); new DataView(bytes.buffer).setUint32(20, height); return bytes }
+function png(width: number, height: number): Uint8Array { const bytes = new Uint8Array(24); bytes.set([137, 80, 78, 71, 13, 10, 26, 10]); new DataView(bytes.buffer).setUint32(16, width); new DataView(bytes.buffer).setUint32(20, height); return bytes }
 const bytes = png(100, 100)
 const output = { text: 'DevFusion OCR', pages: 1, ocrPages: 1, confidence: 94 }
 const frames = [{ bounds: { x: -1920, y: 0, width: 1920, height: 1080 }, image: 'data:image/png;base64,' + Buffer.from(png(3840, 2160)).toString('base64') }, { bounds: { x: 0, y: 0, width: 1920, height: 1080 }, image: 'data:image/png;base64,' + Buffer.from(png(3840, 2160)).toString('base64') }]

@@ -1,7 +1,4 @@
-/**
- * QR encode / decode helpers (browser + Electron renderer).
- * Encode: qrcode · Decode: jsqr
- */
+import { validateRasterImage } from '../image/validation'
 
 export type QrErrorLevel = 'L' | 'M' | 'Q' | 'H'
 export const QR_MAX_FILE_BYTES = 32 * 1024 * 1024
@@ -52,11 +49,11 @@ export async function encodeQr(
   if (!['L', 'M', 'Q', 'H'].includes(options.errorCorrectionLevel ?? 'M')) return { ok: false, error: 'Invalid error correction level.' }
 
   try {
-    // Dynamic import keeps main bundle lighter when tool not opened
     const QRCode = (await import('qrcode')).default
     const qr = QRCode.create(value, { errorCorrectionLevel: options.errorCorrectionLevel ?? 'M' })
     const modules = qr.modules.size + 2 * margin
     if (options.width !== undefined && options.width < modules) return { ok: false, error: `This QR needs at least ${modules}px. Increase size or shorten the payload.` }
+    if ((options.width ?? modules * scale) > 2048) return { ok: false, error: 'QR output exceeds 2048 pixels per side. Reduce scale or set an explicit width.' }
     const dataUrl = await QRCode.toDataURL(value, {
       errorCorrectionLevel: options.errorCorrectionLevel ?? 'M',
       margin,
@@ -67,7 +64,6 @@ export async function encodeQr(
         light: options.light ?? '#ffffff'
       }
     })
-    // estimate size from base64
     const b64 = dataUrl.split(',')[1] ?? ''
     const byteLength = Math.floor((b64.length * 3) / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0)
     return { ok: true, dataUrl, text: value, byteLength, payloadBytes, version: qr.version, pixelSize: options.width ?? modules * scale }
@@ -133,16 +129,16 @@ export async function decodeQrFromSource(
 
     if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w * h > QR_MAX_PIXELS) return { ok: false, error: 'Invalid image dimensions or image exceeds 16 megapixels.' }
 
-    // Cap decode size for performance
     const maxSide = 1600
     const scale = Math.min(1, maxSide / Math.max(w, h))
     canvas.width = Math.max(1, Math.round(w * scale))
     canvas.height = Math.max(1, Math.round(h * scale))
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return { ok: false, error: 'Canvas not available' }
-    ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    return decodeQrFromImageData(imageData)
+    try {
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
+      return await decodeQrFromImageData(ctx.getImageData(0, 0, canvas.width, canvas.height))
+    } finally { canvas.width = canvas.height = 0 }
   } catch (e) {
     return {
       ok: false,
@@ -153,32 +149,39 @@ export async function decodeQrFromSource(
 
 export async function decodeQrFromFile(file: File): Promise<QrDecodeResult> {
   if (file.size === 0 || file.size > QR_MAX_FILE_BYTES) return { ok: false, error: 'Choose a nonempty image up to 32 MiB.' }
-  if (!file.type.startsWith('image/') && !/\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
-    return { ok: false, error: 'File must be an image' }
-  }
-  const url = URL.createObjectURL(file)
+  let url: string | undefined, img: HTMLImageElement | undefined
   try {
-    const img = await loadImage(url)
+    validateRasterImage(new Uint8Array(await file.arrayBuffer()), QR_MAX_PIXELS)
+    url = URL.createObjectURL(file)
+    img = await loadImage(url)
     return await decodeQrFromSource(img)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not read image' }
   } finally {
-    URL.revokeObjectURL(url)
+    if (img) img.src = ''
+    if (url) URL.revokeObjectURL(url)
   }
 }
 
 export async function decodeQrFromDataUrl(dataUrl: string): Promise<QrDecodeResult> {
   if (!dataUrl.trim()) return { ok: false, error: 'Empty image data' }
-  if (!/^data:image\/(?:png|jpeg|webp|gif|bmp);base64,[A-Za-z0-9+/]*={0,2}$/i.test(dataUrl.trim()) || dataUrl.length > 45_000_000) return { ok: false, error: 'Use a local base64 raster image data URL (up to 32 MiB).' }
+  if (dataUrl.length > Math.ceil(QR_MAX_FILE_BYTES / 3) * 4 + 64 || !/^data:image\/(?:png|jpeg|webp|gif|bmp);base64,[A-Za-z0-9+/]*={0,2}$/i.test(dataUrl.trim())) return { ok: false, error: 'Use a local base64 raster image data URL (up to 32 MiB).' }
+  let img: HTMLImageElement | undefined
   try {
-    const img = await loadImage(dataUrl.trim())
+    const source = dataUrl.trim()
+    const binary = atob(source.slice(source.indexOf(',') + 1))
+    if (!binary.length || binary.length > QR_MAX_FILE_BYTES) throw new Error('Choose a nonempty image up to 32 MiB.')
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    validateRasterImage(bytes, QR_MAX_PIXELS)
+    img = await loadImage(dataUrl.trim())
     return await decodeQrFromSource(img)
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : 'Invalid image data URL'
     }
-  }
+  } finally { if (img) img.src = '' }
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -189,8 +192,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
       img.src = ''
       reject(new Error('Image loading timed out. Try a smaller image.'))
     }, 10_000)
-    img.onload = () => { clearTimeout(timer); resolve(img) }
-    img.onerror = () => { clearTimeout(timer); reject(new Error('Could not load image')) }
+    img.onload = () => { clearTimeout(timer); img.onload = img.onerror = null; resolve(img) }
+    img.onerror = () => { clearTimeout(timer); img.onload = img.onerror = null; img.src = ''; reject(new Error('Could not load image')) }
     img.src = src
   })
 }

@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, dialog, ipcMain, net, screen, session, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, screen, session, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
@@ -94,7 +94,7 @@ export class DesktopOcr {
       width: 620, height: view.kind === 'run' ? 260 : 510, ...bounds, icon: appWindowIcon(), show: false, frame: !overlay,
       fullscreen: overlay && process.platform !== 'darwin', thickFrame: false, resizable: !overlay, minimizable: false, maximizable: false,
       alwaysOnTop: true, skipTaskbar: true, autoHideMenuBar: true, backgroundColor: '#171923', title: 'DevFusion · OCR',
-      webPreferences: { preload: join(__dirname, '../preload/ocrHelper.js'), sandbox: true, contextIsolation: true, webSecurity: true, nodeIntegration: false,
+      webPreferences: { preload: join(__dirname, '../preload/ocrHelper.js'), sandbox: true, devTools: !app.isPackaged, contextIsolation: true, webSecurity: true, nodeIntegration: false,
         spellcheck: false, partition: 'ocr-transient' }
     })
     win.setMenu(null); win.setAlwaysOnTop(true, overlay ? 'screen-saver' : 'floating')

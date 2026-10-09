@@ -1,7 +1,8 @@
 import { resolve } from 'path'
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { bytecodePlugin, defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { ocrAssets } from './scripts/ocr-assets'
+import { helperAssets } from './scripts/helper-assets'
 
 const shared = resolve('src/shared')
 const mainRoot = resolve('src/main')
@@ -43,7 +44,7 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), helperAssets(), bytecodePlugin({ transformArrowFunctions: true, removeBundleJS: true })],
     resolve: {
       alias: {
         '@shared': shared,
@@ -56,15 +57,15 @@ export default defineConfig({
       target: 'node20',
       reportCompressedSize: false,
       rollupOptions: {
-        treeshake: true
+        treeshake: true,
+        output: { format: 'cjs', entryFileNames: '[name].cjs', chunkFileNames: '[name]-[hash].cjs' }
       }
     },
-    esbuild: isProd
-      ? {
-          drop: ['debugger'],
-          pure: ['console.log', 'console.debug', 'console.info']
-        }
-      : undefined
+    esbuild: {
+      // Lower fields before electron-vite 2's Babel arrow transform.
+      supported: { 'class-field': false, 'class-static-field': false },
+      ...(isProd ? { drop: ['debugger'] as ('debugger')[], pure: ['console.log', 'console.debug', 'console.info'] } : {})
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

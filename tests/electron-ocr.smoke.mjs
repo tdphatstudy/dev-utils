@@ -47,7 +47,8 @@ try {
         ocr=new DesktopOcr();registerOcrIpc(ocr)
         cold=memory();meter=setInterval(()=>{peak=Math.max(peak,memory().rssMiB)},150)
         assert(BrowserWindow.getAllWindows().length===0,'Idle OCR created a renderer')
-        const area=screen.getPrimaryDisplay().workArea
+        const captureDisplay=screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+        const area=captureDisplay.workArea
         fixture=new BrowserWindow({x:area.x+50,y:area.y+50,width:700,height:180,frame:false,alwaysOnTop:true,skipTaskbar:true,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}})
         await fixture.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html style="background:white"><body style="margin:25px;color:black;font:34px Arial">DevFusion SCREEN OCR 123</body></html>'))
         const data=await fixture.webContents.executeJavaScript('(()=>{const c=document.createElement("canvas");c.width=1200;c.height=240;const ctx=c.getContext("2d");ctx.fillStyle="white";ctx.fillRect(0,0,1200,240);ctx.fillStyle="black";ctx.font="48px Arial";ctx.fillText("DevFusion OCR 123",40,80);ctx.fillText("Tiếng Việt: Xin chào thế giới",40,170);return c.toDataURL("image/png")})()')
@@ -77,7 +78,7 @@ try {
         console.log('PASS cancel kills pending engine renderer and all its workers')
         fixture.show();await wait(500)
         const selected=ocr.capture({id:'region',mode:'region',language:'eng'})
-        const overlay=await until(()=>BrowserWindow.getAllWindows().find(w=>w!==fixture&&w.isVisible()&&w.getBounds().width===screen.getPrimaryDisplay().bounds.width))
+        const overlay=await until(()=>BrowserWindow.getAllWindows().find(w=>{const b=w.getBounds();return w!==fixture&&w.isVisible()&&b.x===captureDisplay.bounds.x&&b.y===captureDisplay.bounds.y&&b.width===captureDisplay.bounds.width}))
         const b=overlay.getBounds(),r=fixture.getBounds()
         const region={x:(r.x-b.x+10)/b.width,y:(r.y-b.y+10)/b.height,width:(r.width-20)/b.width,height:(r.height-20)/b.height}
         await overlay.webContents.executeJavaScript('void(async()=>{const rect='+JSON.stringify(region)+';const c=document.getElementById("desktop"),x=Math.floor(rect.x*c.width),y=Math.floor(rect.y*c.height),width=Math.min(c.width-x,Math.ceil((rect.x+rect.width)*c.width)-x),height=Math.min(c.height-y,Math.ceil((rect.y+rect.height)*c.height)-y);const crop=document.createElement("canvas");crop.width=width;crop.height=height;crop.getContext("2d").drawImage(c,x,y,width,height,0,0,width,height);const blob=await new Promise(ok=>crop.toBlob(ok));await window.ocrHelper.select({rect,bytes:new Uint8Array(await blob.arrayBuffer())})})()')
@@ -90,7 +91,8 @@ try {
         await popup.webContents.executeJavaScript('document.getElementById("close").click()')
         await until(()=>BrowserWindow.getAllWindows().length===1)
         console.log('PASS actual OS fixture region → lightweight result popup → Close releases helpers')
-        fixture.setBounds(screen.getPrimaryDisplay().bounds);fixture.setFullScreen(true);fixture.show()
+        const fullscreenDisplay=screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+        fixture.setBounds(fullscreenDisplay.bounds);fixture.setFullScreen(true);fixture.show()
         await fixture.webContents.executeJavaScript('document.body.textContent="DevFusion FULL SCREEN OCR 456";document.body.style.cssText="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;color:black;background:white;font:64px Arial"')
         await wait(800)
         assert(fixture.isFullScreen() && BrowserWindow.getAllWindows().length===1,'Full-screen fixture did not cover the desktop')

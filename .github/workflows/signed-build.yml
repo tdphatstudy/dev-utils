@@ -12,8 +12,13 @@ jobs:
         include:
           - os: windows-2022
             platform: win
+            arch: x64
           - os: macos-14
             platform: mac
+            arch: arm64
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
     runs-on: ${{ matrix.os }}
     environment: desktop-release
     timeout-minutes: 60
@@ -37,7 +42,7 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-        run: pnpm exec electron-builder --win --config electron-builder.signed.yml --publish never
+        run: pnpm exec electron-builder --win --${{ matrix.arch }} --config electron-builder.signed.yml --publish never
       - name: Build signed and notarized macOS artifacts
         if: runner.os == 'macOS'
         shell: bash
@@ -52,7 +57,7 @@ jobs:
           export APPLE_API_KEY="$RUNNER_TEMP/devfusion-notarize.p8"
           node -e "require('fs').writeFileSync(process.env.APPLE_API_KEY, Buffer.from(process.env.APPLE_API_KEY_BASE64 || '', 'base64'), { mode: 0o600 })"
           trap 'rm -f -- "$APPLE_API_KEY"' EXIT
-          pnpm exec electron-builder --mac --config electron-builder.signed.yml --publish never
+          pnpm exec electron-builder --mac --${{ matrix.arch }} --config electron-builder.signed.yml --publish never
       - name: Verify Windows signatures
         if: runner.os == 'Windows'
         shell: pwsh
@@ -68,16 +73,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for app in release/mac/DevFusion.app release/mac-arm64/DevFusion.app; do
-            test -d "$app"
-            codesign --verify --deep --strict --verbose=2 "$app"
-            spctl --assess --type execute --verbose=2 "$app"
-            xcrun stapler validate "$app"
-          done
+          app="release/mac/DevFusion.app"
+          if [ '${{ matrix.arch }}' = 'arm64' ]; then app="release/mac-arm64/DevFusion.app"; fi
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$app"
       - run: node scripts/artifact-manifest.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: signed-desktop-${{ matrix.platform }}-${{ github.sha }}
+          name: signed-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
             release/DevFusion-*.exe
             release/DevFusion-*.dmg

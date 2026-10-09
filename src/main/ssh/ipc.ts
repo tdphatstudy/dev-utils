@@ -23,6 +23,10 @@ import {
   upsertHost
 } from './index'
 import { resolveSshPaths } from './paths'
+import { IpcTaskPool } from '../ipc-task-pool'
+
+const tasks = new IpcTaskPool(4, 'Too many SSH operations are running. Wait for completion and retry.')
+const keyGeneration = new IpcTaskPool(1, 'Key generation is already running. Wait for completion.')
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid SSH request.')
@@ -51,18 +55,14 @@ function handleSsh<T>(channel: string, listener: (event: IpcMainInvokeEvent, pay
         if (!['ed25519', 'rsa'].includes(request.algorithm as string) || (request.overwrite !== undefined && typeof request.overwrite !== 'boolean')) throw new Error('Invalid key generation options.')
       }
     }
-    return listener(event, payload)
+    return tasks.run(() => channel === 'ssh:createKey' ? keyGeneration.run(() => listener(event, payload)) : listener(event, payload))
   })
 }
 
 export function registerCryptoAndSshIpc(): void {
-  let generating = false
   ipcMain.handle('crypto:generateKeyPair', async (event, req: KeygenRequest) => {
     assertTrustedIpc(event)
-    if (generating) throw new Error('Key generation is already running. Wait for completion.')
-    generating = true
-    try { return await generateKeyPair(req) }
-    finally { generating = false }
+    return keyGeneration.run(() => generateKeyPair(req))
   })
 
   handleSsh('ssh:list', async (_e, location?: SshLocation | null) =>

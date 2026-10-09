@@ -82,6 +82,18 @@ it('does not replace a corrupt registry or silently discard invalid entries', as
   }
 })
 
+it('refuses oversized registry and legacy key files without modifying recovery material', async () => {
+  const registry = Buffer.alloc(1024 * 1024 + 1, 32)
+  await writeFile(secretBoxRegistryPath(), registry)
+  await expect(readRegistry()).rejects.toThrow('registry')
+  expect((await readFile(secretBoxRegistryPath())).equals(registry)).toBe(true)
+  const legacy = Buffer.alloc(64 * 1024 + 1, 7)
+  await writeFile(deviceSecretPath(), legacy)
+  mocks.hardware = ''
+  await expect(listDeviceKeyCandidates()).rejects.toMatchObject({ name: 'DEVICE_SECRET_UNREADABLE' })
+  expect((await readFile(deviceSecretPath())).equals(legacy)).toBe(true)
+})
+
 it('rejects root/metadata deletion and link escapes while allowing ordinary subfolders', async () => {
   const vaultRoot = join(root, 'box'), outside = join(root, 'outside')
   await mkdir(join(vaultRoot, VAULT_DIR), { recursive: true }); await mkdir(outside)

@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { mkdir, readdir, readFile } from 'fs/promises'
+import { mkdir, readdir } from 'fs/promises'
 import { basename, join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { VAULT_CONFIG_VERSION } from '@shared/core/constants'
@@ -13,11 +13,7 @@ import type {
   VaultStatus,
   RecoverMetadataInput, RecoverMetadataResult
 } from '@shared/secret-box/types'
-import {
-  defaultSecretBoxPath,
-  secretBoxRegistryPath,
-  userDataRoot
-} from './paths'
+import { defaultSecretBoxPath } from './paths'
 import {
   assertNotLocked,
   clearAuthFailures,
@@ -39,92 +35,11 @@ import { readMetadata, VaultMetadataError } from './metadata'
 import { recoverMetadataAtRoot } from './recovery'
 import { createKeyVerifiersAsync, deriveLayerKeysAsync, verifyKeyVerifiersAsync } from './async-kdf'
 import { readBoundedFile } from '../bounded-read'
+import { readRegistry, inRegistryQueue, readRegistryInternal, writeRegistry, type VaultRegistry, type VaultRegistryEntry } from './registry'
+import { collectLegacyProofPaths } from './legacy-proof'
 import { MAX_ENVELOPE_BYTES } from '@shared/secret-box/limits'
 
-interface VaultRegistryEntry {
-  id: string
-  name: string
-  rootPath: string
-  createdAt: string
-  isDefault?: boolean
-}
-
-interface VaultRegistry {
-  version: 1
-  activeId: string | null
-  vaults: VaultRegistryEntry[]
-}
-
-function registryPath(): string {
-  return secretBoxRegistryPath()
-}
-
-function legacyPointerPath(): string {
-  return join(userDataRoot(), 'privatebox-pointer.json')
-}
-
-async function emptyRegistry(): Promise<VaultRegistry> {
-  return { version: 1, activeId: null, vaults: [] }
-}
-
-const registryQueues = new Map<string, Promise<void>>()
-function inRegistryQueue<T>(operation: () => Promise<T>): Promise<T> {
-  const path = registryPath()
-  const previous = registryQueues.get(path) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const tail = result.then(() => undefined, () => undefined)
-  registryQueues.set(path, tail)
-  void tail.then(() => { if (registryQueues.get(path) === tail) registryQueues.delete(path) })
-  return result
-}
-
-export function readRegistry(): Promise<VaultRegistry> {
-  return inRegistryQueue(readRegistryInternal)
-}
-
-// Only called while holding the registry queue, including legacy-pointer migration.
-async function readRegistryInternal(): Promise<VaultRegistry> {
-  let raw: string
-  try {
-    raw = await readFile(registryPath(), 'utf8')
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`Cannot read box registry. Check permissions at “${registryPath()}”; existing registry was not replaced.`)
-    // migrate single pointer from older builds
-    try {
-      const raw = await readFile(legacyPointerPath(), 'utf8')
-      const ptr = JSON.parse(raw) as { rootPath?: string }
-      if (typeof ptr?.rootPath === 'string' && ptr.rootPath.trim()) {
-        const entry: VaultRegistryEntry = {
-          id: randomUUID(),
-          name: basename(ptr.rootPath) || 'Private Box',
-          rootPath: resolve(ptr.rootPath),
-          createdAt: new Date().toISOString()
-        }
-        const reg: VaultRegistry = { version: 1, activeId: entry.id, vaults: [entry] }
-        await writeRegistry(reg)
-        return reg
-      }
-      throw new Error('Invalid legacy box pointer')
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`Cannot migrate the legacy box pointer at “${legacyPointerPath()}”. Preserve the file and restore its backup; no new registry was created.`)
-    }
-    return emptyRegistry()
-  }
-  let data: VaultRegistry
-  try { data = JSON.parse(raw) as VaultRegistry }
-  catch { throw new Error(`Box registry JSON is corrupt at “${registryPath()}”. Restore its backup; existing registry was not replaced.`) }
-  if (!data || data.version !== 1 || !Array.isArray(data.vaults) || (data.activeId !== null && typeof data.activeId !== 'string') ||
-      data.vaults.some((v) => !v || typeof v.id !== 'string' || !v.id || typeof v.rootPath !== 'string' || !v.rootPath || typeof v.name !== 'string' || typeof v.createdAt !== 'string') ||
-      new Set(data.vaults.map((v) => v.id)).size !== data.vaults.length || (data.activeId !== null && !data.vaults.some((v) => v.id === data.activeId))) {
-    throw new Error(`Box registry is invalid or unsupported at “${registryPath()}”. Preserve it and restore a known-good backup; no entries were discarded.`)
-  }
-  return data
-}
-
-async function writeRegistry(reg: VaultRegistry, beforeCommit?: () => void): Promise<void> {
-  await mkdir(userDataRoot(), { recursive: true })
-  await atomicWriteFile(registryPath(), JSON.stringify(reg, null, 2), 'utf8', undefined, beforeCommit)
-}
+export { readRegistry } from './registry'
 
 export async function isDirectoryEmpty(dir: string): Promise<boolean> {
   if (!existsSync(dir)) return false
@@ -292,61 +207,15 @@ async function setupVaultInternal(input: SetupInput): Promise<void> {
   } finally { if (!transferred) { keys.keyA.fill(0); keys.keyB.fill(0) } }
 }
 
-async function vaultHasPutlFiles(root: string): Promise<boolean> {
-  async function walk(dir: string): Promise<boolean> {
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return false
-    }
-    for (const ent of entries) {
-      if (ent.name === VAULT_DIR || ent.name.startsWith('.')) continue
-      const full = join(dir, ent.name)
-      if (ent.isDirectory()) {
-        if (await walk(full)) return true
-      } else if (ent.isFile() && isPutlFile(ent.name)) {
-        return true
-      }
-    }
-    return false
-  }
-  return walk(root)
-}
-
-/** Collect up to `limit` .putl paths for key proof. */
-async function collectPutlPaths(root: string, limit = 5): Promise<string[]> {
-  const found: string[] = []
-  async function walk(dir: string): Promise<void> {
-    if (found.length >= limit) return
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const ent of entries) {
-      if (found.length >= limit) return
-      if (ent.name === VAULT_DIR || ent.name.startsWith('.')) continue
-      const full = join(dir, ent.name)
-      if (ent.isDirectory()) await walk(full)
-      else if (ent.isFile() && isPutlFile(ent.name)) found.push(full)
-    }
-  }
-  await walk(root)
-  return found
-}
-
 /**
  * Fail-closed: every sampled .putl must decrypt (avoids mixed-key false positive).
  * Zero files → false (caller handles empty vault).
  */
 async function canDecryptSamplePutls(
-  root: string,
+  paths: string[],
   keyA: Buffer,
   keyB: Buffer
 ): Promise<boolean> {
-  const paths = await collectPutlPaths(root, 5)
   if (paths.length === 0) return false
   for (const full of paths) {
     try {
@@ -388,7 +257,6 @@ export async function accessVault(input: AccessInput): Promise<void> {
 
   const salt = Buffer.from(config.salt, 'base64')
 
-  /** keyA string candidates (device: hardware + legacy; portable: user keyA) */
   let keyAList: string[] = []
   if (config.mode === 'device') {
     const candidates = await listDeviceKeyCandidates()
@@ -400,7 +268,8 @@ export async function accessVault(input: AccessInput): Promise<void> {
   }
 
   const hasAuth = !!(config.auth?.hashA && config.auth?.hashB)
-  const hasFiles = !hasAuth && await vaultHasPutlFiles(root)
+  const proofPaths = hasAuth ? [] : await collectLegacyProofPaths(root, 5, () => assertAccessRevision(revision))
+  const hasFiles = proofPaths.length > 0
   assertAccessRevision(revision)
 
   let accepted: { keyA: Buffer; keyB: Buffer } | null = null
@@ -424,7 +293,7 @@ export async function accessVault(input: AccessInput): Promise<void> {
 
         // Legacy vault without verifiers — prove by decrypting existing .putl files
         if (hasFiles) {
-          if (await canDecryptSamplePutls(root, keys.keyA, keys.keyB)) {
+          if (await canDecryptSamplePutls(proofPaths, keys.keyA, keys.keyB)) {
             accepted = keys
             keep = true
             break
@@ -452,7 +321,6 @@ export async function accessVault(input: AccessInput): Promise<void> {
     assertAccessRevision(revision)
     if (stillActive?.id !== active.id || resolve(stillActive.rootPath) !== root) throw authError('SESSION_CHANGED', 'SESSION_CHANGED: Selected box changed while signing in. Retry in the selected box.')
 
-    // Migrate legacy → verifiers only after proof (or empty bind)
     if (!hasAuth) {
       config = {
         ...config,
@@ -604,7 +472,6 @@ async function ensureDefaultSecretBoxInternal(): Promise<VaultListItem> {
     if (!(await isDirectoryEmpty(root))) {
       throw new VaultMetadataError('MISSING', vaultConfigPath(root), 'This folder already contains data or metadata remnants. Restore the original vault.json; a new salt would make existing encrypted documents unreadable.')
     }
-    // Probe device key material early (hardware-bound) so default box is OS-reinstall safe
     await loadOrCreateDeviceSecret()
     const salt = generateSalt()
     config = {

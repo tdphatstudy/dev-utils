@@ -59,7 +59,7 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 |---|---|---|
 | Startup, cửa sổ, lifecycle | `src/main/index.ts` | preload, IPC registrars |
 | Brand / native tray / quick actions | `src/shared/brand.ts`, `src/main/branding.ts`, `src/main/tray.ts` | shared quick-actions, App router subscription, resource exports |
-| Quick widgets / global shortcuts / Clipboard Manager | `src/shared/quick-tools.ts`, `src/shared/clipboard`, `src/main/quick-tools.ts`, `src/main/global-shortcuts.ts`, `src/main/clipboard` | isolated `src/preload/quick-tools.ts`, `quick.html`, lazy `text.clipboard`, Settings; [usage, research and privacy](quick-tools-clipboard-2026-10-08.md) |
+| Quick widgets / global shortcuts / Clipboard Manager | `src/shared/quick-tools.ts`, `src/shared/clipboard`, `src/main/quick-tools`, `src/main/global-shortcuts.ts`, `src/main/clipboard` | isolated `src/preload/quick-tools.ts`, `quick.html`, lazy `text.clipboard`, Settings; [usage, research and privacy](quick-tools-clipboard-2026-10-08.md) |
 | Color Picker | `src/shared/color`, `src/main/color-picker.ts`, `src/main/screen-snapshot.ts` | app color bridge, isolated `src/preload/color-picker.ts`, tool UI, resource HTML/JS |
 | OCR ảnh/PDF và chụp màn hình | `src/shared/ocr/types.ts`, `src/main/ocr.ts`, `src/renderer/src/ocr-helper` | `text.ocr`, app OCR bridge, isolated preload, local assets plugin, lightweight resource popup |
 | Lorem và time/date | `src/shared/lorem`, `src/shared/time` | lazy `text.lorem`, `time.timestamp`, `time.date`, tool components |
@@ -73,6 +73,7 @@ cho từng module, không mặc định tất cả đều chạy được trong 
 | Settings và recent tools | `src/renderer/src/store/app-store.ts` | Zustand persist/localStorage |
 | Draft/history tạm | `src/renderer/src/store/session-store.ts` | `hooks/useToolDraft.ts` |
 | Vault setup/unlock/chuyển kho | `src/main/secret-box/vault.ts` | `session.ts`, `auth-rate.ts`, `device-secret.ts` |
+| Registry / legacy authentication proof | `src/main/secret-box/registry.ts`, `src/main/secret-box/legacy-proof.ts` | bounded metadata reads/writes, transaction queue, fail-closed streaming scan |
 | Vault đọc/ghi/đổi tên/xóa | `src/main/secret-box/fs-ops.ts` | `vault-paths.ts`, `atomic-write.ts`, `crypto.ts` |
 | Import/export/Save to Box | `src/main/secret-box/export-import.ts` | `features/secret-box/SaveToBoxButton.tsx` |
 | Content kind và editor | `src/shared/secret-box/content-kinds.ts` | `src/renderer/src/content/editors/registry.tsx` |
@@ -970,3 +971,45 @@ CORS origin presets and common findings filters reduce setup/report navigation.
 New interface messages are bundled for all 13 languages in
 `security-workspace-messages.ts`. There are no new privileged bridge methods,
 automatic network calls, persisted candidate sets or storage-format changes.
+
+
+### Admission bounds và refactor bảo mật (2026-10-08 / 09)
+
+Quick window orchestration, geometry, session/resource policy và IPC nằm trong
+`src/main/quick-tools`; clipboard registrar thuộc `src/main/clipboard/ipc.ts`.
+Vault registry IO/transactions ở `secret-box/registry.ts`; legacy proof dùng
+`legacy-proof.ts` với streaming directory scan và refusal khi không kiểm tra
+được dữ liệu. Metadata, device-secret/cache và SSH config đều đọc bằng stable
+bounded file handles, không reset file quá lớn/hỏng/link.
+
+`IpcTaskPool` từ chối tác vụ vượt budget trước khi gọi service, không giữ backlog:
+vault/SSH 4 jobs/domain, keygen 1 chung, port operation 1; tạo widget, clipboard
+copy/settings và shortcut save có giới hạn riêng. Lock/Pause/Cancel vẫn hoạt động.
+`shared/image/validation.ts` dùng chung signature/dimension preflight cho QR,
+Convert và OCR trước browser decoder. QR preview chỉ xuất hiện sau decode thành
+công, canvas/image/blob resources được giải phóng sau xử lý.
+
+Session drafts chỉ RAM, mỗi draft tối đa 1 Mi UTF-16 characters, tổng 4 Mi, tối đa
+40 drafts; input lớn vẫn ở component đang dùng, không cache bản bị truncate hoặc
+bản cũ. History giữ 40 snippets × 200 characters. Privacy denylist không đổi.
+Không đổi tên IPC/storage hoặc envelope version. Findings, rollback, incident/key
+rotation guidance và phạm vi kiểm chứng ở
+[báo cáo refactor bảo mật](security-refactor-2026-10-08.md).
+
+## Protected distribution and future licensing (2026-10-09)
+
+Production main is CommonJS V8 bytecode behind `out/main/index.cjs`; renderer
+and sandboxed preloads remain minified JavaScript. `scripts/helper-assets.ts`
+puts executable Color Picker/OCR helpers inside ASAR, with packaged lookup
+refusing external fallback. Build hooks validate target/runtime compatibility,
+source-artifact exclusions, fuses, embedded header integrity and streamed file/
+block hashes. No runtime scanner, background service or network dependency is
+added. Signed CI rebuilds Intel/ARM macOS independently. Linux runtime ASAR
+enforcement is unavailable. See [application protection](app-protection.md).
+
+`src/main/licensing/offline-license.mjs` is a Node-only, typed, bounded Ed25519
+verification foundation; it is currently unused by app startup. The owner-only
+issuer CLI reads an external private key; current app features are ungated.
+Future entitlement enforcement belongs in main behind compiled public keys,
+with manual signed-file import and independent access to the user's own vault
+data/recovery. No license secret, policy or storage migration is introduced.

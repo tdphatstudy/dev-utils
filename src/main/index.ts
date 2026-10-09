@@ -108,6 +108,7 @@ function createWindow(route = '/'): BrowserWindow {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
+      devTools: !app.isPackaged,
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,

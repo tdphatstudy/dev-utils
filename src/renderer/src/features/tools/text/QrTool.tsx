@@ -80,12 +80,12 @@ export default function QrTool(): JSX.Element {
     setError(null)
     setDecoded('')
     try {
-      const url = URL.createObjectURL(file)
-      previewUrl.current = url
-      setPreview(url)
       const r = await decodeQrFromFile(file)
       if (id !== generation.current) return
       if (r.ok) {
+        const url = URL.createObjectURL(file)
+        previewUrl.current = url
+        setPreview(url)
         setDecoded(r.text)
         setText(r.text)
         setMeta(`QR v${r.version} · ${file.name} · ${formatBytes(file.size)}`)
@@ -106,11 +106,11 @@ export default function QrTool(): JSX.Element {
     const id = generation.current
     setBusy(true)
     setError(null)
-    setPreview(url)
     try {
       const r = await decodeQrFromDataUrl(url)
       if (id !== generation.current) return
       if (r.ok) {
+        setPreview(url)
         setDecoded(r.text)
         setText(r.text)
         setMeta(`QR v${r.version}`)
@@ -175,7 +175,7 @@ export default function QrTool(): JSX.Element {
               ref={inputRef}
               aria-label="Choose QR image"
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]

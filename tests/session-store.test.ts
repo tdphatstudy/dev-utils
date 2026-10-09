@@ -1,9 +1,25 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { NO_HISTORY_TOOLS, useSessionStore } from '../src/renderer/src/store/session-store'
+import { MAX_DRAFT_CHARS, MAX_DRAFT_TOTAL_CHARS, NO_HISTORY_TOOLS, useSessionStore } from '../src/renderer/src/store/session-store'
 
 beforeEach(() => useSessionStore.setState({ history: [], drafts: {}, retention: true }))
 
 describe('session privacy and history', () => {
+  it('bounds retained draft memory and never restores an older draft after an oversized replacement', () => {
+    const store = useSessionStore.getState()
+    for (let i = 0; i < 20; i++) store.setDraft(`fixture.${i}`, String(i).padEnd(MAX_DRAFT_CHARS, 'x'))
+    const drafts = useSessionStore.getState().drafts
+    expect(Object.values(drafts).reduce((sum, value) => sum + value.length, 0)).toBeLessThanOrEqual(MAX_DRAFT_TOTAL_CHARS)
+    expect(store.getDraft('fixture.19')).toBeDefined()
+    store.setDraft('fixture.19', 'x'.repeat(MAX_DRAFT_CHARS + 1))
+    expect(store.getDraft('fixture.19')).toBeUndefined()
+  })
+  it('bounds even direct history writes and the number of small drafts', () => {
+    const store = useSessionStore.getState()
+    store.pushHistory({ toolId: 'json.studio', label: 'x'.repeat(1000), snippet: 'x'.repeat(1_000_000) })
+    expect(useSessionStore.getState().history[0]).toMatchObject({ label: 'x'.repeat(100), snippet: 'x'.repeat(200) })
+    for (let i = 0; i < 100; i++) store.setDraft(`fixture.${i}`, 'x')
+    expect(Object.keys(useSessionStore.getState().drafts)).toHaveLength(40)
+  })
   it('clears retained content and rejects delayed writes while retention is off', () => {
     const store = useSessionStore.getState()
     store.setDraft('json.studio', 'private-input')

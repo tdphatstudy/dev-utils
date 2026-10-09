@@ -75,6 +75,22 @@ describe('secret-box dual-layer crypto', () => {
     } finally { keyA.fill(0); keyB.fill(0) }
   })
 
+  it('rejects ciphertext, authentication-tag and IV tampering without changing the original envelope', () => {
+    const keyA = randomBytes(32), keyB = randomBytes(32)
+    const envelope = sealDoc(keyA, keyB, 'portable', { name: 'fixture.txt', type: 'text', encoding: 'utf-8', content: 'preserved data', createdAt: '', updatedAt: '' })
+    const original = serializeEnvelope(envelope)
+    try {
+      for (const [field, offset] of [['ct', 0], ['ct', -1], ['iv2', 0]] as const) {
+        const bytes = Buffer.from(envelope[field], 'base64')
+        bytes[offset < 0 ? bytes.length + offset : offset]! ^= 1
+        const modified = parseEnvelope(serializeEnvelope({ ...envelope, [field]: bytes.toString('base64') }))
+        expect(() => openDoc(keyA, keyB, modified)).toThrow('Cannot decrypt')
+      }
+      expect(serializeEnvelope(envelope)).toBe(original)
+      expect(openDoc(keyA, keyB, envelope).content).toBe('preserved data')
+    } finally { keyA.fill(0); keyB.fill(0) }
+  })
+
   it('rejects malformed envelope fields before decrypting', () => {
     const keyA = randomBytes(32), keyB = randomBytes(32)
     try {

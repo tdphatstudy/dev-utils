@@ -7,6 +7,7 @@ import { createRequire } from 'module'
 import { join } from 'path'
 import { flipFuses } from '@electron/fuses'
 import { fusePolicy, verifyFuses } from './fuse-policy.mjs'
+import { verifyPackageIntegrity } from './package-integrity.mjs'
 
 const require = createRequire(import.meta.url)
 const ResEdit = require('resedit')
@@ -65,5 +66,6 @@ export default async function afterPack(context) {
   const binary = join(context.appOutDir, context.electronPlatformName === 'darwin' ? `${name}.app` : context.electronPlatformName === 'win32' ? `${name}.exe` : context.packager.executableName)
   await flipFuses(binary, { ...fusePolicy, resetAdHocDarwinSignature: context.electronPlatformName === 'darwin' })
   await verifyFuses(binary)
+  await verifyPackageIntegrity(binary, context.electronPlatformName)
   console.log('[after-pack] Verified packaged Electron security fuses')
 }

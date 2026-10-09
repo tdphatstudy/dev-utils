@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-14]
+        os: [ubuntu-24.04, windows-2022, macos-14, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -48,6 +48,12 @@ jobs:
         run: pnpm test:electron:security
       - name: Package with fuse verification
         run: pnpm exec electron-builder --dir --publish never
+      - name: Protected bytecode and tamper smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm test:electron:protection
+      - name: Protected bytecode and tamper smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: pnpm test:electron:protection
       - name: Packaged native security smoke (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a pnpm test:electron:packaged

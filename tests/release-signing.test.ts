@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import requireReleaseSigning from '../scripts/require-release-signing.mjs'
+vi.mock('../scripts/require-protected-build.mjs', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
 
 const credentials = ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']
 afterEach(() => vi.unstubAllEnvs())

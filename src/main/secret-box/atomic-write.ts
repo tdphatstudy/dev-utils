@@ -3,9 +3,9 @@ import { rename as fsRename, unlink, writeFile, mkdir } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 
 /**
- * Atomic-ish replace: write temp in same directory then rename into place.
- * On Windows, rename cannot overwrite — swap via .bak then remove bak.
- * Prevents truncated vault.json / .putl if the process dies mid-write.
+ * Write a sibling temporary file and rename it into place. The fallback retains
+ * the previous file for restoration if replacement fails. This is not an fsync
+ * durability guarantee against power loss.
  */
 export async function atomicWriteFile(
   filePath: string,

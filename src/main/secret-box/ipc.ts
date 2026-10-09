@@ -10,6 +10,7 @@ import { assertTrustedIpc } from '../ipc-trust'
 import { CONTENT_KIND_IDS } from '@shared/secret-box/content-kinds'
 import { assertSessionId, bindSessionOwner, getSessionId } from './session'
 import { KEEP_FOLDER } from '@shared/secret-box/keep-note'
+import { IpcTaskPool } from '../ipc-task-pool'
 
 import {
   accessVault,
@@ -28,6 +29,7 @@ import {
 const dataChannels = new Set(['privateBox:list', 'privateBox:listFolders', 'privateBox:mkdir', 'privateBox:createFile', 'privateBox:readFile', 'privateBox:writeFile', 'privateBox:rename', 'privateBox:remove', 'privateBox:exportPlain', 'privateBox:exportToDisk', 'privateBox:importPlain', 'privateBox:importFromDisk', 'privateBox:saveDocument', 'privateBox:listKeepNotes'])
 const authChannels = new Set(['privateBox:access', 'privateBox:accessDefault', 'privateBox:setup', 'privateBox:recoverMetadata'])
 let authenticating = false
+const tasks = new IpcTaskPool(4, 'Too many box operations are running. Wait for completion and retry.')
 
 function validateBoxPayload(channel: string, value: unknown): void {
   const text = (input: unknown, label: string, max = 4096): void => {
@@ -69,7 +71,7 @@ function handleBox(channel: string, listener: Parameters<typeof ipcMain.handle>[
     if (auth && authenticating) throw new Error('Authentication is already running. Wait for completion or cancel it.')
     if (auth) authenticating = true
     try {
-      const result = await listener(event, payload)
+      const result = await (channel === 'privateBox:clearAccess' ? listener(event, payload) : tasks.run(() => listener(event, payload)))
       if (dataChannels.has(channel)) assertSessionId(token, event.sender.id)
       if (auth) bindSessionOwner(event.sender.id)
       return ['privateBox:access', 'privateBox:accessDefault'].includes(channel) ? getSessionId() : result

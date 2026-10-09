@@ -1,5 +1,5 @@
 import { chmodSync, existsSync } from 'fs'
-import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises'
+import { mkdir, stat, unlink, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -17,6 +17,7 @@ import { assertSshKeyPath, readKeyBytes, sameKeyBytes, withKeyLock, writePrivate
 import { toOpenSshPrivateKey } from './private-format'
 import { generateKeyPair } from '../crypto-keys'
 import { atomicWriteFile, backupFile } from '../secret-box/atomic-write'
+import { readBoundedFile } from '../bounded-read'
 import {
   hostFromInput,
   parseSshConfig,
@@ -38,10 +39,7 @@ async function ensureSshDir(location?: SshLocation | null): Promise<string> {
 async function readConfigText(location?: SshLocation | null): Promise<string> {
   const p = getConfigPath(location)
   try {
-    const info = await stat(p)
-    if (!info.isFile() || info.size > 2_000_000) throw new Error('SSH config must be a regular file up to 2 MB.')
-    const bytes = await readFile(p)
-    if (bytes.length > 2_000_000) throw new Error('SSH config exceeds the 2 MB editor limit.')
+    const bytes = await readBoundedFile(p, 2_000_000)
     try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) }
     catch { throw new Error('SSH config is not valid UTF-8. Convert its encoding before editing.') }
   } catch (e) {

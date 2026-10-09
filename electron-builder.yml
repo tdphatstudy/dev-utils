@@ -36,20 +36,13 @@ extraResources:
     to: trayTemplate.png
   - from: resources/trayTemplate@2x.png
     to: trayTemplate@2x.png
-  - from: resources/color-picker.html
-    to: color-picker.html
-  - from: resources/color-picker.js
-    to: color-picker.js
-  - from: resources/ocr-helper.html
-    to: ocr-helper.html
-  - from: resources/ocr-helper.js
-    to: ocr-helper.js
 
 # Root icon for all platforms (buildResources = resources/)
 icon: icon.png
 
 # Apply and verify Electron security fuses before signing on every platform.
 # Also embed the Windows icon without requiring winCodeSign in local builds.
+beforePack: scripts/require-protected-build.mjs
 afterPack: scripts/after-pack.mjs
 
 win:
@@ -75,10 +68,7 @@ mac:
   icon: icon.png
   category: public.app-category.developer-tools
   target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
+    - dmg
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
   # Signing / notarization require Apple certs — enable when available:
   # hardenedRuntime: true

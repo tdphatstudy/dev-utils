@@ -18,6 +18,12 @@ are enabled. New Electron fuse definitions fail the build until reviewed.
 Embedded ASAR validation applies on Windows/macOS; do not claim the same OS
 enforcement on Linux. Signed builds verify fuses again after signing.
 
+All distribution profiles now require production main bytecode built on the
+target OS/architecture and Electron version. Executable capture helpers live
+inside ASAR. Packaging and post-sign checks verify the embedded header and every
+file/block digest; they fail on unpacked application files. See
+[application protection](app-protection.md) for limits and offline licensing.
+
 The existing renderer uses `file://` for offline content and workers. Its file
 protocol compatibility fuse stays enabled: disabling it failed the Windows ASAR
 native smoke even though the HTML was present. CSP, navigation, permissions,
@@ -54,8 +60,9 @@ Apple API key only to a temporary file with mode 0600 and removes it on exit.
 Do not put signing keys, passwords or notarization credentials in the repository,
 workflow output, application preferences or diagnostic attachments.
 
-The Windows job rejects invalid Authenticode signatures. The macOS job checks
-both architectures with `codesign`, Gatekeeper and stapled notarization tickets.
+The Windows job rejects invalid Authenticode signatures. Separate Intel and
+Apple Silicon macOS jobs each compile their own bytecode and check that
+architecture with `codesign`, Gatekeeper and stapled notarization tickets.
 Artifacts and streaming SHA-256 manifests are retained for review; nothing is
 published, installed or deployed by these workflows. No credentials, signed
 artifacts, GitHub runs or macOS/Linux native execution were available during this

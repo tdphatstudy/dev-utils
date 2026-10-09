@@ -1,3 +1,6 @@
+import { isSupportedRaster, validateImageSize } from '../image/validation'
+export { validateImageSize } from '../image/validation'
+
 export const OCR_LANGUAGES = ['eng', 'vie', 'eng+vie'] as const
 export type OcrLanguage = typeof OCR_LANGUAGES[number]
 export type CaptureMode = 'screen' | 'region'
@@ -29,52 +32,12 @@ export function validateOcrInput(value: unknown): OcrInput {
   if (input.forceOcr !== undefined && typeof input.forceOcr !== 'boolean') throw new Error('Invalid PDF extraction mode.')
   const b = input.bytes
   const pdf = b[0] === 37 && b[1] === 80 && b[2] === 68 && b[3] === 70 && b[4] === 45
-  const image = (b[0] === 137 && b[1] === 80 && b[2] === 78 && b[3] === 71) ||
-    (b[0] === 255 && b[1] === 216 && b[2] === 255) ||
-    (b[0] === 71 && b[1] === 73 && b[2] === 70 && b[3] === 56) ||
-    (b[0] === 66 && b[1] === 77) ||
-    (b[0] === 82 && b[1] === 73 && b[2] === 70 && b[3] === 70 && b[8] === 87 && b[9] === 69 && b[10] === 66 && b[11] === 80)
+  const image = isSupportedRaster(b)
   if ((input.kind !== 'pdf' || !pdf) && (input.kind !== 'image' || !image)) throw new Error('Supported files: PNG, JPEG, WebP, GIF, BMP and PDF. The file content must match its type.')
   if (input.kind === 'image') validateImageSize(input.bytes)
   return { bytes: input.bytes, kind: input.kind, language: input.language, forceOcr: input.forceOcr }
 }
 
-// Inspect dimensions before the browser decoder allocates pixel buffers. These
-// headers describe the first frame; animated images are recognized as one frame.
-export function validateImageSize(bytes: Uint8Array): { width: number; height: number } {
-  const d = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  let width = 0, height = 0
-  try {
-    if (bytes[0] === 137) { width = d.getUint32(16); height = d.getUint32(20) }
-    else if (bytes[0] === 71) { width = d.getUint16(6, true); height = d.getUint16(8, true) }
-    else if (bytes[0] === 66) {
-      if (d.getUint32(14, true) === 12) { width = d.getUint16(18, true); height = d.getUint16(20, true) }
-      else { width = d.getInt32(18, true); height = Math.abs(d.getInt32(22, true)) }
-    } else if (bytes[0] === 255) {
-      let offset = 2, headers = 0
-      while (offset + 8 < bytes.length && headers++ < 10000) {
-        if (bytes[offset++] !== 255) break
-        while (bytes[offset] === 255) offset++
-        const marker = bytes[offset++]
-        if (marker === 216 || marker === 1 || (marker >= 208 && marker <= 215)) continue
-        if (marker === 218 || marker === 217) break
-        const length = d.getUint16(offset)
-        if (length < 2 || offset + length > bytes.length) break
-        if (marker >= 192 && marker <= 207 && ![196, 200, 204].includes(marker)) { height = d.getUint16(offset + 3); width = d.getUint16(offset + 5); break }
-        offset += length
-      }
-    } else if (bytes[0] === 82) {
-      const tag = String.fromCharCode(...bytes.subarray(12, 16))
-      const uint24 = (at: number): number => d.getUint8(at) | d.getUint8(at + 1) << 8 | d.getUint8(at + 2) << 16
-      if (tag === 'VP8X') { width = uint24(24) + 1; height = uint24(27) + 1 }
-      else if (tag === 'VP8 ') { width = d.getUint16(26, true) & 16383; height = d.getUint16(28, true) & 16383 }
-      else if (tag === 'VP8L' && bytes[20] === 47) { const bits = d.getUint32(21, true); width = (bits & 16383) + 1; height = ((bits >>> 14) & 16383) + 1 }
-    }
-  } catch { throw new Error('Image header is incomplete or unsupported.') }
-  if (width <= 0 || height <= 0) throw new Error('Image dimensions are missing or unsupported.')
-  if (width * height > MAX_OCR_PIXELS || Math.max(width, height) > 16384) throw new Error('Image exceeds 16 million pixels or 16384 pixels per side. Resize it before OCR.')
-  return { width, height }
-}
 export function validateOcrResult(value: unknown): OcrResult {
   const result = value as OcrResult | null
   if (!result || typeof result.text !== 'string' || result.text.length > MAX_OCR_TEXT ||

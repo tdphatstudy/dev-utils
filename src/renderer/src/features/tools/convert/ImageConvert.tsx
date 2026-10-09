@@ -16,6 +16,7 @@ import {
   type ImageOutFormat,
   type ResizeMode
 } from '@shared/image/convert'
+import { validateRasterImage } from '@shared/image/validation'
 
 export default function ImageConvert(): JSX.Element {
   useUiLocale()
@@ -50,6 +51,7 @@ export default function ImageConvert(): JSX.Element {
   const srcUrlRef = useRef<string | null>(null)
   const outUrlRef = useRef<string | null>(null)
   const running = useRef(false)
+  const decoding = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const identity = JSON.stringify([srcUrl, resizeMode, percent, maxW, maxH, exactW, exactH, fit, format, quality, background])
   const identityRef = useRef(identity)
@@ -80,6 +82,7 @@ export default function ImageConvert(): JSX.Element {
   }
 
   const loadFile = async (file: File): Promise<void> => {
+    if (decoding.current || running.current) return
     const version = ++generation.current
     setError(null)
     revoke(srcUrlRef.current)
@@ -92,13 +95,16 @@ export default function ImageConvert(): JSX.Element {
     setOutBytes(0)
     if (!file.size || file.size > IMAGE_MAX_FILE_BYTES) { setError('Choose a nonempty image no larger than 32 MiB.'); setLoading(false); return }
     setLoading(true)
-
-    const url = URL.createObjectURL(file)
-    srcUrlRef.current = url
+    decoding.current = true
+    let url: string | undefined
     setSrcName(file.name.replace(/\.[^.]+$/, '') || 'image')
     setSrcBytes(file.size)
 
     try {
+      validateRasterImage(new Uint8Array(await file.arrayBuffer()), 16_000_000, 8192)
+      if (!mounted.current || version !== generation.current) return
+      url = URL.createObjectURL(file)
+      srcUrlRef.current = url
       const bmp = await createImageBitmap(file)
       if (!mounted.current || version !== generation.current) { bmp.close(); return }
       const invalid = validateImageResize(bmp.width, bmp.height, { mode: 'percent', percent: 100 })
@@ -110,10 +116,11 @@ export default function ImageConvert(): JSX.Element {
       setSrcUrl(url)
     } catch (error) {
       if (mounted.current && version === generation.current) {
-        revoke(url); srcUrlRef.current = null
+        revoke(url ?? null); srcUrlRef.current = null
         setError(error instanceof Error ? `Could not load image: ${error.message}` : 'Could not decode image. Choose a supported raster image.')
       }
     } finally {
+      decoding.current = false
       if (mounted.current && version === generation.current) setLoading(false)
     }
   }
@@ -221,7 +228,7 @@ export default function ImageConvert(): JSX.Element {
             ref={fileInput}
             aria-label="Choose source image"
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]

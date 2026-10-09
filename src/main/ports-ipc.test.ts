@@ -28,3 +28,18 @@ it('dispatches explicit port/PID only after checking sender trust', async () => 
   expect(mocks.trust).toHaveBeenCalledExactlyOnceWith({})
   expect(mocks.kill).toHaveBeenCalledExactlyOnceWith(5432, 123, { confirmPhrase: 'kill 5432' })
 })
+
+it('does not spawn more scans or stop a process while another port operation is active', async () => {
+  registerPortsIpc()
+  const registered = new Map(mocks.handle.mock.calls.map(([name, listener]) => [name, listener]))
+  let release!: () => void
+  mocks.list.mockImplementation(() => new Promise<void>(resolve => { release = resolve }))
+  const first = registered.get('ports:list')!({})
+  await expect(registered.get('ports:list')!({})).rejects.toThrow('already running')
+  await expect(registered.get('ports:kill')!({}, { port: 3000, pid: 123 })).rejects.toThrow('already running')
+  expect(mocks.list).toHaveBeenCalledTimes(1)
+  expect(mocks.kill).not.toHaveBeenCalled()
+  release(); await first
+  await registered.get('ports:kill')!({}, { port: 3000, pid: 123 })
+  expect(mocks.kill).toHaveBeenCalledOnce()
+})

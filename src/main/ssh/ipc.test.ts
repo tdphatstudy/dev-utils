@@ -33,3 +33,27 @@ it('dispatches a valid host edit with its explicit custom location after trust v
   expect(mocks.service).toHaveBeenCalledWith({ alias: 'box', user: 'deploy' }, { sshDir: 'custom' })
   expect(mocks.trust).toHaveBeenCalledExactlyOnceWith({})
 })
+
+it('shares the key-generation budget between SSH creation and the standalone key generator', async () => {
+  let release!: () => void
+  mocks.service.mockImplementation(() => new Promise<void>(resolve => { release = resolve }))
+  const registered = handlers()
+  const first = registered.get('crypto:generateKeyPair')!({}, { algorithm: 'rsa', modulusLength: 4096 })
+  await expect(registered.get('ssh:createKey')!({}, { name: 'fixture', algorithm: 'rsa' })).rejects.toThrow('already running')
+  expect(mocks.service).toHaveBeenCalledTimes(1)
+  release(); await first
+  mocks.service.mockResolvedValue(undefined)
+  await registered.get('ssh:createKey')!({}, { name: 'fixture', algorithm: 'ed25519' })
+  expect(mocks.service).toHaveBeenCalledTimes(2)
+})
+
+it('bounds simultaneous SSH jobs without retaining a queue of connection requests', async () => {
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  mocks.service.mockImplementation(() => pending)
+  const registered = handlers(), payload = { host: '127.0.0.1', port: 22 }
+  const active = Array.from({ length: 4 }, () => registered.get('ssh:testConnect')!({}, payload))
+  await expect(registered.get('ssh:testConnect')!({}, payload)).rejects.toThrow('Too many SSH')
+  expect(mocks.service).toHaveBeenCalledTimes(4)
+  release(); await Promise.all(active)
+})

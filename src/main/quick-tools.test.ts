@@ -11,11 +11,12 @@ vi.mock('./branding', () => ({ appWindowIcon: () => '/fixture/devfusion.ico' }))
 vi.mock('./env', () => ({ is: { dev: false } }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: (event: any) => { if (event.sender.id !== 900 || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted app') }, isRendererUrl: (actual: string, expected: string) => actual === expected }))
 vi.mock('electron', () => ({
+  app: { isPackaged: true },
   ipcMain: { handle: (name: string, fn: any) => f.handlers.set(name, fn) }, nativeTheme: { shouldUseDarkColors: true },
   screen: { getPrimaryDisplay: () => ({ workArea: { x: -800, y: 40, width: 800, height: 600 } }), getCursorScreenPoint: () => ({ x: -100, y: 100 }), getDisplayNearestPoint: () => ({ workArea: { x: -800, y: 40, width: 800, height: 600 } }) },
   BrowserWindow: class extends EventEmitter {
     destroyed = false; webContents: any
-    constructor(public options: any) { super(); this.webContents = Object.assign(new EventEmitter(), { id: f.next++, mainFrame: { url: '' }, session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } }, setWindowOpenHandler: vi.fn(), send: vi.fn() }); f.windows.push(this) }
+    constructor(public options: any) { super(); this.webContents = Object.assign(new EventEmitter(), { id: f.next++, mainFrame: { url: '' }, session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } }, setWindowOpenHandler: vi.fn(), send: vi.fn() }); f.windows.push(this) }
     loadURL = vi.fn(async (url: string) => { this.webContents.mainFrame.url = url }); setMenu = vi.fn(); setAlwaysOnTop = vi.fn(); show = vi.fn(); focus = vi.fn()
     isDestroyed() { return this.destroyed } destroy() { this.destroyed = true; this.emit('closed') }
   }
@@ -45,6 +46,18 @@ it('starts the eyedropper immediately without an intermediate widget and closes 
   picker.isBusy.mockReturnValue(true); await expect(quick.open('color')).rejects.toThrow('Finish or cancel'); expect(win.destroyed).toBe(false)
   picker.isBusy.mockReturnValue(false); ocr.isBusy.mockReturnValue(true); await expect(quick.open('color')).rejects.toThrow('Finish or cancel'); expect(win.destroyed).toBe(false)
   ocr.isBusy.mockReturnValue(false); await quick.open('color'); expect(win.destroyed).toBe(true); expect(f.windows).toHaveLength(1); expect(picker.pickFromTray).toHaveBeenCalledTimes(2)
+})
+
+it('refuses a burst of window creation until the current widget has loaded', async () => {
+  const { quick } = fixture()
+  const first = quick.open('clipboard')
+  await expect(quick.open('timestamp')).rejects.toThrow('opening')
+  expect(f.windows).toHaveLength(1)
+  await first
+  await quick.open('timestamp')
+  expect(f.windows).toHaveLength(2)
+  expect(f.windows[0].destroyed).toBe(true)
+  quick.close()
 })
 it('confines image copy and OCR commands to the current widget and preserves pinning during OCR work', async () => {
   const { quick, clipboard, ocr } = fixture(); await quick.open('ocr'); const win = f.windows[0], e = event(win)

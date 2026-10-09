@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, ipcMain, dialog, screen, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, dialog, screen, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { colorFromHex, type ColorValue, type ScreenColorResult } from '@shared/color'
@@ -91,7 +91,7 @@ export class ScreenColorPicker {
       movable: !overlay, alwaysOnTop: true, skipTaskbar: true, autoHideMenuBar: true, acceptFirstMouse: true,
       title: overlay ? 'DevFusion · Pick anywhere on your desktop' : 'DevFusion · Selected color',
       backgroundColor: '#151829', hasShadow: !overlay,
-      webPreferences: { preload: join(__dirname, '../preload/colorPicker.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false, partition: 'color-picker' }
+      webPreferences: { preload: join(__dirname, '../preload/colorPicker.js'), sandbox: true, devTools: !app.isPackaged, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false, partition: 'color-picker' }
     })
     let markReady!: () => void
     const ready = new Promise<void>((resolve) => { markReady = resolve })

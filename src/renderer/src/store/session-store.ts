@@ -47,6 +47,9 @@ interface SessionState {
 }
 
 const MAX_HISTORY = 40
+export const MAX_DRAFT_CHARS = 1024 * 1024
+export const MAX_DRAFT_TOTAL_CHARS = 4 * MAX_DRAFT_CHARS
+const validToolId = (id: string): boolean => /^[a-z0-9][a-z0-9.-]{0,127}$/i.test(id)
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   retention: true,
@@ -55,10 +58,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   drafts: {},
 
   pushHistory: (entry) => {
-    if (!get().retention || NO_HISTORY_TOOLS.has(entry.toolId)) return
-    if (!entry.snippet.trim()) return
+    if (!get().retention || !validToolId(entry.toolId) || NO_HISTORY_TOOLS.has(entry.toolId)) return
+    if (!entry.snippet.slice(0, 200).trim()) return
     set((s) => {
-      const next: HistoryEntry = { ...entry, at: Date.now() }
+      const next: HistoryEntry = { ...entry, label: entry.label.slice(0, 100), snippet: entry.snippet.slice(0, 200), at: Date.now() }
       if (
         s.history[0] &&
         s.history[0].toolId === next.toolId &&
@@ -73,8 +76,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   clearHistory: () => set({ history: [] }),
 
   setDraft: (toolId, value) => {
-    if (!get().retention || NO_HISTORY_TOOLS.has(toolId)) return
-    set((s) => ({ drafts: { ...s.drafts, [toolId]: value } }))
+    if (!get().retention || !validToolId(toolId) || NO_HISTORY_TOOLS.has(toolId)) return
+    set((s) => {
+      const drafts = { ...s.drafts }
+      delete drafts[toolId]
+      if (value.length <= MAX_DRAFT_CHARS) drafts[toolId] = value
+      let total = Object.values(drafts).reduce((sum, text) => sum + text.length, 0)
+      for (const id of Object.keys(drafts)) {
+        if (total <= MAX_DRAFT_TOTAL_CHARS && Object.keys(drafts).length <= 40) break
+        total -= drafts[id]!.length
+        delete drafts[id]
+      }
+      return { drafts }
+    })
   },
 
   getDraft: (toolId) => get().retention ? get().drafts[toolId] : undefined,

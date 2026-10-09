@@ -20,6 +20,10 @@ export function configureBrand(): void {
 }
 
 export function resourcePath(name: string): string | undefined {
+  if (app.isPackaged && ['color-picker.html', 'color-picker.js', 'ocr-helper.html', 'ocr-helper.js'].includes(name)) {
+    const path = join(app.getAppPath(), 'out/main/helpers', name)
+    return existsSync(path) ? path : undefined
+  }
   return [join(process.resourcesPath, name), join(app.getAppPath(), 'resources', name), join(__dirname, '../../resources', name)].find(existsSync)
 }
 
