@@ -108,8 +108,8 @@ export function TreeView({ data, className, showControls = true }: TreeViewProps
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-2 py-1.5">
           <input
             className="mac-input !py-1 text-[12px]"
-            placeholder="Filter path / value…"
-            aria-label="Filter JSON tree by path or value"
+            placeholder={uiText('Filter path / value…')}
+            aria-label={uiText('Filter JSON tree by path or value')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -118,8 +118,7 @@ export function TreeView({ data, className, showControls = true }: TreeViewProps
           <button type="button" className="mac-btn-ghost !text-[11px] !py-1" onClick={collapseAll}>
             {uiText('Collapse')}</button>
           <span className="ml-auto text-[10px] text-mac-label-tertiary">
-            {filtered.length.toLocaleString()} rows
-          </span>
+            {filtered.length.toLocaleString()} {uiText('rows')}</span>
         </div>
       )}
       <div
@@ -135,8 +134,8 @@ export function TreeView({ data, className, showControls = true }: TreeViewProps
           </div>
         </div>
       </div>
-      {copyStatus && <p role="status" className="shrink-0 border-t border-mac-separator px-3 py-2 text-[12px] text-mac-label-secondary">{copyStatus}</p>}
-      {rows.length >= 10000 && <p role="status" className="shrink-0 px-3 py-2 text-[12px] text-mac-label-secondary">Showing up to 10,000 tree rows. Collapse branches or use Raw to view the full document.</p>}
+      {copyStatus && <p role="status" className="shrink-0 border-t border-mac-separator px-3 py-2 text-[12px] text-mac-label-secondary">{uiText(copyStatus)}</p>}
+      {rows.length >= 10000 && <p role="status" className="shrink-0 px-3 py-2 text-[12px] text-mac-label-secondary">{uiText('Showing up to 10,000 tree rows. Collapse branches or use Raw to view the full document.')}</p>}
     </div>
   )
 }
@@ -162,7 +161,7 @@ function TreeRow({
           className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-mac-label-tertiary"
           onClick={() => onToggle(row.path, row.isOpen)}
           aria-expanded={row.isOpen}
-          aria-label={`${row.isOpen ? uiText('Collapse') : uiText('Expand')} ${row.isRoot ? 'root' : row.path}`}
+          aria-label={uiText(row.isOpen ? 'Collapse {path}' : 'Expand {path}', { path: row.isRoot ? uiText('root') : row.path })}
         >
           {row.isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
@@ -178,12 +177,12 @@ function TreeRow({
             'shrink-0 hover:text-mac-accent',
             row.isExpandable ? 'font-medium text-mac-label-secondary' : 'text-mac-label-secondary'
           )}
-          title={`Copy path: ${row.path}`}
+          title={uiText('Copy path: {path}', { path: row.path })}
         >
           {row.name}
         </button>
       ) : (
-        <span className="font-medium text-mac-label-secondary">root</span>
+        <span className="font-medium text-mac-label-secondary">{uiText('root')}</span>
       )}
 
       {!row.isExpandable && <span className="text-mac-label-tertiary">:</span>}

@@ -88,7 +88,7 @@ export function Sidebar(): JSX.Element {
             <ul id={groupContainerId} hidden={!expanded} className="space-y-0.5">{groupTools.map((tool) => <li key={tool.id}>{toolLink(tool, compact)}</li>)}</ul>
           </div>
         })}
-        {filtering && !compact && matchedIds.size === 0 && <p role="status" className="px-2.5 py-4 text-[12px] leading-relaxed text-mac-label-secondary">No tools found. Try “JSON”, “date” or “convert”.</p>}
+        {filtering && !compact && matchedIds.size === 0 && <p role="status" className="px-2.5 py-4 text-[12px] leading-relaxed text-mac-label-secondary">{uiText('No tools found. Try “JSON”, “date” or “convert”.')}</p>}
       </nav>
       <nav aria-label={uiText('App')} className="shrink-0 border-t border-mac-separator px-2 py-2">{getToolsByGroup('app').filter((tool) => compact || !filtering || matchedIds.has(tool.id)).map((tool) => <div key={tool.id}>{toolLink(tool, compact)}</div>)}</nav>
     </>
@@ -107,7 +107,7 @@ export function Sidebar(): JSX.Element {
         <Dialog.Overlay className="mac-overlay-enter fixed inset-0 z-[80] bg-black/40" />
         <Dialog.Content className="fixed bottom-0 start-[56px] top-[var(--titlebar-height)] z-[81] flex w-[min(280px,calc(100vw-56px))] flex-col border-r border-mac-separator bg-mac-sidebar shadow-[var(--mac-shadow-lg)] outline-none" onOpenAutoFocus={(event) => { event.preventDefault(); filterInput.current?.focus() }} onCloseAutoFocus={(event) => { event.preventDefault(); menuTrigger.current?.focus() }} onEscapeKeyDown={(event) => { if (query) { event.preventDefault(); setQuery('') } }}>
           <div className="flex items-center justify-between gap-2 px-3 py-4"><Dialog.Title className="text-[15px] font-semibold text-mac-label">{uiText('Find a tool')}</Dialog.Title><Dialog.Close asChild><button type="button" aria-label={uiText('Close menu')} title={uiText('Close menu')} className="mac-btn-ghost !h-8 !w-8 !min-h-0 !p-0"><X aria-hidden="true" className="h-4 w-4" /></button></Dialog.Close></div>
-          <Dialog.Description className="sr-only">Search developer tools or choose a category. Escape closes this menu.</Dialog.Description>
+          <Dialog.Description className="sr-only">{uiText('Search developer tools or choose a category. Escape closes this menu.')}</Dialog.Description>
           {navigation(false, true)}
         </Dialog.Content>
       </Dialog.Portal>}

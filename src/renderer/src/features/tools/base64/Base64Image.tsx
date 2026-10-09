@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseImageBase64, imageBytesToDataUrl } from '@shared/base64/image'
@@ -62,41 +63,41 @@ export default function Base64Image(): JSX.Element {
     <div className="flex h-full flex-col">
       <ToolToolbar>
         <SegmentedControl value={mode} onChange={setMode} options={[
-          { value: 'toBase64', label: 'Image → Base64' },
-          { value: 'fromBase64', label: 'Base64 → Image' }
+          { value: 'toBase64', label: messageKey('Image → Base64') },
+          { value: 'fromBase64', label: messageKey('Base64 → Image') }
         ]} />
         <button type="button" className="mac-btn-secondary" onClick={() => fileInput.current?.click()} disabled={busy}>
-          <ImageIcon className="h-3.5 w-3.5" />{busy ? 'Reading…' : 'Choose image'}
+          <ImageIcon className="h-3.5 w-3.5" />{busy ? uiText('Reading…') : uiText('Choose image')}
         </button>
-        <input ref={fileInput} aria-label="Choose image file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon,image/vnd.microsoft.icon" className="hidden" onChange={(event) => {
+        <input ref={fileInput} aria-label={uiText('Choose image file')} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon,image/vnd.microsoft.icon" className="hidden" onChange={(event) => {
           const file = event.target.files?.[0]
           event.target.value = ''
           if (file) void onFile(file)
         }} />
         <button type="button" className="mac-btn-secondary" disabled={!text && !error} onClick={() => edit('')}>{uiText('Clear')}</button>
-        {ready && <a className="mac-btn-secondary" href={meta.dataUrl} download={`decoded-image.${extension}`}>Download image</a>}
+        {ready && <a className="mac-btn-secondary" href={meta.dataUrl} download={`decoded-image.${extension}`}>{uiText('Download image')}</a>}
         <div className="ml-auto flex flex-wrap gap-2">
-          <CopyButton text={ready ? meta.dataUrl : ''} label="Copy data URL" />
-          <CopyButton text={bareB64} label="Copy Base64" />
+          <CopyButton text={ready ? meta.dataUrl : ''} label={uiText('Copy data URL')} />
+          <CopyButton text={bareB64} label={uiText('Copy Base64')} />
         </div>
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={text} onChange={edit} language="text" label="Image Base64 / data URL" placeholder={mode === 'fromBase64' ? 'Paste data:image/…;base64,… or raw Base64' : 'Choose an image to get its Base64 data URL'} />
+        <CodeEditor value={text} onChange={edit} language="text" label={uiText('Image Base64 / data URL')} placeholder={mode === 'fromBase64' ? uiText('Paste data:image/…;base64,… or raw Base64') : uiText('Choose an image to get its Base64 data URL')} />
         <div className="flex min-h-0 flex-col items-center justify-center overflow-auto rounded-mac-lg border border-mac-separator bg-mac-surface p-4">
           {meta && !error ? <img key={meta.dataUrl} src={meta.dataUrl} alt="Decoded image preview" className="max-h-full max-w-full rounded-mac object-contain shadow-mac"
             onLoad={(event) => setLoaded({ url: meta.dataUrl, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
             onError={() => setLoaded({ url: meta.dataUrl, width: 0, height: 0, error: 'Image bytes cannot be decoded. The file may be truncated or corrupt.' })}
           /> : <div className="text-center text-[13px] text-mac-label-tertiary">
             <ImageIcon className="mx-auto mb-2 h-8 w-8 opacity-50" strokeWidth={1.5} />
-            {error ? 'Fix the input or choose another image' : 'Choose an image or paste Base64 to preview it'}
+            {error ? uiText('Fix the input or choose another image') : uiText('Choose an image or paste Base64 to preview it')}
           </div>}
         </div>
       </SplitPane>
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : ready ? 'success' : 'neutral'}>
-          {error ?? (busy ? 'Reading image…' : ready ? `${meta.mime} · ${formatBytes(meta.byteLength)} · ${current.width} × ${current.height} px` : meta ? 'Decoding image…' : 'PNG, JPEG, GIF, WebP, SVG, AVIF, BMP or ICO · files up to 8 MB · local only')}
+          {error ?? (busy ? uiText('Reading image…') : ready ? uiText('{mime} · {value2} · {width} × {height} px', { mime: meta.mime, value2: formatBytes(meta.byteLength), width: current.width, height: current.height }) : meta ? uiText('Decoding image…') : uiText('PNG, JPEG, GIF, WebP, SVG, AVIF, BMP or ICO · files up to 8 MB · local only'))}
         </ToolStatus>
       </footer>
     </div>

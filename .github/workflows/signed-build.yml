@@ -30,13 +30,20 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm security:audit
       - run: pnpm typecheck
+      - run: pnpm test:i18n:coverage
       - run: pnpm test --maxWorkers=4
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:ui:enterprise
       - run: pnpm test:ui:security-testing
+      - run: pnpm test:ui:i18n
+      - run: node tests/quick-tools-ui.smoke.mjs
+      - run: pnpm test:ui:release
+      - run: pnpm test:electron:drafts
       - run: pnpm test:electron:security
+      - run: node tests/electron-quick-tools.smoke.mjs
       - name: Build signed Windows artifacts
         if: runner.os == 'Windows'
         env:

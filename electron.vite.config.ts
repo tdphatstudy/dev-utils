@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { bytecodePlugin, defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { ocrAssets } from './scripts/ocr-assets'
 import { helperAssets } from './scripts/helper-assets'
@@ -44,7 +44,7 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), helperAssets(), bytecodePlugin({ transformArrowFunctions: true, removeBundleJS: true })],
+    plugins: [helperAssets()],
     resolve: {
       alias: {
         '@shared': shared,
@@ -52,6 +52,8 @@ export default defineConfig({
       }
     },
     build: {
+      bytecode: { transformArrowFunctions: true, removeBundleJS: true },
+      externalizeDeps: true,
       minify: 'esbuild',
       sourcemap: false,
       target: 'node20',
@@ -62,19 +64,18 @@ export default defineConfig({
       }
     },
     esbuild: {
-      // Lower fields before electron-vite 2's Babel arrow transform.
       supported: { 'class-field': false, 'class-static-field': false },
       ...(isProd ? { drop: ['debugger'] as ('debugger')[], pure: ['console.log', 'console.debug', 'console.info'] } : {})
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: {
         '@shared': shared
       }
     },
     build: {
+      externalizeDeps: true,
       minify: 'esbuild',
       sourcemap: false,
       target: 'node20',

@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, ImageIcon, QrCode, Upload } from 'lucide-react'
@@ -163,17 +164,16 @@ export default function QrTool(): JSX.Element {
             setError(null)
           }}
           options={[
-            { value: 'encode', label: 'Text → QR' },
-            { value: 'decode', label: 'QR → Text' }
+            { value: 'encode', label: messageKey('Text → QR') },
+            { value: 'decode', label: messageKey('QR → Text') }
           ]}
         />
         {mode === 'decode' && (
           <button type="button" className="mac-btn-secondary" onClick={() => inputRef.current?.click()}>
             <Upload className="h-3.5 w-3.5" />
-            Open image
-            <input
+            {uiText('Open image')}<input
               ref={inputRef}
-              aria-label="Choose QR image"
+              aria-label={uiText('Choose QR image')}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
               className="hidden"
@@ -196,7 +196,7 @@ export default function QrTool(): JSX.Element {
                 <Download className="h-3.5 w-3.5" />
                 PNG
               </button>
-              <CopyButton text={dataUrl} label="Copy data URL" />
+              <CopyButton text={dataUrl} label={uiText('Copy data URL')} />
             </>
           )}
           <SaveToBoxButton
@@ -207,7 +207,7 @@ export default function QrTool(): JSX.Element {
           />
           <CopyButton
             text={mode === 'decode' ? decoded : text}
-            label={mode === 'decode' ? 'Copy text' : 'Copy raw'}
+            label={mode === 'decode' ? uiText('Copy text') : uiText('Copy raw')}
           />
         </div>
       </ToolToolbar>
@@ -215,15 +215,14 @@ export default function QrTool(): JSX.Element {
       {mode === 'encode' && (
         <div className="flex flex-wrap items-center gap-3 border-b border-mac-separator px-4 py-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-            ECC
-          </span>
+            {uiText('ECC')}</span>
           <div className="flex gap-1">
             {ECC.map((e) => (
               <button
                 key={e.id}
                 type="button"
                 title={e.hint}
-                aria-label={`Error correction ${e.id}: ${e.hint}`}
+                aria-label={uiText('Error correction {id}: {hint}', { id: e.id, hint: e.hint })}
                 aria-pressed={ecc === e.id}
                 onClick={() => setEcc(e.id)}
                 className={cn(
@@ -238,8 +237,7 @@ export default function QrTool(): JSX.Element {
             ))}
           </div>
           <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-            Size
-            <input
+            {uiText('Size')}<input
               type="number"
               min={128}
               max={1024}
@@ -251,8 +249,7 @@ export default function QrTool(): JSX.Element {
             px
           </label>
           <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-            Margin
-            <input
+            {uiText('Margin')}<input
               type="number"
               min={0}
               max={8}
@@ -261,7 +258,7 @@ export default function QrTool(): JSX.Element {
               onChange={(e) => setMargin(Number(e.target.value))}
             />
           </label>
-          <span className="text-[11px] text-mac-label-secondary">{margin < 4 ? 'Warning: less than 4 quiet-zone modules may prevent scanning.' : '4 quiet-zone modules recommended. Higher ECC reduces capacity.'}</span>
+          <span className="text-[11px] text-mac-label-secondary">{margin < 4 ? uiText('Warning: less than 4 quiet-zone modules may prevent scanning.') : uiText('4 quiet-zone modules recommended. Higher ECC reduces capacity.')}</span>
         </div>
       )}
 
@@ -269,7 +266,7 @@ export default function QrTool(): JSX.Element {
         {/* Left */}
         <div className="flex min-h-0 flex-col border-b border-mac-separator lg:border-b-0 lg:border-r">
           <div className="border-b border-mac-separator px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-            {mode === 'encode' ? 'Raw data' : 'Decoded text'}
+            {mode === 'encode' ? uiText('Raw data') : uiText('Decoded text')}
           </div>
           {mode === 'encode' ? (
             <div className="min-h-0 flex-1">
@@ -278,8 +275,8 @@ export default function QrTool(): JSX.Element {
                 value={text}
                 onChange={setText}
                 language="text"
-                label="QR payload"
-                placeholder="URL, text, JSON, Wi‑Fi string…"
+                label={uiText('QR payload')}
+                placeholder={uiText('URL, text, JSON, Wi‑Fi string…')}
               />
             </div>
           ) : (
@@ -290,8 +287,8 @@ export default function QrTool(): JSX.Element {
                 onChange={setDecoded}
                 language="text"
                 readOnly
-                label="Decoded QR payload"
-                placeholder="Decoded payload appears here…"
+                label={uiText('Decoded QR payload')}
+                placeholder={uiText('Decoded payload appears here…')}
               />
             </div>
           )}
@@ -338,27 +335,23 @@ export default function QrTool(): JSX.Element {
                 className="mac-btn-ghost text-[12px]"
                 onClick={clearImage}
               >
-                Clear image
-              </button>
+                {uiText('Clear image')}</button>
             </>
           ) : (
             <div className="flex flex-col items-center gap-3 text-center">
               <Empty state="decode" message={error} />
               <button type="button" className="mac-btn-primary" onClick={() => inputRef.current?.click()}>
                 <ImageIcon className="h-3.5 w-3.5" />
-                Choose image
-              </button>
+                {uiText('Choose image')}</button>
               <p className="max-w-xs text-[11px] text-mac-label-tertiary">
-                Local processing only. Images up to 32 MiB / 16 MP; decode downsizes to 1600px. Crop a small QR if scanning fails. URLs in payloads are never opened automatically.
-              </p>
+                {uiText('Local processing only. Images up to 32 MiB / 16 MP; decode downsizes to 1600px. Crop a small QR if scanning fails. URLs in payloads are never opened automatically.')}</p>
               {lastGenerated.current && (
                 <button
                   type="button"
                   className="mac-btn-secondary text-[12px]"
                   onClick={() => void runDecodeDataUrl(lastGenerated.current!)}
                 >
-                  Decode last generated QR
-                </button>
+                  {uiText('Decode last generated QR')}</button>
               )}
             </div>
           )}
@@ -385,11 +378,11 @@ export default function QrTool(): JSX.Element {
               ? error
               : mode === 'encode'
                 ? dataUrl
-                  ? `QR ready · ${text.length} chars · ${encodeMeta}`
-                  : 'Enter text to generate QR'
+                  ? uiText('QR ready · {length} chars · {encodeMeta}', { length: text.length, encodeMeta: encodeMeta })
+                  : uiText('Enter text to generate QR')
                 : decoded
-                  ? `Decoded · ${decoded.length} chars`
-                  : 'Load a QR image to decode'}
+                  ? uiText('Decoded · {length} chars', { length: decoded.length })
+                  : uiText('Load a QR image to decode')}
         </ToolStatus>
       </footer>
     </div>
@@ -410,9 +403,9 @@ function Empty({
       {state === 'error' && message ? (
         <p className="text-mac-danger">{message}</p>
       ) : state === 'encode' ? (
-        <p>QR preview</p>
+        <p>{uiText('QR preview')}</p>
       ) : (
-        <p>Drop / paste / open a QR image</p>
+        <p>{uiText('Drop / paste / open a QR image')}</p>
       )}
     </div>
   )

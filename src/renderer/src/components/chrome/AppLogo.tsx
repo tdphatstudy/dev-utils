@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { cn } from '@renderer/lib/utils'
 import logoSvg from '@renderer/assets/logo.svg'
 import dangerLogoSvg from '@renderer/assets/logo-danger.svg'
@@ -24,6 +25,7 @@ export function AppLogo({
   variant = 'svg',
   pngSrc
 }: Props): JSX.Element {
+  useUiLocale()
   const usePng = variant === 'png' && !!pngSrc
   const src = tone === 'danger' ? dangerLogoSvg : usePng ? pngSrc! : logoSvg
   const radius = usePng ? 0 : Math.round(size * APPLE_CORNER * 10) / 10
@@ -59,8 +61,7 @@ export function AppLogo({
             {APP_NAME}
           </div>
           <div className="truncate text-[10px] font-medium tracking-wide text-mac-label-tertiary">
-            Local developer tools
-          </div>
+            {uiText('Local developer tools')}</div>
         </div>
       )}
     </div>

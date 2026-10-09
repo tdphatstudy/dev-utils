@@ -182,6 +182,8 @@ try {
   }
   if (packaged) {
     await mkdir(fixture, { recursive: true })
+    await mkdir(join(fixture, 'resources'))
+    await cp(resolve('resources/icon.ico'), join(fixture, 'resources/icon.ico'))
     await cp(resolve('out/renderer'), join(fixture, 'out/renderer'), { recursive: true })
     await cp(resolve('out/preload'), join(fixture, 'out/preload'), { recursive: true })
     await writeFile(join(fixture, 'package.json'), JSON.stringify({ name: 'devfusion-security-smoke', version: '0.0.0', main: 'out/main/index.cjs', author: 'DevFusion', description: 'Isolated native fixture' }))
@@ -192,7 +194,7 @@ try {
       win: { signAndEditExecutable: false }, mac: { identity: null, notarize: false }, linux: { executableName: 'devfusion-security-smoke' } }))
     const buildEnv = { ...env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
     for (const name of ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER']) delete buildEnv[name]
-    await run(process.execPath, [require.resolve('electron-builder/cli.js'), '--dir', '--' + process.arch, '--config', config, '--publish', 'never'], { env: buildEnv }, 180000)
+    await run(process.execPath, [require.resolve('electron-builder/cli.js'), '--projectDir', fixture, '--dir', '--' + process.arch, '--config', config, '--publish', 'never'], { env: buildEnv }, 180000)
     if (process.platform === 'darwin') {
       const directory = (await readdir(output)).find((name) => /^mac(?:-|$)/.test(name))
       if (!directory) throw new Error('Packaged macOS fixture not found')

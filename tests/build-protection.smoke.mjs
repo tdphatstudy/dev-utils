@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { requireProtectedBuild } from '../scripts/build-policy.mjs'
 import { verifyPackageIntegrity } from '../scripts/package-integrity.mjs'
+import { readCatalogRows } from '../scripts/i18n-coverage.mjs'
 
 const require = createRequire(import.meta.url)
 const root = await mkdtemp(join(tmpdir(), 'devfusion-protection-'))
@@ -27,10 +28,18 @@ try {
   await requireProtectedBuild(process.cwd(), process.platform, process.arch, require('electron/package.json').version)
   const fixture = join(root, 'app'), output = join(root, 'package')
   await mkdir(fixture)
+  await mkdir(join(fixture, 'resources'))
+  await cp(resolve('resources/icon.ico'), join(fixture, 'resources/icon.ico'))
   await cp(resolve('out'), join(fixture, 'out'), { recursive: true })
   await mkdir(join(fixture, 'node_modules'))
   await cp(dirname(require.resolve('yaml/package.json')), join(fixture, 'node_modules/yaml'), { recursive: true, dereference: true })
   await rename(join(fixture, 'out/main/index.cjs'), join(fixture, 'out/main/production.cjs'))
+  const rows = await readCatalogRows()
+  const closeCopy = ['This view has unsaved changes or a save in progress.', 'Keep editing', 'Close without saving'].map(key => {
+    const row = rows.find(row => row.values[0] === key)
+    assert(row, 'Missing native close-dialog translation: ' + key)
+    return row.values[12]
+  })
   const source = `
     const { app, BrowserWindow, clipboard, dialog, ipcMain } = require('electron')
     const fs = require('fs'), path = require('path')
@@ -55,6 +64,18 @@ try {
         assert(app.getPath('userData').startsWith(profile + path.sep), 'Production fixture escaped its temporary profile')
         assert(main.webContents.getLastWebPreferences().sandbox && !main.webContents.getLastWebPreferences().devTools, 'Production sandbox/developer-tool policy changed')
         assert(await main.webContents.executeJavaScript('window.devutils.app.language().then(value=>typeof value.resolved === "string")'), 'Production bytecode IPC failed')
+        assert(await main.webContents.executeJavaScript('(() => { const api = window.devutils; for (const [owner, name] of [[api.clipboard,"onChanged"],[api.quickTools,"onShortcutsChanged"],[api.securityTesting,"onProgress"],[api.security,"onVaultLocked"],[api.app,"onThemeChanged"],[api.app,"onLanguageChanged"],[api.app,"onOpenTool"],[api.color,"onPicked"],[api.ocr,"onProgress"],[api.file,"onHashProgress"]]) { const cleanup = owner[name](() => {}); if (typeof cleanup !== "function" || cleanup() !== undefined || cleanup() !== undefined) return false }; return true })()'), 'Production subscription cleanup escaped the bridge or failed repeated cancellation')
+        console.log('PASS actual production subscriptions unsubscribe repeatedly without returning IPC objects')
+        let closeDialog = null
+        dialog.showMessageBoxSync = (_window, options) => { closeDialog = options; return 0 }
+        await main.webContents.executeJavaScript('window.devutils.app.setLanguage("vi")')
+        await main.webContents.executeJavaScript('window.fixtureBeforeUnload = event => { event.preventDefault(); event.returnValue = false }; window.addEventListener("beforeunload", window.fixtureBeforeUnload)')
+        main.close()
+        await wait(() => closeDialog !== null, 'Native close confirmation did not run')
+        const closeCopy = ${JSON.stringify(closeCopy)}
+        assert(!main.isDestroyed() && closeDialog.message === closeCopy[0] && closeDialog.buttons[0] === closeCopy[1] && closeDialog.buttons[1] === closeCopy[2], 'Production native close warning ignored the interface language or discarded the window')
+        await main.webContents.executeJavaScript('window.removeEventListener("beforeunload", window.fixtureBeforeUnload); delete window.fixtureBeforeUnload; window.devutils.app.setLanguage("en")')
+        console.log('PASS actual production native close dialog follows locale and keeps the window open')
         await main.webContents.executeJavaScript('window.devutils.quickTools.open("clipboard")')
         const quick = BrowserWindow.getAllWindows().find(win=>win.webContents.getURL().includes('/renderer/quick.html'))
         assert(quick && quick.webContents.getLastWebPreferences().sandbox && !quick.webContents.getLastWebPreferences().devTools, 'Production widget failed')
@@ -84,7 +105,7 @@ try {
   await writeFile(config, JSON.stringify({ extends: null, appId: 'com.devfusion.protection-fixture', productName: 'DevFusionProtection', electronVersion: require('electron/package.json').version,
     directories: { app: fixture, output, buildResources: resolve('resources') }, files: ['out/**/*', 'package.json'], asar: true, afterPack: resolve('scripts/after-pack.mjs'), publish: null,
     win: { signAndEditExecutable: false }, mac: { identity: null, notarize: false }, linux: { executableName: 'devfusion-protection' } }))
-  const packed = await run(process.execPath, [require.resolve('electron-builder/cli.js'), '--dir', '--' + process.arch, '--config', config, '--publish', 'never'], 180000)
+  const packed = await run(process.execPath, [require.resolve('electron-builder/cli.js'), '--projectDir', fixture, '--dir', '--' + process.arch, '--config', config, '--publish', 'never'], 180000)
   assert(packed.code === 0, 'Protection fixture packaging failed\n' + packed.stdout + packed.stderr)
   let binary, entry
   if (process.platform === 'darwin') {

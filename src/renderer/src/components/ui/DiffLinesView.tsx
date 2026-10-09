@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo } from 'react'
 import { diffLines, type LineDiffKind } from '@shared/text/line-diff'
 import { cn } from '@renderer/lib/utils'
@@ -17,6 +18,7 @@ export function DiffLinesView({
   rightLabel = 'B',
   className
 }: Props): JSX.Element {
+  useUiLocale()
   const result = useMemo(() => diffLines(left, right), [left, right])
 
   return (
@@ -32,7 +34,7 @@ export function DiffLinesView({
       </div>
       <div className="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-[1.55]">
         {result.pairs.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-mac-label-tertiary">Empty</div>
+          <div className="flex h-full items-center justify-center text-mac-label-tertiary">{uiText('Empty')}</div>
         ) : (
           result.pairs.map((pair, idx) => (
             <div key={idx} className="grid grid-cols-2">
@@ -58,6 +60,7 @@ function LineCell({
   side: { line: number | null; text: string; kind: LineDiffKind } | null
   gutterBorder?: boolean
 }): JSX.Element {
+  useUiLocale()
   if (!side) {
     return (
       <div

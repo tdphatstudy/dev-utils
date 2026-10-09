@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import {
@@ -59,9 +60,9 @@ export default function SecureRandom(): JSX.Element {
           value={tab}
           onChange={setTab}
           options={[
-            { value: 'password', label: 'Password' },
-            { value: 'bytes', label: 'Random bytes' },
-            { value: 'uuid', label: 'UUID v4' }
+            { value: 'password', label: messageKey('Password') },
+            { value: 'bytes', label: messageKey('Random bytes') },
+            { value: 'uuid', label: messageKey('UUID v4') }
           ]}
         />
         <button type="button" className="mac-btn-primary" disabled={tab === 'password' && !!passwordResult.error} onClick={() => setNonce((n) => n + 1)}>
@@ -75,8 +76,7 @@ export default function SecureRandom(): JSX.Element {
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-5">
         <div className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4 shadow-mac">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-            Output · CSPRNG (Web Crypto)
-          </div>
+            {uiText('Output · CSPRNG (Web Crypto)')}</div>
           <pre className="code-select whitespace-pre-wrap break-all font-mono text-[14px] leading-relaxed text-mac-label">
             {current || '—'}
           </pre>
@@ -85,7 +85,7 @@ export default function SecureRandom(): JSX.Element {
         {tab === 'password' && (
           <div className="grid max-w-xl gap-3 rounded-mac-lg border border-mac-separator bg-mac-surface p-4">
             <label className="flex items-center justify-between gap-4 text-[13px]">
-              <span className="text-mac-label-secondary">Length</span>
+              <span className="text-mac-label-secondary">{uiText('Length')}</span>
               <input
                 type="range"
                 min={8}
@@ -97,27 +97,27 @@ export default function SecureRandom(): JSX.Element {
               <span className="w-8 text-right font-mono">{length}</span>
             </label>
             <div className="flex flex-wrap gap-3 text-[13px] text-mac-label-secondary">
-              <Toggle label="a–z" checked={lower} onChange={setLower} />
-              <Toggle label="A–Z" checked={upper} onChange={setUpper} />
+              <Toggle label={uiText('a–z')} checked={lower} onChange={setLower} />
+              <Toggle label={uiText('A–Z')} checked={upper} onChange={setUpper} />
               <Toggle label="0–9" checked={digits} onChange={setDigits} />
-              <Toggle label="Symbols" checked={symbols} onChange={setSymbols} />
+              <Toggle label={uiText('Symbols')} checked={symbols} onChange={setSymbols} />
             </div>
             <p className="text-[12px] text-mac-label-secondary">
-              Alphabet estimate (upper bound):{' '}
-              <span className="font-medium text-mac-label">~{entropy.toFixed(0)} bits</span>
+              {uiText('Alphabet estimate (upper bound):')}{' '}
+              <span className="font-medium text-mac-label">~{entropy.toFixed(0)} {uiText('bits')}</span>
               {entropy < 50 && (
-                <span className="text-mac-warning"> · weak for sensitive use</span>
+                <span className="text-mac-warning"> {uiText('· weak for sensitive use')}</span>
               )}
-              {entropy >= 80 && <span className="text-mac-success"> · strong</span>}
+              {entropy >= 80 && <span className="text-mac-success"> {uiText('· strong')}</span>}
             </p>
-            {passwordResult.error && <p role="alert" className="text-[12px] text-mac-danger">{passwordResult.error}. Enable a–z, A–Z, digits or symbols.</p>}
+            {passwordResult.error && <p role="alert" className="text-[12px] text-mac-danger">{passwordResult.error}{uiText('. Enable a–z, A–Z, digits or symbols.')}</p>}
           </div>
         )}
 
         {tab === 'bytes' && (
           <div className="grid max-w-xl gap-3 rounded-mac-lg border border-mac-separator bg-mac-surface p-4">
             <label className="flex items-center justify-between gap-4 text-[13px]">
-              <span className="text-mac-label-secondary">Bytes</span>
+              <span className="text-mac-label-secondary">{uiText('Bytes')}</span>
               <input
                 type="range"
                 min={8}
@@ -132,7 +132,7 @@ export default function SecureRandom(): JSX.Element {
               value={format}
               onChange={setFormat}
               options={[
-                { value: 'hex', label: 'Hex' },
+                { value: 'hex', label: messageKey('Hex') },
                 { value: 'base64', label: 'Base64' }
               ]}
             />
@@ -141,8 +141,7 @@ export default function SecureRandom(): JSX.Element {
 
         {tab === 'uuid' && (
           <p className="max-w-xl text-[12px] text-mac-label-secondary">
-            RFC 4122 UUID version 4, filled with cryptographically secure random bits.
-          </p>
+            {uiText('RFC 4122 UUID version 4, filled with cryptographically secure random bits.')}</p>
         )}
       </div>
     </div>

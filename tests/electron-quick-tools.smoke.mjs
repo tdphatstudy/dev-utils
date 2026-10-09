@@ -14,11 +14,14 @@ try {
   await cp(resolve('resources/menu-icons'),join(root,'main','resources/menu-icons'),{recursive:true})
   await copyFile(resolve('out/preload/quickTools.js'),join(root,'preload/quickTools.js'))
   const entry=join(root,'main','smoke.cjs'), source=`
-    import { app, BrowserWindow, globalShortcut, nativeImage } from 'electron'
+    import { app, BrowserWindow, globalShortcut, nativeImage, nativeTheme } from 'electron'
     import { readFile } from 'node:fs/promises'
     import { ClipboardManager } from './src/main/clipboard/service'
     import { QuickTools } from './src/main/quick-tools'
     import { GlobalShortcuts } from './src/main/global-shortcuts'
+    import { LanguagePreferences } from './src/main/language'
+    import { LOCALES } from './src/shared/i18n/locales'
+    import { translate } from './src/shared/i18n/catalog'
     import { menuIcon } from './src/main/menu-icons'
     import { DEFAULT_CLIPBOARD } from './src/shared/clipboard/types'
     const root=${JSON.stringify(root)}, assert=(ok,message)=>{if(!ok)throw new Error(message)}
@@ -36,7 +39,9 @@ try {
         await manager.start(); console.log('Native clipboard service ready'); await manager.configure({...DEFAULT_CLIPBOARD,enabled:true}); await manager.poll()
         input={text:'{ "count":9007199254740993, "count":2 }'}; await manager.poll()
         let picks=0
-        quick=new QuickTools(manager,{isBusy:()=>false,getLast:()=> '#FF8800',pickFromTray:async()=>{picks++}},{isBusy:()=>false},()=> 'en')
+        const language=new LanguagePreferences(root,()=>['en'],()=>quick?.notifyLanguage())
+        await language.start()
+        quick=new QuickTools(manager,{isBusy:()=>false,getLast:()=> '#FF8800',pickFromTray:async()=>{picks++}},{isBusy:()=>false},()=>language.state().resolved,undefined,{capture:async()=>null,paste:async()=>{throw Error('No fixture target')}})
         shortcuts=new GlobalShortcuts(root,()=>quick.open('clipboard'))
         await shortcuts.start(); console.log('Native global shortcuts ready')
         assert(BrowserWindow.getAllWindows().length===0,'Idle allocated a renderer')
@@ -52,6 +57,10 @@ try {
         console.log('Native clipboard row visible')
         assert(await win.webContents.executeJavaScript('Boolean(window.quickTools && !window.devutils && !window.require && !window.process)'), 'Sandbox bridge isolation failed')
         await win.webContents.executeJavaScript('window.quickTools.pin(true)')
+        nativeTheme.themeSource='light'; quick.notifyAppearance()
+        await until(()=>win.webContents.executeJavaScript('!document.documentElement.classList.contains("dark")'))
+        nativeTheme.themeSource='dark'; quick.notifyAppearance()
+        await until(()=>win.webContents.executeJavaScript('document.documentElement.classList.contains("dark")'))
         console.log('Native widget pin verified')
         assert(await win.webContents.executeJavaScript('document.querySelector(".quick-header img").naturalWidth>0'),'Widget logo missing')
         await win.webContents.executeJavaScript('Array.from(document.querySelector(".clip-kind-json").closest(".clip-row").querySelectorAll("button")).find(b=>b.title==="Preview entry").click()')
@@ -68,7 +77,32 @@ try {
         console.log('PASS native OS global registration survives all windows closed; file-URL widget, sandbox preload and exact JSON copy')
         await quick.open('random'); win=BrowserWindow.getAllWindows()[0]
         await until(()=>win.webContents.executeJavaScript('Boolean(document.querySelector(".quick-card"))'))
-        await win.webContents.executeJavaScript('window.quickTools.pin(true)')
+        await win.webContents.executeJavaScript('document.querySelector(".quick-header button").click()')
+        await until(()=>win.webContents.executeJavaScript('document.querySelector(".quick-header button").getAttribute("aria-pressed")==="true"'))
+        const uuid=await win.webContents.executeJavaScript('document.querySelector("textarea").value')
+        assert(await win.webContents.executeJavaScript('['+
+          '()=>window.quickTools.clipboard.onChanged(()=>{}),'+
+          '()=>window.quickTools.onShortcutsChanged(()=>{}),'+
+          '()=>window.quickTools.onAppearanceChanged(()=>{}),'+
+          '()=>window.quickTools.onPasteTargetChanged(()=>{}),'+
+          '()=>window.quickTools.ocr.onProgress(()=>{})'+
+          '].every(subscribe=>{const off=subscribe();return off()===undefined&&off()===undefined})'),'Quick unsubscribe exposed a bridge object or failed on repetition')
+        await win.webContents.executeJavaScript('window.__languageEvents=[]; window.__languageStop=window.quickTools.onLanguageChanged(value=>window.__languageEvents.push(value)); true')
+        for(const malformed of [null,{},['ar'],{locale:'ar'},'system','AR','xx','vi\\n','en ','',42]) win.webContents.send('quick:languageChanged',malformed)
+        for(const locale of LOCALES) {
+          await language.set(locale.id)
+          await until(()=>win.webContents.executeJavaScript('document.documentElement.lang==='+JSON.stringify(locale.id)))
+          assert(await win.webContents.executeJavaScript('document.documentElement.dir==='+JSON.stringify(locale.direction)), 'Quick language direction did not update')
+          assert(await win.webContents.executeJavaScript('document.querySelector("h1").textContent==='+JSON.stringify(translate(locale.id,'Secure Random / UUID'))), 'Quick title did not update')
+          assert(await win.webContents.executeJavaScript('document.querySelector("textarea").value==='+JSON.stringify(uuid)), 'Language change modified generated content')
+          assert(await win.webContents.executeJavaScript('document.querySelector(".quick-header button").getAttribute("aria-pressed")==="true"'), 'Language change lost pin state')
+        }
+        assert(JSON.stringify(await win.webContents.executeJavaScript('window.__languageEvents'))===JSON.stringify(LOCALES.map(locale=>locale.id)), 'Quick subscription accepted an invalid language payload')
+        assert(await win.webContents.executeJavaScript('window.__languageStop()===undefined && window.__languageStop()===undefined'),'Quick unsubscribe exposed a bridge object')
+        await language.set('system')
+        await until(()=>win.webContents.executeJavaScript('document.documentElement.lang==="en"'))
+        assert(await win.webContents.executeJavaScript('window.__languageEvents.length')===LOCALES.length,'Unsubscribed quick language listener was called')
+        console.log('PASS live quick language events across 13 locales, RTL, payload validation, content/pin preservation and subscription cleanup')
         let refused=false; try { await win.webContents.executeJavaScript('window.quickTools.open("file:///C:/Windows")') } catch {refused=true}
         assert(refused,'Arbitrary quick target accepted')
         const glyph=menuIcon('clipboard'), bitmap=glyph.toBitmap(); let colored=false
@@ -81,7 +115,7 @@ try {
         const encrypted=await readFile(root+'/clipboard-history.enc')
         assert(!encrypted.includes(Buffer.from('9007199254740993')),'OS encrypted history leaked plaintext')
         console.log('PASS actual OS-backed async encrypted history in the temporary fixture profile')
-        quick.close();shortcuts.dispose();await manager.dispose()
+        quick.close();await language.set('ar');assert(BrowserWindow.getAllWindows().length===0,'Language update allocated an idle renderer');shortcuts.dispose();await manager.dispose()
         assert(!globalShortcut.isRegistered('Control+Alt+Shift+F10'),'Quit leaked registration')
         console.log('PASS native resource icons, fixed quick targets, renderer cleanup and shortcut release; system clipboard unchanged')
         app.exit(0)

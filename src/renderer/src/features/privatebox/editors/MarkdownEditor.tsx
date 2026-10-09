@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   emptyBlock,
@@ -26,6 +27,7 @@ function stripSlashPrefix(text: string): string {
 }
 
 export function MarkdownEditor({ value, onChange, className }: Props): JSX.Element {
+  const { locale } = useUiLocale()
   const [doc, setDoc] = useState<NotionDoc>(() => parseDoc(value))
   const seedRef = useRef(value)
   const [slash, setSlash] = useState<{
@@ -170,8 +172,8 @@ export function MarkdownEditor({ value, onChange, className }: Props): JSX.Eleme
     doc.blocks[doc.blocks.length - 1]!.text === ''
 
   const commands = useMemo(
-    () => (slash ? filterSlash(slash.query) : []),
-    [slash]
+    () => (slash ? filterSlash(slash.query, uiText) : []),
+    [slash, locale]
   )
 
   return (
@@ -271,17 +273,13 @@ export function MarkdownEditor({ value, onChange, className }: Props): JSX.Eleme
             type="button"
             className="mt-1 w-full rounded-mac px-2 py-2 text-left text-[14px] text-mac-label-tertiary hover:bg-mac-control/50"
             onClick={ensureEmptyBlock}
-          >
-            Type / for commands…
-          </button>
+          >{uiText('Type / for commands…')}{' '}</button>
         )}
       </div>
 
       {slash && commands.length > 0 && (
         <div className="fixed left-1/2 top-[38%] z-[230] max-h-72 w-72 -translate-x-1/2 overflow-auto rounded-mac-xl border border-mac-separator bg-mac-surface/95 py-1 shadow-mac-lg backdrop-blur-xl">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-            Turn into
-          </div>
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-mac-label-tertiary">{uiText('Turn into')}{' '}</div>
           {commands.map((cmd, i) => (
             <button
               key={cmd.id}
@@ -296,7 +294,7 @@ export function MarkdownEditor({ value, onChange, className }: Props): JSX.Eleme
               }}
             >
               <span className="text-[13px] font-medium">
-                {cmd.label}
+                {uiText(cmd.label)}
               </span>
               <span
                 className={cn(
@@ -304,7 +302,7 @@ export function MarkdownEditor({ value, onChange, className }: Props): JSX.Eleme
                   i === slash.index ? 'text-white/70' : 'text-mac-label-tertiary'
                 )}
               >
-                {cmd.description}
+                {uiText(cmd.description)}
               </span>
             </button>
           ))}
@@ -408,7 +406,7 @@ function BlockView({
           block.type === 'code' &&
             'rounded-mac bg-mac-control px-3 py-2 font-mono text-[13px] leading-relaxed'
         )}
-        data-placeholder={placeholder(block.type)}
+        data-placeholder={uiText(placeholder(block.type))}
         onInput={(e) => {
           // contentEditable may add trailing newline / <br>
           let t = e.currentTarget.innerText

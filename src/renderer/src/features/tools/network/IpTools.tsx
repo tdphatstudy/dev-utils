@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { parseCidr, parseIp } from '@shared/network/ip'
@@ -41,8 +42,8 @@ export default function IpTools(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'ip', label: 'IP info' },
-            { value: 'cidr', label: 'IPv4 CIDR' }
+            { value: 'ip', label: messageKey('IP info') },
+            { value: 'cidr', label: messageKey('IPv4 CIDR') }
           ]}
         />
         <div className="ml-auto">
@@ -51,39 +52,39 @@ export default function IpTools(): JSX.Element {
       </ToolToolbar>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-5">
-        <label htmlFor="ip-input" className="text-[12px] text-mac-label-secondary">{mode === 'ip' ? 'IPv4 or IPv6 address' : 'IPv4 address and prefix'}</label>
+        <label htmlFor="ip-input" className="text-[12px] text-mac-label-secondary">{mode === 'ip' ? uiText('IPv4 or IPv6 address') : uiText('IPv4 address and prefix')}</label>
         <input
           id="ip-input"
           aria-invalid={!!input.trim() && status.tone === 'danger'}
           className="mac-input max-w-lg font-mono text-[15px]"
           value={input}
           onChange={(e) => setInputs((previous) => ({ ...previous, [mode]: e.target.value }))}
-          placeholder={mode === 'ip' ? '192.168.0.1 or ::1' : '192.168.0.0/24'}
+          placeholder={mode === 'ip' ? uiText('192.168.0.1 or ::1') : '192.168.0.0/24'}
           spellCheck={false}
         />
 
         {mode === 'ip' && ip && (
           <div className="grid max-w-lg gap-2 rounded-mac-lg border border-mac-separator bg-mac-surface p-4 text-[13px] shadow-mac">
-            <Row label="Version" value={`IPv${ip.version}`} />
-            <Row label="Address" value={ip.address} mono />
-            <Row label="Private" value={ip.isPrivate ? 'Yes' : 'No'} />
-            <Row label="Loopback" value={ip.isLoopback ? 'Yes' : 'No'} />
-            <Row label="Link-local" value={ip.isLinkLocal ? 'Yes' : 'No'} />
-            <Row label="Multicast" value={ip.isMulticast ? 'Yes' : 'No'} />
+            <Row label={uiText('Version')} value={`IPv${ip.version}`} />
+            <Row label={uiText('Address')} value={ip.address} mono />
+            <Row label={uiText('Private')} value={ip.isPrivate ? 'Yes' : 'No'} />
+            <Row label={uiText('Loopback')} value={ip.isLoopback ? 'Yes' : 'No'} />
+            <Row label={uiText('Link-local')} value={ip.isLinkLocal ? 'Yes' : 'No'} />
+            <Row label={uiText('Multicast')} value={ip.isMulticast ? 'Yes' : 'No'} />
           </div>
         )}
 
         {mode === 'cidr' && cidr.ok && (
           <div className="grid max-w-lg gap-2 rounded-mac-lg border border-mac-separator bg-mac-surface p-4 text-[13px] shadow-mac">
             <Row label={uiText('Network')} value={cidr.network} mono />
-            <Row label="Prefix" value={`/${cidr.prefix}`} />
-            <Row label="Addresses" value={String(cidr.hostCount)} />
-            <Row label="Netmask" value={cidr.netmask} mono />
-            <Row label="Broadcast" value={cidr.broadcast} mono />
-            <Row label="First host" value={cidr.firstHost} mono />
-            <Row label="Last host" value={cidr.lastHost} mono />
-            <Row label="Usable hosts" value={String(cidr.usableHosts)} />
-            {cidr.prefix === 31 && <p className="text-[11px] text-mac-label-secondary">/31 assumes a point-to-point link; both addresses are usable.</p>}
+            <Row label={uiText('Prefix')} value={`/${cidr.prefix}`} />
+            <Row label={uiText('Addresses')} value={String(cidr.hostCount)} />
+            <Row label={uiText('Netmask')} value={cidr.netmask} mono />
+            <Row label={uiText('Broadcast')} value={cidr.broadcast} mono />
+            <Row label={uiText('First host')} value={cidr.firstHost} mono />
+            <Row label={uiText('Last host')} value={cidr.lastHost} mono />
+            <Row label={uiText('Usable hosts')} value={String(cidr.usableHosts)} />
+            {cidr.prefix === 31 && <p className="text-[11px] text-mac-label-secondary">{uiText('/31 assumes a point-to-point link; both addresses are usable.')}</p>}
           </div>
         )}
       </div>

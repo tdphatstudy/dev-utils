@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -29,7 +30,7 @@ export default function HtmlStudio(): JSX.Element {
   const [indent, setIndent] = useState(2)
   const [view, setView] = useState<'formatted' | 'preview'>('formatted')
   useToolDraft('markup.html', input, setInput, {
-    label: 'HTML Studio',
+    label: messageKey('HTML Studio'),
     historyOnUnmount: true
   })
 
@@ -84,7 +85,7 @@ export default function HtmlStudio(): JSX.Element {
             <option value={4}>4</option>
           </select>
         </label>
-        <SegmentedControl value={view} onChange={setView} options={[{ value: 'formatted', label: 'Formatted' }, { value: 'preview', label: 'Static preview' }]} />
+        <SegmentedControl value={view} onChange={setView} options={[{ value: 'formatted', label: messageKey('Formatted') }, { value: 'preview', label: messageKey('Static preview') }]} />
         <div className="ml-auto flex gap-2">
           <SaveToBoxButton
             type="text"
@@ -104,14 +105,14 @@ export default function HtmlStudio(): JSX.Element {
           value={input}
           onChange={setInput}
           language="html"
-          label="HTML input"
+          label={uiText('HTML input')}
           issue={input.trim() && !validated.ok ? validated : null}
           onRun={runFormat}
-          placeholder="Paste HTML…"
+          placeholder={uiText('Paste HTML…')}
         />
-        {view === 'formatted' ? <CodeEditor value={output} language="html" label="Formatted HTML" readOnly placeholder="Fix structural issues to see formatted output" /> : <div className="flex min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator">
-          <p className="shrink-0 border-b border-mac-separator px-3 py-2 text-[11px] text-mac-label-secondary">Static preview · scripts and remote resources disabled</p>
-          <iframe title="Static HTML preview" sandbox="" srcDoc={previewDocument} className="min-h-0 flex-1 bg-white" />
+        {view === 'formatted' ? <CodeEditor value={output} language="html" label={uiText('Formatted HTML')} readOnly placeholder={uiText('Fix structural issues to see formatted output')} /> : <div className="flex min-h-0 flex-col overflow-hidden rounded-mac-lg border border-mac-separator">
+          <p className="shrink-0 border-b border-mac-separator px-3 py-2 text-[11px] text-mac-label-secondary">{uiText('Static preview · scripts and remote resources disabled')}</p>
+          <iframe title={uiText('Static HTML preview')} sandbox="" srcDoc={previewDocument} className="min-h-0 flex-1 bg-white" />
         </div>}
       </SplitPane>
 

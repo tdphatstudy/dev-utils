@@ -6,7 +6,8 @@ interface ClipboardAccess {
   assertCaller(event: IpcMainInvokeEvent): void
   assertWidget(event: IpcMainInvokeEvent): void
   closeForSender(event: IpcMainInvokeEvent): void
-  recognize(id: unknown): Promise<string | null>
+  recognize(id: unknown, event: IpcMainInvokeEvent): Promise<string | null>
+  paste(event: IpcMainInvokeEvent, write: () => Promise<void>): Promise<void>
 }
 
 export function registerClipboardIpc(clipboard: ClipboardManager, access: ClipboardAccess, copies: IpcTaskPool): void {
@@ -19,9 +20,11 @@ export function registerClipboardIpc(clipboard: ClipboardManager, access: Clipbo
   ipcMain.handle('clipboard:content', (e, id: unknown) => { caller(e); return clipboard.content(id) })
   ipcMain.handle('clipboard:copy', async (e, id: unknown, mode: unknown, close: unknown) => { caller(e); if (close !== undefined && typeof close !== 'boolean') throw new Error('Invalid close option.'); await copies.run(() => clipboard.copy(id, mode)); if (close) access.closeForSender(e) })
   ipcMain.handle('clipboard:copyText', async (e, text: unknown, close: unknown) => { caller(e); if (close !== undefined && typeof close !== 'boolean') throw new Error('Invalid close option.'); await copies.run(() => clipboard.copyText(text)); if (close) access.closeForSender(e) })
+  ipcMain.handle('clipboard:paste', (e, id: unknown, mode: unknown) => { access.assertWidget(e); return copies.run(() => access.paste(e, () => clipboard.copy(id, mode))) })
+  ipcMain.handle('clipboard:pasteText', (e, text: unknown) => { access.assertWidget(e); return copies.run(() => access.paste(e, () => clipboard.copyText(text))) })
   ipcMain.handle('clipboard:update', (e, id: unknown, value: unknown) => { caller(e); clipboard.update(id, value) })
   ipcMain.handle('clipboard:remove', (e, ids: unknown) => { caller(e); clipboard.remove(ids) })
   ipcMain.handle('clipboard:clear', e => { caller(e); return settings.run(() => clipboard.clear()) })
   ipcMain.handle('clipboard:captureCurrent', e => { caller(e); return clipboard.captureCurrent() })
-  ipcMain.handle('clipboard:ocr', (e, id: unknown) => { access.assertWidget(e); return access.recognize(id) })
+  ipcMain.handle('clipboard:ocr', (e, id: unknown) => { caller(e); return access.recognize(id, e) })
 }

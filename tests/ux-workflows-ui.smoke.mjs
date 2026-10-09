@@ -116,7 +116,7 @@ try {
   console.log('PASS Color Picker retains conversions/OS result and recent colors are readable beyond hue alone')
 
   const screens = [
-    ['network.mock-api', 'Start server'], ['network.http', 'Send'], ['design.color', 'Pick screen color'], ['text.ocr', 'Extract file text']
+    ['network.mock-api', 'Start server'], ['network.http', 'Send'], ['design.color', 'Pick screen color'], ['text.ocr', 'Extract text (OCR)']
   ]
   await page.setViewportSize({ width: 720, height: 500 })
   for (const [id, action] of screens) {

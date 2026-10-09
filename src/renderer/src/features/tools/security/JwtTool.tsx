@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAsyncValue } from '@renderer/hooks/useAsyncValue'
@@ -151,16 +152,16 @@ export default function JwtTool(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'decode', label: uiText('Decode') },
-            { value: 'verify', label: 'Verify' },
-            { value: 'sign', label: 'Sign (HS)' }
+            { value: 'decode', label: messageKey('Decode') },
+            { value: 'verify', label: messageKey('Verify') },
+            { value: 'sign', label: messageKey('Sign (HS)') }
           ]}
         />
         <button type="button" disabled={busy} className="mac-btn-ghost" onClick={() => void loadSample()}>
           {uiText('Sample')}</button>
         <div className="ml-auto flex gap-2">
-          <CopyButton text={mode === 'sign' ? currentSigned : token} label="Copy token" />
-          <CopyButton text={mode === 'sign' ? payloadValid ? payloadEdit : '' : payloadText} label="Copy payload" />
+          <CopyButton text={mode === 'sign' ? currentSigned : token} label={uiText('Copy token')} />
+          <CopyButton text={mode === 'sign' ? payloadValid ? payloadEdit : '' : payloadText} label={uiText('Copy payload')} />
         </div>
       </ToolToolbar>
 
@@ -168,12 +169,11 @@ export default function JwtTool(): JSX.Element {
       {mode !== 'decode' && <div className="space-y-2 border-b border-mac-separator px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <label htmlFor="jwt-secret" className="text-[11px] font-semibold uppercase tracking-wide text-mac-label-tertiary">
-            {needsPem ? 'Public key (PEM)' : 'Secret / key'}
-            {mode === 'sign' ? ' (HMAC secret)' : ''}
+            {needsPem ? uiText('Public key (PEM)') : uiText('Secret / key')}
+            {mode === 'sign' ? ` ${uiText('(HMAC secret)')}` : ''}
           </label>
           <span className="text-[11px] text-mac-label-tertiary">
-            Stays local · never saved to disk
-          </span>
+            {uiText('Stays local · never saved to disk')}</span>
         </div>
         <div className="relative">
           {needsPem ? (
@@ -186,7 +186,7 @@ export default function JwtTool(): JSX.Element {
               placeholder={
                 needsPem
                   ? '-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----'
-                  : 'HMAC secret or PEM public key'
+                  : uiText('HMAC secret or PEM public key')
               }
             />
           ) : (
@@ -199,14 +199,14 @@ export default function JwtTool(): JSX.Element {
                 onChange={(e) => setSecret(e.target.value)}
                 spellCheck={false}
                 autoComplete="off"
-                placeholder="Enter shared secret (HS256/384/512)"
+                placeholder={uiText('Enter shared secret (HS256/384/512)')}
               />
               <button
                 type="button"
                 className="mac-btn-secondary !px-2.5"
                 onClick={() => setShowSecret((s) => !s)}
-                title={showSecret ? 'Hide' : 'Show'}
-                aria-label={showSecret ? 'Hide JWT secret' : 'Show JWT secret'}
+                title={showSecret ? uiText('Hide') : uiText('Show')}
+                aria-label={showSecret ? uiText('Hide JWT secret') : uiText('Show JWT secret')}
               >
                 {showSecret ? (
                   <EyeOff className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function JwtTool(): JSX.Element {
         </div>
         {mode === 'sign' && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-mac-label-tertiary">Algorithm</span>
+            <span className="text-[11px] text-mac-label-tertiary">{uiText('Algorithm')}</span>
             {(['HS256', 'HS384', 'HS512'] as HsAlgorithm[]).map((a) => (
               <button
                 key={a}
@@ -242,48 +242,43 @@ export default function JwtTool(): JSX.Element {
               disabled={busy || !secret || !payloadValid}
               onClick={() => void onSign()}
             >
-              Sign JWT
-            </button>
+              {uiText('Sign JWT')}</button>
           </div>
         )}
         {mode !== 'sign' && (
           <p className="text-[11px] text-mac-label-tertiary">
-            <strong className="text-mac-label-secondary">HS</strong> → shared secret string ·{' '}
-            <strong className="text-mac-label-secondary">RS / ES</strong> → paste PEM public key
-            (auto-expands). Signature is checked with Web Crypto.
-          </p>
+            <strong className="text-mac-label-secondary">HS</strong> {uiText('→ shared secret string ·')}{' '}
+            <strong className="text-mac-label-secondary">{uiText('RS / ES')}</strong> {uiText('→ paste PEM public key (auto-expands). Signature is checked with Web Crypto.')}</p>
         )}
       </div>}
-      <p className="shrink-0 border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">{mode === 'decode' ? 'Decoded claims are untrusted. No key is used in Decode mode.' : 'Signature verification does not validate issuer, audience or application authorization. No remote key URLs are fetched.'}</p>
+      <p className="shrink-0 border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">{mode === 'decode' ? uiText('Decoded claims are untrusted. No key is used in Decode mode.') : uiText('Signature verification does not validate issuer, audience or application authorization. No remote key URLs are fetched.')}</p>
       {decoded.ok && mode !== 'sign' && decoded.claimWarnings.map((warning) => <p key={warning} role="alert" className="px-4 py-1 text-[12px] text-mac-warning">{warning}</p>)}
-      {mode === 'sign' && payloadParsed.ok && !payloadValid && <p role="alert" className="px-4 py-2 text-[12px] text-mac-danger">Payload must be a JSON object, not an array, null or primitive.</p>}
+      {mode === 'sign' && payloadParsed.ok && !payloadValid && <p role="alert" className="px-4 py-2 text-[12px] text-mac-danger">{uiText('Payload must be a JSON object, not an array, null or primitive.')}</p>}
 
       <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3">
         {mode === 'sign' ? (
           <div className="grid min-h-0 flex-1 auto-rows-[minmax(200px,1fr)] grid-cols-1 gap-3 md:grid-cols-2">
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                Payload (JSON)
-              </span>
+                {uiText('Payload (JSON)')}</span>
               <CodeEditor
                 value={payloadEdit}
                 onChange={setPayloadEdit}
                 language="json"
                 placeholder="{ }"
-                label="JWT payload JSON"
+                label={uiText('JWT payload JSON')}
                 onRun={() => void onSign()}
               />
             </div>
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                Signed token
-              </span>
+                {uiText('Signed token')}</span>
               <CodeEditor
                 value={currentSigned}
                 language="text"
                 readOnly
-                placeholder="Click Sign JWT…"
-                label="Signed JWT"
+                placeholder={uiText('Click Sign JWT…')}
+                label={uiText('Signed JWT')}
               />
             </div>
           </div>
@@ -291,27 +286,25 @@ export default function JwtTool(): JSX.Element {
           <div className="grid min-h-0 flex-1 grid-rows-[minmax(110px,0.35fr)_minmax(180px,1fr)] gap-3">
             <div className="flex min-h-0 flex-col gap-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                Token {token.trim().toLowerCase().startsWith('bearer ') ? '(Bearer stripped)' : ''}
+                {uiText('Token')} {token.trim().toLowerCase().startsWith('bearer ') ? uiText('(Bearer stripped)') : ''}
               </span>
               <CodeEditor
                 value={token}
                 onChange={setToken}
                 language="text"
-                placeholder="Paste JWT… (Bearer prefix ok)"
-                label="JWT token"
+                placeholder={uiText('Paste JWT… (Bearer prefix ok)')}
+                label={uiText('JWT token')}
               />
             </div>
             <div className="grid min-h-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex min-h-0 flex-col gap-1">
                 <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                  Header
-                </span>
+                  {uiText('Header')}</span>
                 <CodeEditor value={headerText} language="json" readOnly />
               </div>
               <div className="flex min-h-0 flex-col gap-1">
                 <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                  Payload
-                </span>
+                  {uiText('Payload')}</span>
                 <CodeEditor value={payloadText} language="json" readOnly />
               </div>
             </div>
@@ -324,19 +317,19 @@ export default function JwtTool(): JSX.Element {
         {decoded.ok && (
           <>
             {decoded.issuedAt && (
-              <span className="text-mac-label-secondary">iat {decoded.issuedAt}</span>
+              <span className="text-mac-label-secondary">{uiText('iat')} {decoded.issuedAt}</span>
             )}
             {decoded.expiresAt && (
-              <span className="text-mac-label-secondary">exp {decoded.expiresAt}</span>
+              <span className="text-mac-label-secondary">{uiText('exp')} {decoded.expiresAt}</span>
             )}
             {decoded.notBefore && (
               <span className="text-mac-label-secondary">nbf {decoded.notBefore}</span>
             )}
             {mode === 'verify' && currentVerify?.ok && currentVerify.valid && (
-              <span className="font-medium text-mac-success">✓ signature OK</span>
+              <span className="font-medium text-mac-success">{uiText('✓ signature OK')}</span>
             )}
             {mode === 'verify' && currentVerify?.ok && !currentVerify.valid && (
-              <span className="font-medium text-mac-danger">Signature not verified</span>
+              <span className="font-medium text-mac-danger">{uiText('Signature not verified')}</span>
             )}
           </>
         )}

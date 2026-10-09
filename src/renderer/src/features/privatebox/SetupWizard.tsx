@@ -95,9 +95,7 @@ export function SetupWizard({
           </div>
           <div>
             <h1 className="text-[18px] font-semibold tracking-tight">{title}</h1>
-            <p className="text-[12px] text-mac-label-secondary">
-              Encrypted local vault · files stored as .putl · you can create many boxes
-            </p>
+            <p className="text-[12px] text-mac-label-secondary">{uiText('Encrypted local vault · files stored as .putl · you can create many boxes')}{' '}</p>
           </div>
         </div>
 
@@ -118,21 +116,19 @@ export function SetupWizard({
         <div className="rounded-mac-xl border border-mac-separator bg-mac-surface p-5 shadow-mac">
           {step === 0 && (
             <div className="space-y-4">
-              <p className="text-[13px] text-mac-label-secondary">
-                Choose an <strong className="text-mac-label">empty</strong> folder. All files inside
-                will be encrypted as <code className="font-mono text-[12px]">.putl</code>.
+              <p className="text-[13px] text-mac-label-secondary">{uiText('Choose an')}{' '}<strong className="text-mac-label">{uiText('empty')}</strong>{' '}{uiText('folder. All files inside will be encrypted as')}{' '}<code className="font-mono text-[12px]">{uiText('.putl')}</code>.
               </p>
               <button type="button" className="mac-btn-secondary w-full !justify-start" onClick={pick}>
                 <FolderOpen className="h-4 w-4" />
-                {rootPath || 'Select empty folder…'}
+                {rootPath || uiText('Select empty folder…')}
               </button>
               <label className="block text-[12px]">
-                <span className="mb-1 block text-mac-label-secondary">Box name (optional)</span>
+                <span className="mb-1 block text-mac-label-secondary">{uiText('Box name (optional)')}</span>
                 <input
                   className="mac-input"
                   value={boxName}
                   onChange={(e) => setBoxName(e.target.value)}
-                  placeholder="Work secrets, Personal, …"
+                  placeholder={uiText('Work secrets, Personal, …')}
                 />
               </label>
               <div className="flex flex-wrap justify-between gap-2">
@@ -141,18 +137,14 @@ export function SetupWizard({
                     <button type="button" className="mac-btn-ghost" onClick={onCancel}>
                       {uiText('Cancel')}</button>
                   )}
-                  <button type="button" className="mac-btn-ghost" onClick={onOpenExisting}>
-                    Add existing folder…
-                  </button>
+                  <button type="button" className="mac-btn-ghost" onClick={onOpenExisting}>{uiText('Add existing folder…')}{' '}</button>
                 </div>
                 <button
                   type="button"
                   className="mac-btn-primary"
                   disabled={!rootPath}
                   onClick={() => setStep(1)}
-                >
-                  Continue
-                </button>
+                >{uiText('Continue')}{' '}</button>
               </div>
             </div>
           )}
@@ -162,24 +154,20 @@ export function SetupWizard({
               <ModeCard
                 active={mode === 'device'}
                 icon={<Smartphone className="h-4 w-4" />}
-                title="Only this PC"
-                body="Device secret + your password. Files cannot open on another machine."
+                title={uiText('Only this PC')}
+                body={uiText('Device secret + your password. Files cannot open on another machine.')}
                 onClick={() => setMode('device')}
               />
               <ModeCard
                 active={mode === 'portable'}
                 icon={<Globe2 className="h-4 w-4" />}
-                title="All PCs (portable)"
-                body="You set two keys. Copy the folder to Mac/Windows/Linux and unlock with the same keys."
+                title={uiText('All PCs (portable)')}
+                body={uiText('You set two keys. Copy the folder to Mac/Windows/Linux and unlock with the same keys.')}
                 onClick={() => setMode('portable')}
               />
               <div className="flex justify-between pt-2">
-                <button type="button" className="mac-btn-ghost" onClick={() => setStep(0)}>
-                  Back
-                </button>
-                <button type="button" className="mac-btn-primary" onClick={() => setStep(2)}>
-                  Continue
-                </button>
+                <button type="button" className="mac-btn-ghost" onClick={() => setStep(0)}>{uiText('Back')}{' '}</button>
+                <button type="button" className="mac-btn-primary" onClick={() => setStep(2)}>{uiText('Continue')}{' '}</button>
               </div>
             </div>
           )}
@@ -188,29 +176,23 @@ export function SetupWizard({
             <div className="space-y-3">
               {mode === 'portable' ? (
                 <>
-                  <Field label="Key A" type="password" value={keyA} onChange={setKeyA} />
-                  <Field label="Confirm Key A" type="password" value={keyA2} onChange={setKeyA2} />
-                  <Field label="Key B" type="password" value={keyB} onChange={setKeyB} />
-                  <Field label="Confirm Key B" type="password" value={keyB2} onChange={setKeyB2} />
-                  <p className="text-[11px] text-mac-warning">
-                    Store both keys safely. There is no recovery if you lose them.
-                  </p>
+                  <Field label={uiText('Key A')} type="password" value={keyA} onChange={setKeyA} />
+                  <Field label={uiText('Confirm Key A')} type="password" value={keyA2} onChange={setKeyA2} />
+                  <Field label={uiText('Key B')} type="password" value={keyB} onChange={setKeyB} />
+                  <Field label={uiText('Confirm Key B')} type="password" value={keyB2} onChange={setKeyB2} />
+                  <p className="text-[11px] text-mac-warning">{uiText('Store both keys safely. There is no recovery if you lose them.')}{' '}</p>
                 </>
               ) : (
                 <>
-                  <Field label="Password" type="password" value={keyB} onChange={setKeyB} />
-                  <Field label="Confirm password" type="password" value={keyB2} onChange={setKeyB2} />
-                  <p className="text-[11px] text-mac-label-tertiary">
-                    A device secret is stored securely on this PC via the OS keychain when available.
-                  </p>
+                  <Field label={uiText('Password')} type="password" value={keyB} onChange={setKeyB} />
+                  <Field label={uiText('Confirm password')} type="password" value={keyB2} onChange={setKeyB2} />
+                  <p className="text-[11px] text-mac-label-tertiary">{uiText('A device secret is stored securely on this PC via the OS keychain when available.')}{' '}</p>
                 </>
               )}
               <div className="flex justify-between pt-2">
-                <button type="button" className="mac-btn-ghost" onClick={() => setStep(1)}>
-                  Back
-                </button>
+                <button type="button" className="mac-btn-ghost" onClick={() => setStep(1)}>{uiText('Back')}{' '}</button>
                 <button type="button" className="mac-btn-primary" disabled={busy} onClick={finish}>
-                  {busy ? 'Creating…' : 'Create Private Box'}
+                  {busy ? uiText('Creating…') : uiText('Create Private Box')}
                 </button>
               </div>
             </div>
@@ -218,7 +200,7 @@ export function SetupWizard({
 
           {err && (
             <p className="mt-4 rounded-mac bg-mac-danger/10 px-3 py-2 text-[12px] text-mac-danger">
-              {err}
+              {uiText(err)}
             </p>
           )}
         </div>

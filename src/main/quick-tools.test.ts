@@ -6,7 +6,8 @@ import type { ScreenColorPicker } from './color-picker'
 import type { DesktopOcr } from './ocr'
 import type { GlobalShortcuts } from './global-shortcuts'
 import type { MockApiServer } from './mock-api-server'
-const f = vi.hoisted(() => ({ windows: [] as any[], handlers: new Map<string, (...args: any[]) => any>(), next: 1 }))
+const f = vi.hoisted(() => ({ windows: [] as any[], handlers: new Map<string, (...args: any[]) => any>(), next: 1, captureTarget: vi.fn(), pasteTarget: vi.fn() }))
+vi.mock('./platform/clipboard-paste', () => ({ DesktopPaste: class { capture = f.captureTarget; paste = f.pasteTarget } }))
 vi.mock('./branding', () => ({ appWindowIcon: () => '/fixture/devfusion.ico' }))
 vi.mock('./env', () => ({ is: { dev: false } }))
 vi.mock('./ipc-trust', () => ({ assertTrustedIpc: (event: any) => { if (event.sender.id !== 900 || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted app') }, isRendererUrl: (actual: string, expected: string) => actual === expected }))
@@ -17,15 +18,15 @@ vi.mock('electron', () => ({
   BrowserWindow: class extends EventEmitter {
     destroyed = false; webContents: any
     constructor(public options: any) { super(); this.webContents = Object.assign(new EventEmitter(), { id: f.next++, mainFrame: { url: '' }, session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } }, setWindowOpenHandler: vi.fn(), send: vi.fn() }); f.windows.push(this) }
-    loadURL = vi.fn(async (url: string) => { this.webContents.mainFrame.url = url }); setMenu = vi.fn(); setAlwaysOnTop = vi.fn(); show = vi.fn(); focus = vi.fn()
+    loadURL = vi.fn(async (url: string) => { this.webContents.mainFrame.url = url }); setMenu = vi.fn(); setAlwaysOnTop = vi.fn(); show = vi.fn(); hide = vi.fn(); focus = vi.fn()
     isDestroyed() { return this.destroyed } destroy() { this.destroyed = true; this.emit('closed') }
   }
 }))
 import { QuickTools } from './quick-tools'
 const event = (win: any): IpcMainInvokeEvent => ({ sender: win.webContents, senderFrame: win.webContents.mainFrame }) as IpcMainInvokeEvent
-beforeEach(() => { f.windows.length = 0; f.handlers.clear() })
+beforeEach(() => { f.windows.length = 0; f.handlers.clear(); f.captureTarget.mockReset().mockResolvedValue({ windowId: '123', pid: 100 }); f.pasteTarget.mockReset().mockResolvedValue(undefined) })
 function fixture(): { quick: QuickTools; clipboard: any; picker: any; ocr: any } {
-  const clipboard = { state: vi.fn(() => ({ blocked: null })), list: vi.fn(() => []), content: vi.fn(() => ({ text: 'fixture' })), copyText: vi.fn().mockResolvedValue(undefined), copyImage: vi.fn().mockResolvedValue(undefined) }
+  const clipboard = { state: vi.fn(() => ({ blocked: null })), visibilityRevision: vi.fn(() => 0), list: vi.fn(() => []), content: vi.fn(() => ({ text: 'fixture' })), copy: vi.fn().mockResolvedValue(undefined), copyText: vi.fn().mockResolvedValue(undefined), copyImage: vi.fn().mockResolvedValue(undefined) }
   const picker = { isBusy: vi.fn(() => false), pickFromTray: vi.fn().mockResolvedValue(undefined) }, ocr = { isBusy: vi.fn(() => false), captureFromTray: vi.fn().mockResolvedValue(undefined), recognize: vi.fn().mockResolvedValue({ text: 'fixture', pages: 1, ocrPages: 1 }), cancel: vi.fn() }
   const quick = new QuickTools(clipboard as unknown as ClipboardManager, picker as unknown as ScreenColorPicker, ocr as unknown as DesktopOcr, () => 'vi')
   quick.register({ state: () => ({}) } as GlobalShortcuts)
@@ -35,7 +36,7 @@ it('allocates no idle renderer, confines a branded widget to the chosen work are
   const { quick } = fixture(); expect(f.windows).toHaveLength(0)
   await quick.open('clipboard'); const win = f.windows[0]
   expect(win.options).toMatchObject({ icon: '/fixture/devfusion.ico', width: 620, height: 600, x: -710, y: 40, webPreferences: { sandbox: true, contextIsolation: true, webSecurity: true, nodeIntegration: false, partition: 'quick-tools' } })
-  expect(quick.context(event(win))).toEqual({ kind: 'clipboard', locale: 'vi', dark: true })
+  expect(quick.context(event(win))).toEqual({ kind: 'clipboard', locale: 'vi', dark: true, canPaste: true })
   await quick.open('clipboard'); expect(f.windows).toHaveLength(1)
   win.emit('blur'); expect(win.destroyed).toBe(true)
 })
@@ -52,11 +53,61 @@ it('refuses a burst of window creation until the current widget has loaded', asy
   const { quick } = fixture()
   const first = quick.open('clipboard')
   await expect(quick.open('timestamp')).rejects.toThrow('opening')
+  await Promise.resolve()
   expect(f.windows).toHaveLength(1)
   await first
   await quick.open('timestamp')
   expect(f.windows).toHaveLength(2)
   expect(f.windows[0].destroyed).toBe(true)
+  quick.close()
+})
+it('captures the target before opening, restores it only after copy and preserves it when switching widgets', async () => {
+  const { quick, clipboard } = fixture()
+  await quick.open('clipboard'); const win = f.windows[0], e = event(win)
+  expect(f.captureTarget).toHaveBeenCalledOnce()
+  await quick.open('json'); expect(f.captureTarget).toHaveBeenCalledOnce()
+  await quick.open('clipboard'); const current = f.windows.at(-1), currentEvent = event(current)
+  await f.handlers.get('clipboard:paste')!(currentEvent, 'entry', 'original')
+  expect(clipboard.copy).toHaveBeenCalledWith('entry', 'original')
+  expect(current.hide).toHaveBeenCalledOnce()
+  expect(f.pasteTarget).toHaveBeenCalledWith({ windowId: '123', pid: 100 })
+  expect(current.destroyed).toBe(true)
+  expect(() => f.handlers.get('clipboard:paste')!(e, 'entry', 'original')).toThrow('active quick')
+})
+it('keeps clipboard available on paste failure, refuses missing targets and rechecks identity after copy', async () => {
+  const { quick, clipboard } = fixture(); await quick.open('clipboard'); const win = f.windows[0], e = event(win)
+  f.pasteTarget.mockRejectedValueOnce(new Error('target closed'))
+  await expect(f.handlers.get('clipboard:pasteText')!(e, 'fixture')).rejects.toThrow('target closed')
+  expect(win.destroyed).toBe(false); expect(win.show).toHaveBeenCalledTimes(2)
+  clipboard.copy.mockRejectedValueOnce(new Error('write failed'))
+  await expect(f.handlers.get('clipboard:paste')!(e, 'entry', 'original')).rejects.toThrow('write failed')
+  expect(f.pasteTarget).toHaveBeenCalledOnce()
+  clipboard.copy.mockImplementationOnce(async () => { clipboard.visibilityRevision.mockReturnValue(1) })
+  await expect(f.handlers.get('clipboard:paste')!(e, 'entry', 'original')).rejects.toThrow('access changed')
+  expect(f.pasteTarget).toHaveBeenCalledOnce()
+  quick.close(); f.captureTarget.mockResolvedValueOnce(null); await quick.open('clipboard')
+  await expect(f.handlers.get('clipboard:pasteText')!(event(f.windows.at(-1)), 'fixture')).rejects.toThrow('global shortcut')
+})
+it('refreshes a pinned clipboard target on reopening from another app and starts the helper before hiding', async () => {
+  const { quick } = fixture(); await quick.open('clipboard'); const win = f.windows[0]
+  quick.pin(true); f.captureTarget.mockResolvedValueOnce({ windowId: '456', pid: 200 })
+  await quick.open('clipboard')
+  f.pasteTarget.mockImplementationOnce(async target => {
+    expect(target).toEqual({ windowId: '456', pid: 200 }); expect(win.hide).not.toHaveBeenCalled()
+  })
+  await f.handlers.get('clipboard:pasteText')!(event(win), 'fixture')
+  expect(win.destroyed).toBe(true)
+})
+it('runs clipboard OCR hidden for either trusted UI and discards stale results after privacy changes', async () => {
+  const { quick, clipboard, ocr } = fixture(); clipboard.content.mockReturnValue({ text: '', png: 'fixture-png' })
+  await quick.open('clipboard'); const win = f.windows[0], e = event(win)
+  await expect(f.handlers.get('clipboard:ocr')!(e, 'image')).resolves.toBe('fixture')
+  expect(ocr.recognize).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'image', language: 'eng+vie' }), e.sender, false)
+  const app = { sender: { id: 900, mainFrame: {} } } as any; app.senderFrame = app.sender.mainFrame
+  await expect(f.handlers.get('clipboard:ocr')!(app, 'image')).resolves.toBe('fixture')
+  expect(ocr.recognize).toHaveBeenLastCalledWith(expect.anything(), app.sender, false)
+  ocr.recognize.mockImplementationOnce(async () => { clipboard.visibilityRevision.mockReturnValue(2); return { text: 'stale' } })
+  await expect(f.handlers.get('clipboard:ocr')!(e, 'image')).resolves.toBeNull()
   quick.close()
 })
 it('confines image copy and OCR commands to the current widget and preserves pinning during OCR work', async () => {

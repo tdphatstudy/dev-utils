@@ -66,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">
             {loadFailure
-              ? 'The tool files could not be opened. Return to the toolbox. If this continues, save your work and reopen DevFusion.'
+              ? uiText('The tool files could not be opened. Return to the toolbox. If this continues, save your work and reopen DevFusion.')
               : uiText('This view could not be displayed. Try again, or return to the toolbox.')}
           </p>
         </div>
@@ -76,7 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {uiText('Try again')}</button>}
           <button type="button" className="mac-btn-primary" onClick={this.goHome}>
             <Home className="h-3.5 w-3.5" />
-            {this.props.homeLabel ?? 'Back to Home'}
+            {this.props.homeLabel ?? uiText('Back to Home')}
           </button>
         </div>
       </div>

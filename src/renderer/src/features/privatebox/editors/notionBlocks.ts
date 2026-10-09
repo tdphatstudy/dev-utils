@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 export type BlockType =
   | 'p'
   | 'h1'
@@ -119,25 +120,29 @@ export interface SlashItem {
 }
 
 export const SLASH_ITEMS: SlashItem[] = [
-  { id: 'h1', label: 'Heading 1', description: 'Large title', aliases: ['h1', 'title'] },
-  { id: 'h2', label: 'Heading 2', description: 'Medium title', aliases: ['h2'] },
-  { id: 'h3', label: 'Heading 3', description: 'Small title', aliases: ['h3'] },
-  { id: 'p', label: 'Text', description: 'Plain paragraph', aliases: ['text', 'p', 'paragraph'] },
-  { id: 'bullet', label: 'Bullet list', description: 'List item', aliases: ['bullet', 'ul', 'list'] },
-  { id: 'number', label: 'Numbered list', description: 'Ordered item', aliases: ['number', 'ol'] },
-  { id: 'todo', label: 'To-do', description: 'Checkbox', aliases: ['todo', 'task', 'check'] },
-  { id: 'quote', label: 'Quote', description: 'Callout quote', aliases: ['quote'] },
-  { id: 'code', label: 'Code', description: 'Code block', aliases: ['code', 'codeblock'] },
-  { id: 'divider', label: 'Divider', description: 'Horizontal line', aliases: ['divider', 'hr'] }
+  { id: 'h1', label: messageKey('Heading 1'), description: messageKey('Large title'), aliases: ['h1', 'title'] },
+  { id: 'h2', label: messageKey('Heading 2'), description: messageKey('Medium title'), aliases: ['h2'] },
+  { id: 'h3', label: messageKey('Heading 3'), description: messageKey('Small title'), aliases: ['h3'] },
+  { id: 'p', label: messageKey('Text'), description: messageKey('Plain paragraph'), aliases: ['text', 'p', 'paragraph'] },
+  { id: 'bullet', label: messageKey('Bullet list'), description: messageKey('List item'), aliases: ['bullet', 'ul', 'list'] },
+  { id: 'number', label: messageKey('Numbered list'), description: messageKey('Ordered item'), aliases: ['number', 'ol'] },
+  { id: 'todo', label: messageKey('To-do'), description: messageKey('Checkbox'), aliases: ['todo', 'task', 'check'] },
+  { id: 'quote', label: messageKey('Quote'), description: messageKey('Callout quote'), aliases: ['quote'] },
+  { id: 'code', label: messageKey('Code'), description: messageKey('Code block'), aliases: ['code', 'codeblock'] },
+  { id: 'divider', label: messageKey('Divider'), description: messageKey('Horizontal line'), aliases: ['divider', 'hr'] }
 ]
 
-export function filterSlash(query: string): SlashItem[] {
-  const q = query.trim().toLowerCase()
+export function filterSlash(query: string, localize: (message: string) => string = (message) => message): SlashItem[] {
+  const normalize = (value: string): string => value.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase()
+  const q = normalize(query.trim())
   if (!q) return SLASH_ITEMS
   return SLASH_ITEMS.filter(
     (c) =>
       c.id.includes(q) ||
-      c.label.toLowerCase().includes(q) ||
+      normalize(c.label).includes(q) ||
+      normalize(c.description).includes(q) ||
+      normalize(localize(c.label)).includes(q) ||
+      normalize(localize(c.description)).includes(q) ||
       c.aliases.some((a) => a.startsWith(q) || a.includes(q))
   )
 }

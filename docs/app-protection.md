@@ -144,3 +144,7 @@ hardware ID for default device-vault creation; neither is counted as validated
 by that fixture. Portable-vault preservation, crypto and hardware-ID parsing
 have unit coverage in the full suite. No macOS/Linux native execution, installer
 upgrade test, real code signing/notarization or CI run was performed here.
+
+The figures above describe the earlier protection build. Subsequent toolchain,
+native close-dialog localization, subscription cleanup and final integrity smoke
+results are recorded in [release fixes](release-fixes-2026-10-09.md).

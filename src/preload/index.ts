@@ -1,6 +1,7 @@
 import type { LocalDomainInput, LocalDomainPorts, LocalDomainsStatus, DomainResolution } from '@shared/local-domains/types'
 import { isLanguageState, type LanguageSetting, type LanguageState } from '@shared/i18n/locales'
 import { contextBridge, ipcRenderer } from 'electron'
+import { isThemeState, type ThemeMode, type ThemeState } from '@shared/theme'
 import type { ClipboardApi } from '@shared/clipboard/types'
 import type { QuickToolsApi } from '@shared/quick-tools'
 import { isVaultLockEvent, type RecoveredVaultDraft, type SecurityState, type VaultIdleMinutes, type VaultLockEvent } from '@shared/security-policy'
@@ -59,12 +60,13 @@ const clipboardApi: ClipboardApi = {
   state: () => ipcRenderer.invoke('clipboard:state'), configure: value => ipcRenderer.invoke('clipboard:configure', value), pause: value => ipcRenderer.invoke('clipboard:pause', value),
   list: query => ipcRenderer.invoke('clipboard:list', query), content: id => ipcRenderer.invoke('clipboard:content', id),
   copy: (id, mode, close) => ipcRenderer.invoke('clipboard:copy', id, mode, close), copyText: (text, close) => ipcRenderer.invoke('clipboard:copyText', text, close),
+  paste: (id, mode) => ipcRenderer.invoke('clipboard:paste', id, mode), pasteText: text => ipcRenderer.invoke('clipboard:pasteText', text),
   update: (id, value) => ipcRenderer.invoke('clipboard:update', id, value), remove: ids => ipcRenderer.invoke('clipboard:remove', ids), clear: () => ipcRenderer.invoke('clipboard:clear'), captureCurrent: () => ipcRenderer.invoke('clipboard:captureCurrent'), ocr: id => ipcRenderer.invoke('clipboard:ocr', id),
-  onChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('clipboard:changed', listener); return () => ipcRenderer.removeListener('clipboard:changed', listener) }
+  onChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('clipboard:changed', listener); return () => { ipcRenderer.removeListener('clipboard:changed', listener) } }
 }
 const quickToolsApi: QuickToolsApi = {
   open: kind => ipcRenderer.invoke('quick:open', kind), shortcuts: () => ipcRenderer.invoke('quick:shortcuts'), setShortcuts: bindings => ipcRenderer.invoke('quick:setShortcuts', bindings), checkShortcut: binding => ipcRenderer.invoke('quick:checkShortcut', binding),
-  onShortcutsChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('quick:shortcutsChanged', listener); return () => ipcRenderer.removeListener('quick:shortcutsChanged', listener) }
+  onShortcutsChanged: callback => { const listener = (): void => callback(); ipcRenderer.on('quick:shortcutsChanged', listener); return () => { ipcRenderer.removeListener('quick:shortcutsChanged', listener) } }
 }
 
 const api = {
@@ -80,7 +82,7 @@ const api = {
     onProgress: (callback: (value: StressProgress) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, value: StressProgress): void => { if (value && typeof value.id === 'string' && typeof value.started === 'number') callback(value) }
       ipcRenderer.on('securityTesting:progress', listener)
-      return () => ipcRenderer.removeListener('securityTesting:progress', listener)
+      return () => { ipcRenderer.removeListener('securityTesting:progress', listener) }
     }
   },
   security: {
@@ -94,25 +96,32 @@ const api = {
     onVaultLocked: (callback: (event: VaultLockEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => { if (isVaultLockEvent(value)) callback(value) }
       ipcRenderer.on('security:vaultLocked', listener)
-      return () => ipcRenderer.removeListener('security:vaultLocked', listener)
+      return () => { ipcRenderer.removeListener('security:vaultLocked', listener) }
     }
   },
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke('app:platform'),
   version: (): Promise<string> => ipcRenderer.invoke('app:version'),
   app: {
+    theme: (): Promise<ThemeState> => ipcRenderer.invoke('app:theme'),
+    setTheme: (theme: ThemeMode): Promise<ThemeState> => ipcRenderer.invoke('app:setTheme', theme),
+    onThemeChanged: (callback: (state: ThemeState) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => { if (isThemeState(value)) callback(value) }
+      ipcRenderer.on('app:themeChanged', listener)
+      return () => { ipcRenderer.removeListener('app:themeChanged', listener) }
+    },
     language: (): Promise<LanguageState> => ipcRenderer.invoke('app:language'),
     setLanguage: (language: LanguageSetting): Promise<LanguageState> => ipcRenderer.invoke('app:setLanguage', language),
     onLanguageChanged: (callback: (state: LanguageState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => { if (isLanguageState(value)) callback(value) }
       ipcRenderer.on('app:languageChanged', listener)
-      return () => ipcRenderer.removeListener('app:languageChanged', listener)
+      return () => { ipcRenderer.removeListener('app:languageChanged', listener) }
     },
     trayAvailable: (): Promise<boolean> => ipcRenderer.invoke('app:trayAvailable'),
     quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
     onOpenTool: (callback: (target: QuickTarget) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, target: unknown): void => { if (isQuickTarget(target)) callback(target) }
       ipcRenderer.on('app:openTool', listener)
-      return () => ipcRenderer.removeListener('app:openTool', listener)
+      return () => { ipcRenderer.removeListener('app:openTool', listener) }
     }
   },
   color: {
@@ -121,7 +130,7 @@ const api = {
     onPicked: (callback: (hex: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, hex: unknown): void => { if (typeof hex === 'string' && /^#[0-9A-F]{6}$/.test(hex)) callback(hex) }
       ipcRenderer.on('color:picked', listener)
-      return () => ipcRenderer.removeListener('color:picked', listener)
+      return () => { ipcRenderer.removeListener('color:picked', listener) }
     }
   },
   ocr: {
@@ -131,7 +140,7 @@ const api = {
     onProgress: (callback: (progress: OcrProgress) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progress: OcrProgress): void => callback(progress)
       ipcRenderer.on('ocr:progress', listener)
-      return () => ipcRenderer.removeListener('ocr:progress', listener)
+      return () => { ipcRenderer.removeListener('ocr:progress', listener) }
     }
   },
 
@@ -173,7 +182,7 @@ const api = {
     onHashProgress: (callback: (progress: FileHashProgress) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progress: FileHashProgress): void => callback(progress)
       ipcRenderer.on('file:hashProgress', listener)
-      return () => ipcRenderer.removeListener('file:hashProgress', listener)
+      return () => { ipcRenderer.removeListener('file:hashProgress', listener) }
     },
     info: (path: string): Promise<FileInfo> => ipcRenderer.invoke('file:info', path),
     openDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile')

@@ -83,7 +83,7 @@ export function TitleBar(): JSX.Element {
         <button
           type="button"
           aria-label={uiText('Search tools')}
-          title={shortcut ? `Search tools (${shortcut})` : 'Search tools'}
+          title={shortcut ? uiText('Search tools ({shortcut})', { shortcut: shortcut }) : uiText('Search tools')}
           onClick={() => setCommandOpen(true)}
           className={cn(
             'titlebar-no-drag group flex h-9 w-full max-w-[min(400px,52vw)] items-center gap-2 rounded-mac',
@@ -105,8 +105,8 @@ export function TitleBar(): JSX.Element {
         <button
           type="button"
           className="mac-btn-ghost h-9 w-9 !p-0"
-          title={isDark ? 'Switch to light' : 'Switch to dark'}
-          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+          title={isDark ? uiText('Switch to light') : uiText('Switch to dark')}
+          aria-label={isDark ? uiText('Switch to light theme') : uiText('Switch to dark theme')}
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
         >
           {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -148,7 +148,7 @@ function WindowBtn({
   return (
     <button
       type="button"
-      title={disabled ? `${title} — available in the desktop app` : title}
+      title={disabled ? uiText('{title} — available in the desktop app', { title: title }) : title}
       aria-label={title}
       disabled={disabled}
       onClick={onClick}

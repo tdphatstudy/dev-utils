@@ -27,7 +27,7 @@ try {
   await page.getByRole('status').filter({hasText:'RGB copied'}).waitFor()
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth && document.documentElement.scrollHeight<=innerHeight), 'Popup overflows')
   if(process.env.BRAND_SCREENSHOT_DIR) { await mkdir(process.env.BRAND_SCREENSHOT_DIR,{recursive:true}); await page.screenshot({path:join(process.env.BRAND_SCREENSHOT_DIR,'devfusion-color-popup.png')}) }
-  await page.getByRole('button', { name: 'Repick', exact: true }).click()
+  await page.getByRole('button', { name: 'Pick another color', exact: true }).click()
   assert.equal(await page.evaluate(()=>window.__pickerTest.repicks),1)
   await page.keyboard.press('Escape')
   assert.equal(await page.evaluate(()=>window.__pickerTest.closed),1)

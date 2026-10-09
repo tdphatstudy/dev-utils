@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import type { ComponentType } from 'react'
 import type { ContentKindId } from '@shared/secret-box/content-kinds'
 import { editorKindFor } from '@shared/secret-box/content-kinds'
@@ -21,6 +22,7 @@ export interface ContentEditorProps {
 type EditorComponent = ComponentType<ContentEditorProps>
 
 function MediaEditorBridge(props: ContentEditorProps): JSX.Element {
+  useUiLocale()
   const kind = props.type ?? 'image'
   if (kind === 'image' || kind === 'video' || kind === 'audio') {
     return (
@@ -46,6 +48,7 @@ function MediaEditorBridge(props: ContentEditorProps): JSX.Element {
 }
 
 function BinaryEditorBridge(props: ContentEditorProps): JSX.Element {
+  useUiLocale()
   return (
     <BinaryFileView
       value={props.value}

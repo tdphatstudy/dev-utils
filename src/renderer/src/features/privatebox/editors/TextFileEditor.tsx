@@ -28,18 +28,14 @@ export function TextFileEditor({ value, onChange, className }: Props): JSX.Eleme
           type="button"
           className="mac-btn-secondary !text-[11px]"
           onClick={() => onChange(convertLineEndings(value, 'lf'))}
-        >
-          → LF
-        </button>
+        >{uiText('→ LF')}{' '}</button>
         <button
           type="button"
           className="mac-btn-secondary !text-[11px]"
           onClick={() => onChange(convertLineEndings(value, 'crlf'))}
-        >
-          → CRLF
-        </button>
+        >{uiText('→ CRLF')}{' '}</button>
         <span className="text-[11px] text-mac-label-tertiary">
-          {lines} lines · {words} words · {chars} chars · {ending}
+          {uiText('{lines} lines · {words} words · {chars} chars · {ending}', { lines, words, chars, ending })}
         </span>
         <div className="ml-auto">
           <CopyButton text={value} label={uiText('Copy')} className="!text-[11px]" />

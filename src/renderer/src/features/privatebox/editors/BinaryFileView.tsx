@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { File, Download } from 'lucide-react'
 import { formatBytes } from '@renderer/lib/utils'
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function BinaryFileView({ name, value, mimeType, onExport, className }: Props): JSX.Element {
+  useUiLocale()
   const bytes = value ? Math.floor((value.length * 3) / 4) : 0
   return (
     <div className={`flex h-full flex-col items-center justify-center gap-3 p-8 ${className ?? ''}`}>
@@ -20,18 +22,13 @@ export function BinaryFileView({ name, value, mimeType, onExport, className }: P
       <div className="text-center">
         <p className="text-[14px] font-semibold text-mac-label">{name}</p>
         <p className="mt-1 text-[12px] text-mac-label-secondary">
-          {mimeType || 'application/octet-stream'} · {formatBytes(bytes)}
+          {mimeType || uiText('application/octet-stream')} · {formatBytes(bytes)}
         </p>
-        <p className="mt-2 max-w-sm text-[12px] text-mac-label-tertiary">
-          Binary file stored encrypted in the vault. Preview is not available — export to open with
-          another app.
-        </p>
+        <p className="mt-2 max-w-sm text-[12px] text-mac-label-tertiary">{uiText('Binary file stored encrypted in the vault. Preview is not available — export to open with another app.')}{' '}</p>
       </div>
       {onExport && (
         <button type="button" className="mac-btn-primary mt-2" onClick={onExport}>
-          <Download className="h-3.5 w-3.5" />
-          Export to disk…
-        </button>
+          <Download className="h-3.5 w-3.5" />{uiText('Export to disk…')}{' '}</button>
       )}
     </div>
   )

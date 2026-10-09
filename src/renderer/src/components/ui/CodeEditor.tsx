@@ -205,9 +205,9 @@ export function CodeEditor({
       {label && (
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-mac-separator px-3 py-2">
           <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-mac-label">{t(label)}</span>
-          {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title="Select and copy text from this output">{uiText('Read only')}</span>}
+          {readOnly && <span className="rounded bg-mac-control px-1.5 py-0.5 text-[11px] text-mac-label-secondary" title={uiText('Select and copy text from this output')}>{uiText('Read only')}</span>}
           {onRun && runShortcut.binding && <kbd className="text-[11px] text-mac-label-secondary" aria-hidden>{formatShortcut(runShortcut.binding, runShortcut.platform)}</kbd>}
-          <span className="text-[11px] tabular-nums text-mac-label-secondary" aria-hidden>{value.length.toLocaleString()} chars</span>
+          <span className="text-[11px] tabular-nums text-mac-label-secondary" aria-hidden>{value.length.toLocaleString()} {uiText('chars')}</span>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -234,10 +234,10 @@ export function CodeEditor({
           <div className="flex flex-wrap items-start gap-2 text-[12px] leading-relaxed text-mac-danger">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             <div className="min-w-[120px] flex-1 break-words [overflow-wrap:anywhere]">
-              <p className="font-medium">{diagnostic.line ? `Line ${diagnostic.line}${diagnostic.column ? `, column ${diagnostic.column}` : ''}: ` : ''}{diagnostic.error}</p>
-              {diagnostic.hint && <p className="mt-1 text-mac-label-secondary">{diagnostic.hint}</p>}
+              <p className="font-medium">{diagnostic.line ? diagnostic.column ? uiText('Line {line}, column {column}:', { line: diagnostic.line, column: diagnostic.column }) : uiText('Line {line}:', { line: diagnostic.line }) : ''}{' '}{uiText(diagnostic.error)}</p>
+              {diagnostic.hint && <p className="mt-1 text-mac-label-secondary">{uiText(diagnostic.hint)}</p>}
             </div>
-            {errorOffset != null && <button type="button" onClick={jumpToError} className="mac-btn-ghost ml-auto shrink-0 !px-2 !text-[12px]" title="Move cursor to the first error"><ArrowDownToLine className="h-3.5 w-3.5" aria-hidden />Go to error</button>}
+            {errorOffset != null && <button type="button" onClick={jumpToError} className="mac-btn-ghost ml-auto shrink-0 !px-2 !text-[12px]" title={uiText('Move cursor to the first error')}><ArrowDownToLine className="h-3.5 w-3.5" aria-hidden />{uiText('Go to error')}</button>}
           </div>
         </div>
       )}

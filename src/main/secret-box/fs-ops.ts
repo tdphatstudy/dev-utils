@@ -282,7 +282,11 @@ export async function renameEntry(relativePath: string, newName: string): Promis
   if (isPutlFile(basename(abs))) {
     const doc = await readFileInternal(relativePath, access)
     assertAccess(access)
-    const type = typeFromName(name)
+    const namedType = typeFromName(name)
+    const type = isBinaryKind(doc.type) ? doc.type : namedType
+    if (!isBinaryKind(doc.type) && isBinaryKind(namedType)) {
+      throw new Error('Changing a text file to a media type requires importing the media file.')
+    }
     const logical = ensureExtension(name, type)
     const now = new Date().toISOString()
     const payload: DocPayload = {

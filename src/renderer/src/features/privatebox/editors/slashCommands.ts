@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 export interface SlashCommand {
   id: string
   label: string
@@ -12,72 +13,72 @@ export interface SlashCommand {
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     id: 'h1',
-    label: 'Heading 1',
-    description: 'Large section title',
+    label: messageKey('Heading 1'),
+    description: messageKey('Large section title'),
     aliases: ['h1', 'title', 'heading1'],
     insert: '# '
   },
   {
     id: 'h2',
-    label: 'Heading 2',
-    description: 'Medium section title',
+    label: messageKey('Heading 2'),
+    description: messageKey('Medium section title'),
     aliases: ['h2', 'heading2'],
     insert: '## '
   },
   {
     id: 'h3',
-    label: 'Heading 3',
-    description: 'Small section title',
+    label: messageKey('Heading 3'),
+    description: messageKey('Small section title'),
     aliases: ['h3', 'heading3'],
     insert: '### '
   },
   {
     id: 'bullet',
-    label: 'Bullet list',
-    description: 'Unordered list item',
+    label: messageKey('Bullet list'),
+    description: messageKey('Unordered list item'),
     aliases: ['bullet', 'ul', 'list'],
     insert: '- '
   },
   {
     id: 'number',
-    label: 'Numbered list',
-    description: 'Ordered list item',
+    label: messageKey('Numbered list'),
+    description: messageKey('Ordered list item'),
     aliases: ['number', 'ol', 'ordered'],
     insert: '1. '
   },
   {
     id: 'todo',
-    label: 'To-do',
-    description: 'Checkbox task',
+    label: messageKey('To-do'),
+    description: messageKey('Checkbox task'),
     aliases: ['todo', 'task', 'check'],
     insert: '- [ ] '
   },
   {
     id: 'quote',
-    label: 'Quote',
-    description: 'Block quote',
+    label: messageKey('Quote'),
+    description: messageKey('Block quote'),
     aliases: ['quote', 'blockquote'],
     insert: '> '
   },
   {
     id: 'code',
-    label: 'Code block',
-    description: 'Fenced code block',
+    label: messageKey('Code block'),
+    description: messageKey('Fenced code block'),
     aliases: ['code', 'codeblock', 'pre'],
     insert: '```\n\n```',
     cursorBack: 4
   },
   {
     id: 'divider',
-    label: 'Divider',
-    description: 'Horizontal rule',
+    label: messageKey('Divider'),
+    description: messageKey('Horizontal rule'),
     aliases: ['divider', 'hr', 'line'],
     insert: '\n---\n'
   },
   {
     id: 'callout',
-    label: 'Callout',
-    description: 'Highlighted note',
+    label: messageKey('Callout'),
+    description: messageKey('Highlighted note'),
     aliases: ['callout', 'note', 'info'],
     insert: '> **Note:** '
   }

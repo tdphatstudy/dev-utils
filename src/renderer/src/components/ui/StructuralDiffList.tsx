@@ -1,12 +1,13 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import type { DiffEntry } from '@shared/json/diff'
 import { cn } from '@renderer/lib/utils'
 
 export function StructuralDiffList({ entries }: { entries: DiffEntry[] }): JSX.Element {
+  useUiLocale()
   if (entries.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-[13px] text-mac-success">
-        No differences
-      </div>
+        {uiText('No differences')}</div>
     )
   }
 

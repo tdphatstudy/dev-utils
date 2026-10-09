@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import {
@@ -55,30 +56,29 @@ export default function UrlTools(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'parse', label: 'Parse' },
-            { value: 'encode', label: uiText('Encode') },
-            { value: 'decode', label: uiText('Decode') }
+            { value: 'parse', label: messageKey('Parse') },
+            { value: 'encode', label: messageKey('Encode') },
+            { value: 'decode', label: messageKey('Decode') }
           ]}
         />
         {mode !== 'parse' && <label className="flex items-center gap-2 text-[12px]">
-          Encoding
-          <select className="mac-input !w-auto" value={encoding} onChange={(e) => setEncoding(e.target.value as UriEncoding)}>
-            <option value="component">URI component</option>
-            <option value="url">Whole URL</option>
-            <option value="form">Form / query value (+ spaces)</option>
+          {uiText('Encoding')}<select className="mac-input !w-auto" value={encoding} onChange={(e) => setEncoding(e.target.value as UriEncoding)}>
+            <option value="component">{uiText('URI component')}</option>
+            <option value="url">{uiText('Whole URL')}</option>
+            <option value="form">{uiText('Form / query value (+ spaces)')}</option>
           </select>
         </label>}
         {mode !== 'parse' && <button type="button" className="mac-btn-secondary" disabled={status.tone === 'danger' || !input} onClick={() => {
           setInput(output); setMode(mode === 'encode' ? 'decode' : 'encode')
-        }}>Reverse using output</button>}
+        }}>{uiText('Reverse using output')}</button>}
         <div className="ml-auto">
           <CopyButton text={output} />
         </div>
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="text" label="URL or text input" placeholder="URL or component…" />
-        <CodeEditor value={output} language={mode === 'parse' ? 'json' : 'text'} label={mode === 'parse' ? 'URL parts and query values' : 'Converted output'} readOnly />
+        <CodeEditor value={input} onChange={setInput} language="text" label={uiText('URL or text input')} placeholder={uiText('URL or component…')} />
+        <CodeEditor value={output} language={mode === 'parse' ? 'json' : 'text'} label={mode === 'parse' ? uiText('URL parts and query values') : uiText('Converted output')} readOnly />
       </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">

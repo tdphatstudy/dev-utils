@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Send, Code2 } from 'lucide-react'
@@ -30,11 +31,11 @@ type StatusTone = 'neutral' | 'success' | 'danger' | 'warning'
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
 const BODY_MODES: { value: BodyMode; label: string }[] = [
-  { value: 'none', label: 'None' },
+  { value: 'none', label: messageKey('None') },
   { value: 'json', label: 'JSON' },
-  { value: 'text', label: 'Raw' },
-  { value: 'urlencoded', label: 'x-www-form-urlencoded' },
-  { value: 'form', label: 'Form data' }
+  { value: 'text', label: messageKey('Raw') },
+  { value: 'urlencoded', label: messageKey('x-www-form-urlencoded') },
+  { value: 'form', label: messageKey('Form data') }
 ]
 
 export default function HttpClient(): JSX.Element {
@@ -115,7 +116,7 @@ export default function HttpClient(): JSX.Element {
     setResponse(null)
     try {
       if (!window.devutils?.net?.httpRequest) {
-        throw new Error('HTTP bridge unavailable — restart the app')
+        throw new Error('HTTP requests are unavailable. Restart DevFusion and try again.')
       }
       const res = await window.devutils.net.httpRequest(payload, id)
       if (version !== request.current) return
@@ -185,7 +186,7 @@ export default function HttpClient(): JSX.Element {
       <ToolToolbar className="gap-2">
         <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
           <select
-            aria-label="HTTP method"
+            aria-label={uiText('HTTP method')}
             disabled={busy}
             className={cn(
               'mac-input !w-[100px] shrink-0 !py-1.5 font-mono text-[13px] font-semibold sm:!w-[110px]',
@@ -201,7 +202,7 @@ export default function HttpClient(): JSX.Element {
             ))}
           </select>
           <input
-            aria-label="HTTP request URL"
+            aria-label={uiText('HTTP request URL')}
             aria-invalid={!!validateHttpPayload(payload)}
             disabled={busy}
             className="mac-input min-w-0 flex-1 basis-[12rem] font-mono text-[14px]"
@@ -217,26 +218,24 @@ export default function HttpClient(): JSX.Element {
             onClick={() => void send()}
           >
             <Send className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{busy ? 'Sending…' : 'Send'}</span>
-            <span className="sm:hidden">{busy ? '…' : 'Go'}</span>
+            <span className="hidden sm:inline">{busy ? uiText('Sending…') : uiText('Send')}</span>
+            <span className="sm:hidden">{busy ? '…' : uiText('Go')}</span>
           </button>
-          {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : uiText('Cancel')}</button>}
+          {busy && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? uiText('Canceling…') : uiText('Cancel')}</button>}
         </div>
       </ToolToolbar>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-mac-separator px-3 py-2 text-[12px] text-mac-label-secondary">
-        <label>Timeout <select aria-label="HTTP timeout" className="mac-input !w-auto !py-1" disabled={busy} value={timeout} onChange={(e) => setTimeoutValue(Number(e.target.value))}>{[5000, 15000, 30000, 60000].map((value) => <option key={value} value={value}>{value / 1000}s</option>)}</select></label>
-        <span>Redirects are shown as responses. Follow the Location header with a new request.</span>
+        <label>{uiText('Timeout')} <select aria-label={uiText('HTTP timeout')} className="mac-input !w-auto !py-1" disabled={busy} value={timeout} onChange={(e) => setTimeoutValue(Number(e.target.value))}>{[5000, 15000, 30000, 60000].map((value) => <option key={value} value={value}>{value / 1000}s</option>)}</select></label>
+        <span>{uiText('Redirects are shown as responses. Follow the Location header with a new request.')}</span>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(280px,1fr)_minmax(220px,1fr)] overflow-auto divide-y divide-mac-separator">
         <fieldset disabled={busy} className="flex min-h-[280px] min-w-0 flex-col">
-          <div role="tablist" aria-label="HTTP request sections" onKeyDown={navigateTabs} className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
+          <div role="tablist" aria-label={uiText('HTTP request sections')} onKeyDown={navigateTabs} className="flex shrink-0 items-center gap-1 border-b border-mac-separator px-2">
             <TabBtn id="http-request-tab-params" panel="http-request-panel" active={requestTab === 'params'} onClick={() => setRequestTab('params')}>
-              Params
-            </TabBtn>
+              {uiText('Params')}</TabBtn>
             <TabBtn id="http-request-tab-headers" panel="http-request-panel" active={requestTab === 'headers'} onClick={() => setRequestTab('headers')}>
-              Headers
-            </TabBtn>
+              {uiText('Headers')}</TabBtn>
             <TabBtn
               id="http-request-tab-body"
               panel="http-request-panel"
@@ -244,10 +243,9 @@ export default function HttpClient(): JSX.Element {
               onClick={() => setRequestTab('body')}
               disabled={!methodAllowsBody(method)}
             >
-              Body
-            </TabBtn>
+              {uiText('Body')}</TabBtn>
             <span className="ml-auto hidden pr-2 text-[12px] text-mac-label-tertiary sm:inline">
-              {runShortcut.binding && `${formatShortcut(runShortcut.binding, runShortcut.platform)} to send`}
+              {runShortcut.binding && uiText('{value1} to send', { value1: formatShortcut(runShortcut.binding, runShortcut.platform) })}
             </span>
           </div>
           <div id="http-request-panel" role="tabpanel" aria-labelledby={`http-request-tab-${requestTab}`} tabIndex={0} className="min-h-0 flex-1 overflow-hidden p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
@@ -275,23 +273,22 @@ export default function HttpClient(): JSX.Element {
             )}
             {requestTab === 'body' && methodAllowsBody(method) && (
               <div className="flex h-full min-h-0 flex-col gap-2">
-                <SegmentedControl label="Request body format" className="!flex !flex-wrap" value={bodyMode} onChange={setBodyMode} options={BODY_MODES} />
-                {bodyMode === 'form' && <p className="text-[12px] text-mac-label-secondary">Multipart text fields; Content-Type boundary is generated automatically. File uploads are not available here.</p>}
+                <SegmentedControl label={uiText('Request body format')} className="!flex !flex-wrap" value={bodyMode} onChange={setBodyMode} options={BODY_MODES} />
+                {bodyMode === 'form' && <p className="text-[12px] text-mac-label-secondary">{uiText('Multipart text fields; Content-Type boundary is generated automatically. File uploads are not available here.')}</p>}
                 <div className="min-h-0 flex-1">
                   {bodyMode === 'none' && (
                     <div className="flex h-full items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[14px] text-mac-label-tertiary">
-                      This request has no body
-                    </div>
+                      {uiText('This request has no body')}</div>
                   )}
                   {(bodyMode === 'json' || bodyMode === 'text') && (
                     <CodeEditor
                       value={bodyText}
                       onChange={setBodyText}
                       language={bodyMode === 'json' ? 'json' : 'text'}
-                      label="HTTP request body"
+                      label={uiText('HTTP request body')}
                       readOnly={busy}
                       onRun={() => void send()}
-                      placeholder={bodyMode === 'json' ? '{ }' : 'Raw body…'}
+                      placeholder={bodyMode === 'json' ? '{ }' : uiText('Raw body…')}
                     />
                   )}
                   {(bodyMode === 'form' || bodyMode === 'urlencoded') && (
@@ -312,17 +309,14 @@ export default function HttpClient(): JSX.Element {
         </fieldset>
 
         <section className="flex min-h-[220px] min-w-0 flex-col">
-          <div role="tablist" aria-label="HTTP response sections" onKeyDown={navigateTabs} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-mac-separator px-2">
+          <div role="tablist" aria-label={uiText('HTTP response sections')} onKeyDown={navigateTabs} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-mac-separator px-2">
             <TabBtn id="http-response-tab-body" panel="http-response-panel" active={responseTab === 'body'} onClick={() => setResponseTab('body')}>
-              Response
-            </TabBtn>
+              {uiText('Response')}</TabBtn>
             <TabBtn id="http-response-tab-headers" panel="http-response-panel" active={responseTab === 'headers'} onClick={() => setResponseTab('headers')}>
-              Headers
-            </TabBtn>
+              {uiText('Headers')}</TabBtn>
             <TabBtn id="http-response-tab-code" panel="http-response-panel" active={responseTab === 'code'} onClick={() => setResponseTab('code')}>
               <Code2 className="mr-1 inline h-3 w-3" />
-              Code
-            </TabBtn>
+              {uiText('Code')}</TabBtn>
             {response && (
               <span
                 className={cn(
@@ -339,7 +333,7 @@ export default function HttpClient(): JSX.Element {
               {responseTab === 'code' ? (
                 <>
                   <select
-                    aria-label="HTTP code language"
+                    aria-label={uiText('HTTP code language')}
                     className="mac-input !w-auto !py-1 text-[13px]"
                     value={snippetId}
                     onChange={(e) => setSnippetId(e.target.value as SnippetId)}
@@ -350,7 +344,7 @@ export default function HttpClient(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                  <CopyButton text={validationError ? '' : snippet} label="Copy snippet" />
+                  <CopyButton text={validationError ? '' : snippet} label={uiText('Copy snippet')} />
                 </>
               ) : (
                 <>
@@ -368,35 +362,35 @@ export default function HttpClient(): JSX.Element {
                   />
                   <CopyButton
                     text={responseTab === 'headers' ? responseHeadersJson : prettyBody}
-                    label={response?.bodyEncoding === 'base64' && responseTab === 'body' ? 'Copy Base64' : uiText('Copy')}
+                    label={response?.bodyEncoding === 'base64' && responseTab === 'body' ? uiText('Copy Base64') : uiText('Copy')}
                   />
                 </>
               )}
             </div>
           </div>
           {response && responseTab === 'body' && <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-1 text-[12px] text-mac-label-secondary">
-            {response.bodyEncoding === 'base64' ? <span>Binary or non-UTF-8 bytes · lossless Base64 view</span> : <label><input type="checkbox" disabled={!responseIsJson} checked={pretty} onChange={(e) => setPretty(e.target.checked)} /> Format JSON layout</label>}
-            {!response.bodyText && <span>Empty response body ({method === 'HEAD' ? 'HEAD' : response.status})</span>}
+            {response.bodyEncoding === 'base64' ? <span>{uiText('Binary or non-UTF-8 response · displayed as Base64')}</span> : <label><input type="checkbox" disabled={!responseIsJson} checked={pretty} onChange={(e) => setPretty(e.target.checked)} /> {uiText('Format JSON layout')}</label>}
+            {!response.bodyText && <span>{uiText('Empty response body (')}{method === 'HEAD' ? uiText('HEAD') : response.status})</span>}
           </div>}
           <div id="http-response-panel" role="tabpanel" aria-labelledby={`http-response-tab-${responseTab}`} tabIndex={0} className="min-h-0 flex-1 overflow-hidden p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mac-accent">
             {responseTab === 'code' ? (
-              <CodeEditor value={snippet} language="text" label="HTTP code snippet" readOnly />
+              <CodeEditor value={snippet} language="text" label={uiText('HTTP code snippet')} readOnly />
             ) : !response && !error ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 rounded-mac-lg border border-dashed border-mac-separator px-5 text-center text-[14px] text-mac-label-secondary">
                 <Send className="mb-1 h-6 w-6 opacity-40" strokeWidth={1.5} />
-                {busy ? 'Waiting for response…' : canceled ? 'Request canceled. Send again to retry.' : !available ? 'Desktop app required to send requests' : 'Send a request to see the response'}
-                {!busy && !canceled && available && <p className="text-[13px]">Set the URL, add any headers or query parameters, then press Send{runShortcut.binding ? ` or ${formatShortcut(runShortcut.binding, runShortcut.platform)}` : ''}.</p>}
+                {busy ? uiText('Waiting for response…') : canceled ? uiText('Request canceled. Send again to retry.') : !available ? uiText('Desktop app required to send requests') : uiText('Send a request to see the response')}
+                {!busy && !canceled && available && <p className="text-[13px]">{uiText('Set the URL, add any headers or query parameters, then press Send')}{runShortcut.binding ? ` ${uiText('or {value1}', { value1: formatShortcut(runShortcut.binding, runShortcut.platform) })}` : ''}.</p>}
               </div>
             ) : error && !response ? (
               <div className="flex h-full items-center justify-center rounded-mac-lg border border-mac-danger/30 bg-mac-danger/5 px-4 text-center text-[14px] text-mac-danger">
                 {error}
               </div>
             ) : responseTab === 'headers' ? (
-              <CodeEditor value={responseHeadersJson} language="json" label="HTTP response headers" readOnly />
+              <CodeEditor value={responseHeadersJson} language="json" label={uiText('HTTP response headers')} readOnly />
             ) : (
               <CodeEditor
                 value={prettyBody}
-                label={response?.bodyEncoding === 'base64' ? 'HTTP response Base64' : 'HTTP response body'}
+                label={response?.bodyEncoding === 'base64' ? uiText('HTTP response Base64') : uiText('HTTP response body')}
                 language={looksLikeJson(prettyBody) ? 'json' : 'text'}
                 readOnly
               />

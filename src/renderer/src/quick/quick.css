@@ -1,4 +1,5 @@
 body { margin:0; background:var(--mac-bg); color:var(--mac-label) } #root { height:100vh }
+:root { color-scheme:light } :root.dark { color-scheme:dark }
 .quick-shell { display:flex; flex-direction:column; height:100%; font:13px system-ui,sans-serif; border:1px solid var(--mac-separator); border-radius:14px; overflow:hidden }
 .quick-shell * { box-sizing:border-box }.quick-shell svg { flex-shrink:0; aspect-ratio:1 }
 .quick-header { -webkit-app-region:drag; display:flex; align-items:center; gap:9px; padding:11px 14px; border-bottom:1px solid var(--mac-separator) }

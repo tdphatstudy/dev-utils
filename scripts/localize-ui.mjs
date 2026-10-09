@@ -1,50 +1,66 @@
 import ts from 'typescript'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
+import { readCatalogRows, templateMessage } from './i18n-coverage.mjs'
 
 // One-time, source-based migration. Touch only known static interface messages;
 // never inspect a live DOM, user input, editor values, routes or protocol strings.
 const root = resolve('src/renderer/src')
-let catalog = ts.createSourceFile('catalog.ts', await readFile('src/shared/i18n/catalog.ts', 'utf8'), ts.ScriptTarget.Latest, true)
-const keys = new Set()
-function catalogKeys(node) {
-  if (ts.isVariableDeclaration(node) && ts.isArrayLiteralExpression(node.initializer)) for (const row of node.initializer.elements) if (ts.isArrayLiteralExpression(row) && ts.isStringLiteral(row.elements[0])) keys.add(row.elements[0].text)
-  ts.forEachChild(node, catalogKeys)
-}
-catalogKeys(catalog)
-catalog = ts.createSourceFile('workspace-messages.ts', await readFile('src/shared/i18n/workspace-messages.ts', 'utf8'), ts.ScriptTarget.Latest, true)
-catalogKeys(catalog)
-catalog = ts.createSourceFile('settings-messages.ts', await readFile('src/shared/i18n/settings-messages.ts', 'utf8'), ts.ScriptTarget.Latest, true)
-catalogKeys(catalog)
-catalog = ts.createSourceFile('tool-messages.ts', await readFile('src/shared/i18n/tool-messages.ts', 'utf8'), ts.ScriptTarget.Latest, true)
-catalogKeys(catalog)
-const attributes = new Set(['label', 'title', 'aria-label', 'placeholder', 'heading', 'purpose', 'limits', 'caption', 'action'])
+const keys = new Set((await readCatalogRows()).map(row => row.values[0]))
+const include = process.argv.find(value => value.startsWith('--include='))?.slice(10)?.split(',')
+const exclude = process.argv.find(value => value.startsWith('--exclude='))?.slice(10)?.split(',') ?? []
+const attributes = new Set(['label', 'title', 'aria-label', 'placeholder', 'heading', 'purpose', 'limits', 'caption', 'action', 'description', 'emptyTitle', 'emptyDescription', 'slowDetail', 'body', 'summary', 'leftLabel', 'rightLabel', 'confirmLabel', 'submitLabel', 'headers', 'labels'])
 const quote = value => "'" + value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n') + "'"
 async function files(directory) { return (await Promise.all((await readdir(directory, { withFileTypes: true })).map(entry => entry.isDirectory() ? files(join(directory, entry.name)) : entry.name.endsWith('.tsx') ? [join(directory, entry.name)] : []))).flat() }
 let count = 0, changedFiles = 0
 for (const file of await files(root)) {
+  const path = file.replaceAll('\\', '/')
+  if (include && !include.some(part => path.includes(part)) || exclude.some(part => path.includes(part))) continue
   const source = await readFile(file, 'utf8'), ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX), edits = []
   const replace = (node, text) => edits.push({ start: node.getStart(ast), end: node.end, text })
   function walk(node) {
+    if (ts.isJsxElement(node) && ['code', 'kbd', 'pre'].includes(node.openingElement.tagName.getText(ast))) return
     if (ts.isJsxText(node)) {
       const message = node.getText(ast).replace(/\s+/g, ' ').trim()
-      if (keys.has(message)) replace(node, `{uiText(${quote(message)})}`)
+      if (keys.has(message)) {
+        const raw = node.getText(ast)
+        const leading = /^ +\S/.test(raw) ? ' ' : ''
+        const trailing = /\S +$/.test(raw) ? ' ' : ''
+        replace(node, `${leading}{uiText(${quote(message)})}${trailing}`)
+      }
     } else if (ts.isJsxAttribute(node) && attributes.has(node.name.getText(ast)) && node.initializer && ts.isStringLiteral(node.initializer) && keys.has(node.initializer.text)) {
       replace(node.initializer, `{uiText(${quote(node.initializer.text)})}`)
-    } else if (ts.isStringLiteral(node) && keys.has(node.text)) {
+      return
+    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && keys.has(ts.isTemplateExpression(node) ? templateMessage(node).message : node.text)) {
       let parent = node.parent, expression = null, skip = false
       while (parent && !ts.isSourceFile(parent)) {
-        if (ts.isBinaryExpression(parent) || ts.isFunctionLike(parent) || ts.isJsxAttribute(parent)) { skip = true; break }
+        if (ts.isConditionalExpression(parent) && parent.condition.pos <= node.pos && parent.condition.end >= node.end) { skip = true; break }
+        if (ts.isBinaryExpression(parent) && ![ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.AmpersandAmpersandToken].includes(parent.operatorToken.kind) || ts.isFunctionLike(parent)) { skip = true; break }
+        if (ts.isJsxAttribute(parent) && !attributes.has(parent.name.getText(ast))) { skip = true; break }
         if (ts.isCallExpression(parent) && ['t', 'uiText', 'translate'].includes(parent.expression.getText(ast))) { skip = true; break }
+        if (ts.isCallExpression(parent)) { skip = true; break }
         if (ts.isPropertyAssignment(parent) && !['label', 'title', 'description'].includes(parent.name.getText(ast))) { skip = true; break }
-        if (ts.isJsxExpression(parent)) { expression = parent; break }
+        if (ts.isJsxExpression(parent)) {
+          if (ts.isJsxAttribute(parent.parent) && !attributes.has(parent.parent.name.getText(ast))) { skip = true; break }
+          expression = parent; break
+        }
         parent = parent.parent
       }
-      if (!skip && expression) replace(node, `uiText(${quote(node.text)})`)
+      if (!skip && expression) {
+        if (ts.isTemplateExpression(node)) {
+          const template = templateMessage(node)
+          replace(node, `uiText(${quote(template.message)}, { ${template.values.map(value => `${value.name}: ${value.expression}`).join(', ')} })`)
+          return
+        } else replace(node, `uiText(${quote(node.text)})`)
+      }
     }
     ts.forEachChild(node, walk)
   }
   walk(ast)
+  const ranges = edits.filter(edit => edit.start !== edit.end).sort((a, b) => a.start - b.start)
+  for (let index = 1; index < ranges.length; index++) {
+    if (ranges[index].start < ranges[index - 1].end) throw new Error(`Overlapping localization edits: ${file}`)
+  }
   if (!edits.length) continue
   function subscribe(node) {
     const name = ts.isFunctionDeclaration(node) ? node.name?.text : ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) ? node.name.text : null
@@ -58,7 +74,9 @@ for (const file of await files(root)) {
     ts.forEachChild(node, subscribe)
   }
   subscribe(ast)
-  if (!source.includes('t as uiText')) edits.push({ start: 0, end: 0, text: "import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'\n" })
+  const needSubscribe = edits.some(edit => edit.text.includes('useUiLocale()'))
+  if (!source.includes('t as uiText')) edits.push({ start: 0, end: 0, text: needSubscribe && !source.includes('useI18n as useUiLocale') ? "import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'\n" : "import { t as uiText } from '@renderer/i18n'\n" })
+  else if (needSubscribe && !source.includes('useI18n as useUiLocale')) edits.push({ start: 0, end: 0, text: "import { useI18n as useUiLocale } from '@renderer/i18n'\n" })
   let result = source
   for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end)
   await writeFile(file, result)

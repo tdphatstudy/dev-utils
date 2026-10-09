@@ -52,7 +52,7 @@ const palette = () => page.getByRole('dialog', { name: 'Search tools', exact: tr
 try {
   const paletteGate = await gateChunk('CommandPaletteContents')
   await page.goto(url + '/#/')
-  const homeSearch = page.getByRole('searchbox', { name: 'What would you like to do?', exact: true })
+  const homeSearch = page.getByRole('searchbox', { name: 'Find a tool', exact: true })
   await homeSearch.waitFor()
   await homeSearch.focus()
   await page.keyboard.press('Control+k')
@@ -103,7 +103,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   assert.equal(await loader.locator('.mac-loading-logo').evaluate((element) => getComputedStyle(element).animationName), 'none')
   await status.waitFor()
-  await loader.getByRole('link', { name: 'Back to all tools', exact: true }).click()
+  await loader.getByRole('link', { name: 'All tools', exact: true }).click()
   await homeSearch.waitFor()
   loremGate.release()
   await loremGate.dispose()

@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -14,7 +15,7 @@ import { ArrowDownUp } from 'lucide-react'
 type Mode = 'encode' | 'decode'
 
 export default function Base64Codec(): JSX.Element {
-  useUiLocale()
+  const { locale } = useUiLocale()
   const [mode, setMode] = useState<Mode>('encode')
   const [variant, setVariant] = useState<Base64Variant>('standard')
   const [decodedFormat, setDecodedFormat] = useState<'text' | 'hex'>('text')
@@ -51,27 +52,27 @@ export default function Base64Codec(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'encode', label: uiText('Encode') },
-            { value: 'decode', label: uiText('Decode') }
+            { value: 'encode', label: messageKey('Encode') },
+            { value: 'decode', label: messageKey('Decode') }
           ]}
         />
         {mode === 'decode' && <label className="flex items-center gap-2 text-[12px]">{uiText('Output')}<select aria-label={uiText('Output')} className="mac-input !w-auto" value={decodedFormat} onChange={(e) => setDecodedFormat(e.target.value as 'text' | 'hex')}>
-            <option value="text">UTF-8 text</option><option value="hex">Hex bytes</option>
+            <option value="text">{uiText('UTF-8 text')}</option><option value="hex">{uiText('Hex bytes')}</option>
           </select>
         </label>}
         <SegmentedControl
           value={variant}
           onChange={setVariant}
           options={[
-            { value: 'standard', label: 'Standard' },
-            { value: 'url', label: 'URL-safe' }
+            { value: 'standard', label: messageKey('Standard') },
+            { value: 'url', label: messageKey('URL-safe') }
           ]}
         />
         <button
           type="button"
           className="mac-btn-secondary"
           disabled={!input || !result.ok || (mode === 'decode' && decodedFormat === 'hex')}
-          title={mode === 'decode' && decodedFormat === 'hex' ? 'Hex bytes cannot be reversed as UTF-8 text' : 'Use output as input and reverse the operation'}
+          title={mode === 'decode' && decodedFormat === 'hex' ? uiText('Hex bytes cannot be reversed as UTF-8 text') : uiText('Use output as input and reverse the operation')}
           onClick={() => {
             if (result.ok) {
               setInput(result.text)
@@ -80,8 +81,7 @@ export default function Base64Codec(): JSX.Element {
           }}
         >
           <ArrowDownUp className="h-3.5 w-3.5" />
-          Reverse
-        </button>
+          {uiText('Reverse')}</button>
         <div className="ml-auto flex items-center gap-2">
           <SaveToBoxButton type="text" content={output} defaultName="base64-output.txt" disabled={!result.ok || !output} />
           <CopyButton text={output} />
@@ -94,17 +94,17 @@ export default function Base64Codec(): JSX.Element {
           value={input}
           onChange={setInput}
           language="text"
-          label={mode === 'encode' ? 'Text input (UTF-8)' : 'Base64 input'}
-          placeholder={mode === 'encode' ? 'Plain text…' : 'Base64…'}
+          label={mode === 'encode' ? uiText('Text input (UTF-8)') : uiText('Base64 input')}
+          placeholder={mode === 'encode' ? uiText('Plain text…') : uiText('Base64…')}
         />
-        <CodeEditor value={output} language="text" label={mode === 'encode' ? 'Encoded Base64' : decodedFormat === 'hex' ? 'Decoded bytes (hex)' : 'Decoded UTF-8 text'} readOnly />
+        <CodeEditor value={output} language="text" label={mode === 'encode' ? uiText('Encoded Base64') : decodedFormat === 'hex' ? uiText('Decoded bytes (hex)') : uiText('Decoded UTF-8 text')} readOnly />
       </SplitPane>
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={!input ? 'neutral' : result.ok ? 'success' : 'danger'}>
-          {!input ? 'Enter text or Base64 to begin · Base64 is an encoding, not encryption' : result.ok
-            ? `${mode === 'encode' ? 'Encoded' : 'Decoded'} · ${output.length.toLocaleString()} chars`
-            : result.error}
+          {!input ? uiText('Enter text or Base64 to begin · Base64 is an encoding, not encryption') : result.ok
+            ? uiText('{value1} · {value2} chars', { value1: uiText(mode === 'encode' ? 'Encoded' : 'Decoded'), value2: output.length.toLocaleString(locale) })
+            : uiText(result.error)}
         </ToolStatus>
       </footer>
     </div>

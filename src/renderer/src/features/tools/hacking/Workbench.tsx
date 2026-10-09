@@ -25,7 +25,7 @@ export function Findings({ title, summary, findings }: { title: string; summary:
     <div className="grid grid-cols-3 gap-2 text-[12px]">{[[uiText('Warning'), warning], [uiText('Review'), review], [uiText('Passed'), passed]].map(([label, count]) => <div key={label} className="rounded-mac-lg border border-mac-separator p-3"><p className="text-mac-label-secondary">{label}</p><p className="text-xl font-semibold tabular-nums">{count}</p></div>)}</div>
     <div className="flex flex-wrap gap-2" role="group" aria-label={uiText('Filter findings')}>{([['all', 'All checks'], ['attention', 'Needs attention'], ['pass', 'Passed']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} className={filter === value ? 'mac-btn-primary' : 'mac-btn-secondary'} onClick={() => setFilter(value)}>{uiText(label)}</button>)}</div>
     <CopyButton label={uiText('Copy report')} text={JSON.stringify({ summary, findings }, null, 2)} />
-    <AnalysisTable caption={uiText(title)} headers={['Level / check', 'Observation']} rows={visible.map(finding => [
+    <AnalysisTable caption={uiText(title)} headers={[uiText('Level / check'), uiText('Observation')]} rows={visible.map(finding => [
       <span className={finding.severity === 'warning' ? 'text-mac-danger' : finding.severity === 'pass' ? 'text-mac-success' : 'text-mac-label-secondary'}><span className="mb-1 inline-block rounded-md bg-mac-control px-2 py-0.5 text-[11px] font-medium">{uiText(finding.severity === 'pass' ? 'Passed' : finding.severity === 'warning' ? 'Warning' : 'Review')}</span><span className="block">{finding.rule}</span></span>, uiText(finding.detail)
     ])} />
   </AnalysisResults>

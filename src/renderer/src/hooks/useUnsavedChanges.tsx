@@ -9,7 +9,6 @@ interface Options {
   onSave: () => Promise<boolean>
 }
 
-/** The guard owns no document content and never persists drafts. */
 export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
   requestLeave: (action: () => void | Promise<void>) => void
   dialog: JSX.Element
@@ -25,7 +24,7 @@ export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
   const open = blocker.state === 'blocked' || pending !== null
 
   useBeforeUnload(useCallback((event: BeforeUnloadEvent) => {
-    if (!dirty && !busy && !saving) return
+    if (!dirty && !busy && !saving && !running.current) return
     event.preventDefault()
     event.returnValue = ''
   }, [dirty, busy, saving]), { capture: true })
@@ -34,7 +33,10 @@ export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
     if (busy || running.current) return
     setError(null)
     if (dirty) setPending(() => action)
-    else void Promise.resolve().then(action).catch(() => setError('Could not complete the action. Try again.'))
+    else {
+      running.current = true
+      void Promise.resolve().then(action).catch(() => setError('Could not complete the action. Try again.')).finally(() => { running.current = false })
+    }
   }
 
   const cancel = (): void => {
@@ -45,7 +47,6 @@ export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
   }
 
   const finish = async (): Promise<void> => {
-    // Sign out may fail. Keep the blocked page and draft available for a retry.
     if (pending) await pending()
     setPending(null)
     if (blocker.state === 'blocked') blocker.proceed()
@@ -71,14 +72,14 @@ export function useUnsavedChanges({ dirty, busy, onSave }: Options): {
   }
 
   const dialog = (
-    <Modal open={open} title={dirty ? 'Unsaved changes' : locked ? 'Save in progress' : 'Leave this view?'}
-      description={dirty ? 'Save your note before leaving, discard your changes, or keep editing.' : locked ? 'Wait for the current write to finish before leaving.' : 'The write has finished. You can continue or stay here.'}
+    <Modal open={open} title={uiText(dirty ? 'Unsaved changes' : locked ? 'Save in progress' : 'Leave this view?')}
+      description={uiText(dirty ? 'Save your changes before leaving, discard them, or keep editing.' : locked ? 'Wait for the current write to finish before leaving.' : 'The write has finished. You can continue or stay here.')}
       onClose={cancel} busy={locked}>
-      {error && <p role="alert" className="mb-4 text-[13px] text-mac-danger">{error}</p>}
+      {error && <p role="alert" className="mb-4 text-[13px] text-mac-danger">{uiText(error)}</p>}
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className="mac-btn-secondary" disabled={locked} onClick={cancel}>Keep editing</button>
-        {dirty && <button type="button" className="mac-btn-ghost !text-mac-danger" disabled={locked} onClick={() => void leave(false)}>Discard changes</button>}
-        <button type="button" className="mac-btn-primary" disabled={locked} onClick={() => void leave(true)}>{locked ? uiText('Saving…') : dirty ? 'Save and continue' : 'Continue'}</button>
+        <button type="button" className="mac-btn-secondary" disabled={locked} onClick={cancel}>{uiText('Keep editing')}</button>
+        {dirty && <button type="button" className="mac-btn-ghost !text-mac-danger" disabled={locked} onClick={() => void leave(false)}>{uiText('Discard changes')}</button>}
+        <button type="button" className="mac-btn-primary" disabled={locked} onClick={() => void leave(true)}>{uiText(locked ? 'Saving…' : dirty ? 'Save and continue' : 'Continue')}</button>
       </div>
     </Modal>
   )

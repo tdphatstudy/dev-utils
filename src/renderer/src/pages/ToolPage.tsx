@@ -45,7 +45,7 @@ export function ToolPage(): JSX.Element {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-mac-separator bg-mac-bg px-3 py-3 sm:px-5">
-        <Link to="/" aria-label={uiText('All tools')} title="Back to all tools" className="mac-btn-ghost h-9 w-9 shrink-0 !p-0"><ArrowLeft className="h-4 w-4" aria-hidden="true" /></Link>
+        <Link to="/" aria-label={uiText('All tools')} title={uiText('All tools')} className="mac-btn-ghost h-9 w-9 shrink-0 !p-0"><ArrowLeft className="h-4 w-4" aria-hidden="true" /></Link>
         <div className="mac-icon-tile-accent h-9 w-9">
           <Icon className="h-4 w-4" strokeWidth={1.75} />
         </div>
@@ -59,11 +59,11 @@ export function ToolPage(): JSX.Element {
           <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-mac-label-secondary" title={t(tool.description)}>{t(tool.description)}</p>
         </div>
         {tool.group !== 'app' && <button type="button" className="mac-btn-secondary h-9 shrink-0 !px-2.5" aria-label={t('How to use')} title={t('How to use')} aria-controls={`tool-guide-${tool.id}`} aria-expanded={guideTool === tool.id} onClick={() => setGuideTool(guideTool === tool.id ? null : tool.id)}><CircleHelp className="h-4 w-4" aria-hidden /><span className="hidden md:inline">{t('How to use')}</span></button>}
-        <button type="button" className="mac-btn-ghost h-9 w-9 shrink-0 !p-0" aria-pressed={pinned} aria-label={`${pinned ? 'Unpin' : 'Pin'} ${tool.name}`} title={full ? `You can pin ${MAX_FAVORITE_TOOLS} tools. Unpin one to add another.` : `${pinned ? 'Remove from' : 'Add to'} Favorites`} disabled={full} onClick={() => toggleFavorite(tool.id)}><Star className={`h-4 w-4 ${pinned ? 'fill-mac-accent text-mac-accent' : ''}`} aria-hidden="true" /></button>
+        <button type="button" className="mac-btn-ghost h-9 w-9 shrink-0 !p-0" aria-pressed={pinned} aria-label={t(pinned ? 'Remove {tool} from favorites' : 'Add {tool} to favorites', { tool: t(tool.name) })} title={full ? t('Favorites limit reached ({count}). Remove a favorite to add another.', { count: MAX_FAVORITE_TOOLS }) : t(pinned ? 'Remove from favorites' : 'Add to favorites')} disabled={full} onClick={() => toggleFavorite(tool.id)}><Star className={`h-4 w-4 ${pinned ? 'fill-mac-accent text-mac-accent' : ''}`} aria-hidden="true" /></button>
       </header>
       {guideTool === tool.id && <ToolGuide tool={tool} />}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <SecurityToolBoundary key={tool.id} id={tool.id}><Suspense key={tool.id} fallback={<LoadingState label={t('Opening {tool}…', { tool: t(tool.name) })} slowDetail="This is taking longer than usual. You can choose another tool while it opens." action={<Link to="/" className="mac-btn-secondary">Back to all tools</Link>} />}>
+        <SecurityToolBoundary key={tool.id} id={tool.id}><Suspense key={tool.id} fallback={<LoadingState label={t('Opening {tool}…', { tool: t(tool.name) })} slowDetail={uiText('This is taking longer than usual.')} action={<Link to="/" className="mac-btn-secondary">{t('All tools')}</Link>} />}>
           <div key={tool.id} className="mac-page-enter h-full min-h-0" data-tool-ready={tool.id}>
             <div role="status" aria-live="polite" className="sr-only">{t('{tool} ready', { tool: t(tool.name) })}</div>
             <Component />

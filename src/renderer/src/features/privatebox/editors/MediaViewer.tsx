@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download, Film, Image as ImageIcon, Music } from 'lucide-react'
 import { cn, formatBytes } from '@renderer/lib/utils'
 import { mimeFromFileName, type ContentKindId } from '@shared/secret-box/content-kinds'
+import { useI18n } from '@renderer/i18n'
 
 interface Props {
   /** base64 payload (no data: prefix) */
@@ -21,6 +22,7 @@ export function MediaViewer({
   className,
   onExport
 }: Props): JSX.Element {
+  const { t } = useI18n()
   const mime = mimeType || mimeFromFileName(name, type)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,6 +40,7 @@ export function MediaViewer({
   }, [value, mime])
 
   useEffect(() => {
+    setError(null)
     return () => {
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
@@ -48,7 +51,7 @@ export function MediaViewer({
   if (!blobUrl) {
     return (
       <div className={cn('flex h-full flex-col items-center justify-center gap-2 p-6', className)}>
-        <p className="text-[13px] text-mac-danger">Could not decode media payload</p>
+        <p role="alert" className="text-[13px] text-mac-danger">{t('Could not decode media payload')}</p>
       </div>
     )
   }
@@ -61,11 +64,11 @@ export function MediaViewer({
         {type === 'audio' && <Music className="h-3.5 w-3.5" />}
         <span className="min-w-0 truncate font-mono text-[11px]">{mime}</span>
         <span className="text-mac-label-tertiary">· {formatBytes(approxBytes)}</span>
-        <span className="text-mac-label-tertiary">· encrypted in vault</span>
+        <span className="text-mac-label-tertiary">· {t('Encrypted in vault')}</span>
         {onExport && (
           <button type="button" className="mac-btn-secondary ml-auto !py-1 text-[12px]" onClick={onExport}>
             <Download className="h-3.5 w-3.5" />
-            Export…
+            {t('Export…')}
           </button>
         )}
       </div>
@@ -101,7 +104,7 @@ export function MediaViewer({
             />
           </div>
         )}
-        {error && <p className="mt-3 text-[12px] text-mac-danger">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-[12px] text-mac-danger">{t(error)}</p>}
       </div>
     </div>
   )

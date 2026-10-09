@@ -74,7 +74,7 @@ try {
   await openKeyboard()
   assert.equal(await activeName(), 'OpenEnter')
   await page.keyboard.press('ArrowDown')
-  assert.equal(await activeName(), 'Export as plain…')
+  assert.equal(await activeName(), 'Export saved file…')
   await page.keyboard.press('ArrowDown')
   assert.equal(await activeName(), 'RenameF2')
   await page.keyboard.press('End')
@@ -82,7 +82,7 @@ try {
   await page.keyboard.press('ArrowDown')
   assert.equal(await activeName(), 'OpenEnter')
   // Exercise an unavailable menu item; query-based navigation must skip it.
-  await menu().getByRole('menuitem', { name: 'Export as plain…', exact: true }).evaluate(element => { element.disabled = true })
+  await menu().getByRole('menuitem', { name: 'Export saved file…', exact: true }).evaluate(element => { element.disabled = true })
   await page.keyboard.press('ArrowDown')
   assert.equal(await activeName(), 'RenameF2')
   await page.keyboard.press('Home')

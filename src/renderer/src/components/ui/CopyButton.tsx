@@ -71,7 +71,7 @@ export function CopyButton({ text, className, label = 'Copy' }: Props): JSX.Elem
       type="button"
       onClick={() => void onCopy()}
       disabled={!text || pending}
-      title={failed ? 'Clipboard access failed. Select the output and copy it with Ctrl/⌘ + C, or try again.' : !text ? uiText('Nothing to copy yet.') : undefined}
+      title={failed ? uiText('Clipboard access failed. Select the output and copy it with Ctrl/⌘ + C, or try again.') : !text ? uiText('Nothing to copy yet.') : undefined}
       aria-live="polite"
       aria-atomic="true"
       aria-busy={pending}

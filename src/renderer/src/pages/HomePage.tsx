@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -22,15 +23,15 @@ import { LoadingState } from '@renderer/components/ui/LoadingState'
 
 const LAUNCH_FLAG = 'devutils-session-launched'
 const QUICK_STARTS = [
-  { id: 'json.studio', description: 'Make a JSON payload readable and explore its structure.' },
-  { id: 'network.mock-api', description: 'Give your frontend a local API while the backend is being built.' },
-  { id: 'text.ocr', description: 'Turn an image, PDF or screen selection into editable text.' },
-  { id: 'design.color', description: 'Pick a color anywhere on your screen and copy its codes.' }
+  { id: 'json.studio', description: messageKey('Format JSON and inspect its structure.') },
+  { id: 'network.mock-api', description: messageKey('Run a local API server for frontend testing.') },
+  { id: 'text.ocr', description: messageKey('Extract text from an image, PDF or screen region.') },
+  { id: 'design.color', description: messageKey('Select a screen color and copy its HEX, RGB or HSL value.') }
 ]
 const WORKFLOWS = [
-  { title: 'Build & debug APIs', description: 'Validate contracts and payloads, then test requests.', ids: ['network.openapi', 'json.schema', 'network.http', 'network.mock-api'] },
-  { title: 'Check a release', description: 'Review API changes, configuration drift and migrated data.', ids: ['network.openapi', 'security.env', 'json.reconcile', 'file.hash'] },
-  { title: 'Investigate an incident', description: 'Follow traces and latency, then inspect local services.', ids: ['text.logs', 'network.ports', 'network.dns', 'network.ssh'] }
+  { title: messageKey('Build & debug APIs'), description: messageKey('Validate contracts and payloads, then test requests.'), ids: ['network.openapi', 'json.schema', 'network.http', 'network.mock-api'] },
+  { title: messageKey('Check a release'), description: messageKey('Review API changes, configuration drift and migrated data.'), ids: ['network.openapi', 'security.env', 'json.reconcile', 'file.hash'] },
+  { title: messageKey('Investigate an incident'), description: messageKey('Follow traces and latency, then inspect local services.'), ids: ['text.logs', 'network.ports', 'network.dns', 'network.ssh'] }
 ]
 
 export function HomePage(): JSX.Element {
@@ -99,7 +100,7 @@ export function HomePage(): JSX.Element {
     />
   )
 
-  if (!ready) return <LoadingState label="Starting…" />
+  if (!ready) return <LoadingState label={uiText('Starting…')} />
 
   return (
     <div className="mac-page-enter h-full overflow-auto">
@@ -108,15 +109,15 @@ export function HomePage(): JSX.Element {
           <AppLogo size={44} />
           <div>
             <h1 className="text-[26px] font-semibold tracking-[-0.025em] text-mac-label">{APP_NAME}</h1>
-            <p className="mt-1 text-[14px] leading-relaxed text-mac-label-secondary">{uiText('A focused workspace for your daily development work.')}</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-mac-label-secondary">{uiText('Tools for software development and testing.')}</p>
           </div>
-          <span className="mac-chip ml-auto gap-1.5 !px-3 !py-1.5"><ShieldCheck aria-hidden="true" className="h-4 w-4" />Local-first</span>
+          <span className="mac-chip ml-auto gap-1.5 !px-3 !py-1.5"><ShieldCheck aria-hidden="true" className="h-4 w-4" />{uiText('Desktop toolbox')}</span>
         </div>
 
         <CrashBanner />
 
         <div className="mb-7">
-          <label htmlFor="home-tool-search" className="mb-2 block text-[15px] font-semibold text-mac-label">{uiText('What would you like to do?')}</label>
+          <label htmlFor="home-tool-search" className="mb-2 block text-[15px] font-semibold text-mac-label">{uiText('Find a tool')}</label>
           <div className="relative">
             <Search aria-hidden="true" className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-mac-label-secondary" />
             <input
@@ -137,7 +138,7 @@ export function HomePage(): JSX.Element {
             {query ? (
               <button type="button" aria-label={uiText('Clear tool search')} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => { setQuery(''); searchInput.current?.focus() }}>{uiText('Clear')}</button>
             ) : (
-              <button type="button" aria-label={shortcut ? `Open tool search (${shortcut})` : uiText('Search tools')} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => setCommandOpen(true)}>{shortcut ? <kbd className="mac-kbd">{shortcut}</kbd> : uiText('Search tools')}</button>
+              <button type="button" aria-label={shortcut ? uiText('Open tool search ({shortcut})', { shortcut }) : uiText('Search tools')} className="mac-btn-ghost absolute end-2 top-1/2 -translate-y-1/2 !px-2" onClick={() => setCommandOpen(true)}>{shortcut ? <kbd className="mac-kbd">{shortcut}</kbd> : uiText('Search tools')}</button>
             )}
           </div>
           <p id="home-search-hint" className="mt-2 text-[12px] text-mac-label-secondary">{uiText('Search by name or task. Press Enter to open the first result.')}</p>
@@ -146,7 +147,7 @@ export function HomePage(): JSX.Element {
         {browsing && (
           <>
             <section aria-labelledby="home-workflows" className="mb-8">
-              <SectionHeading id="home-workflows" icon={BriefcaseBusiness} title={uiText('Developer workflows')} detail="Tools for the task at hand" />
+              <SectionHeading id="home-workflows" icon={BriefcaseBusiness} title={uiText('Developer workflows')} detail="Tools by task" />
               <div className="mac-workflow-grid grid grid-cols-1 gap-3">{WORKFLOWS.map((workflow) => <div key={uiText(workflow.title)} className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4">
                 <h3 className="text-[14px] font-semibold">{uiText(workflow.title)}</h3>
                 <p className="mt-1 text-[13px] leading-relaxed text-mac-label-secondary">{uiText(workflow.description)}</p>
@@ -161,7 +162,7 @@ export function HomePage(): JSX.Element {
             )}
             {recent.length > 0 && (
               <section aria-labelledby="home-recent" className="mb-8">
-                <SectionHeading id="home-recent" icon={Clock3} title={uiText('Pick up where you left off')} />
+                <SectionHeading id="home-recent" icon={Clock3} title={uiText('Recent tools')} />
                 <div className="flex flex-wrap gap-2">{recent.map((tool) => {
                   const Icon = tool.icon
                   return <button key={tool.id} type="button" className="mac-btn-secondary gap-2" onClick={() => openTool(tool.id)}><Icon aria-hidden="true" className="h-4 w-4" />{uiText(tool.name)}</button>
@@ -169,12 +170,12 @@ export function HomePage(): JSX.Element {
               </section>
             )}
             <section aria-labelledby="home-quick-starts" className="mb-8">
-              <SectionHeading id="home-quick-starts" icon={Zap} title={uiText('Quick access')} detail="A good place to start" />
+              <SectionHeading id="home-quick-starts" icon={Zap} title={uiText('Quick access')} detail="Common tasks" />
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{QUICK_STARTS.map((item) => {
                 const tool = getToolById(item.id)
                 return tool ? card(tool, item.description) : null
               })}</div>
-              {favorites.length === 0 && <p className="mt-3 flex items-center gap-1.5 text-[12px] text-mac-label-secondary"><Star aria-hidden="true" className="h-3.5 w-3.5" />Star the tools you use most to keep them in Favorites.</p>}
+              {favorites.length === 0 && <p className="mt-3 flex items-center gap-1.5 text-[12px] text-mac-label-secondary"><Star aria-hidden="true" className="h-3.5 w-3.5" />{uiText('Add frequently used tools to Favorites with the star button.')}</p>}
             </section>
           </>
         )}
@@ -197,7 +198,7 @@ export function HomePage(): JSX.Element {
             <div className="flex flex-col items-center rounded-mac-xl border border-dashed border-mac-separator px-6 py-12 text-center">
               <Search aria-hidden="true" className="mb-3 h-8 w-8 text-mac-label-secondary" strokeWidth={1.5} />
               <h3 className="text-[16px] font-semibold text-mac-label">{uiText('No tools found')}</h3>
-              <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-mac-label-secondary">Try a task like “format”, “convert” or “date”, or choose another category.</p>
+              <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-mac-label-secondary">{uiText('Search for a task such as “format”, “convert” or “date”, or select another category.')}</p>
               <button type="button" className="mac-btn-secondary mt-4" onClick={clearFilters}>{uiText('Clear search and filters')}</button>
             </div>
           ) : (
@@ -211,7 +212,7 @@ export function HomePage(): JSX.Element {
           )}
         </section>
 
-        <p className="mt-9 flex items-start gap-2 border-t border-mac-separator pt-5 text-[12px] leading-relaxed text-mac-label-secondary"><Sparkles aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />Prefer starting with your last tool? Change “On launch” in Settings.</p>
+        <p className="mt-9 flex items-start gap-2 border-t border-mac-separator pt-5 text-[12px] leading-relaxed text-mac-label-secondary"><Sparkles aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{uiText('Choose your startup page under “On launch” in Settings.')}</p>
       </div>
     </div>
   )
@@ -243,7 +244,7 @@ function ToolCard({ tool, onOpen, description, favorite, favoriteLimit, onFavori
           <span id={descriptionId} className="mt-1 block text-[13px] leading-relaxed text-mac-label-secondary">{uiText(description || tool.description)}</span>
         </span>
       </button>
-      <button type="button" className={cn('mac-btn-ghost absolute end-1.5 top-1.5 !h-8 !w-8 !min-h-0 !p-0', favorite && '!text-mac-accent')} aria-label={`${favorite ? 'Remove' : 'Add'} ${uiText(tool.name)} ${favorite ? 'from' : 'to'} favorites`} aria-pressed={favorite} disabled={limitReached} title={limitReached ? `Favorites is full (${MAX_FAVORITE_TOOLS}). Remove a favorite to add another.` : favorite ? uiText('Remove from favorites') : uiText('Add to favorites')} onClick={() => onFavorite(tool.id)}><Star aria-hidden="true" className="h-4 w-4" fill={favorite ? 'currentColor' : 'none'} /></button>
+      <button type="button" className={cn('mac-btn-ghost absolute end-1.5 top-1.5 !h-8 !w-8 !min-h-0 !p-0', favorite && '!text-mac-accent')} aria-label={uiText(favorite ? 'Remove {tool} from favorites' : 'Add {tool} to favorites', { tool: uiText(tool.name) })} aria-pressed={favorite} disabled={limitReached} title={limitReached ? uiText('Favorites limit reached ({count}). Remove a favorite to add another.', { count: MAX_FAVORITE_TOOLS }) : favorite ? uiText('Remove from favorites') : uiText('Add to favorites')} onClick={() => onFavorite(tool.id)}><Star aria-hidden="true" className="h-4 w-4" fill={favorite ? 'currentColor' : 'none'} /></button>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -23,7 +24,7 @@ export default function XmlStudio(): JSX.Element {
   const [input, setInput] = useState(SAMPLE)
   const [indent, setIndent] = useState(2)
   useToolDraft('markup.xml', input, setInput, {
-    label: 'XML Studio',
+    label: messageKey('XML Studio'),
     historyOnUnmount: true
   })
 
@@ -93,12 +94,12 @@ export default function XmlStudio(): JSX.Element {
           value={input}
           onChange={setInput}
           language="xml"
-          label="XML input"
+          label={uiText('XML input')}
           issue={input.trim() && !validated.ok ? validated : null}
           onRun={runFormat}
-          placeholder="Paste XML…"
+          placeholder={uiText('Paste XML…')}
         />
-        <CodeEditor value={output} language="xml" label="Formatted XML" readOnly placeholder="Fix errors to see formatted output" />
+        <CodeEditor value={output} language="xml" label={uiText('Formatted XML')} readOnly placeholder={uiText('Fix errors to see formatted output')} />
       </SplitPane>
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">

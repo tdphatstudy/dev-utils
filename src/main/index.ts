@@ -23,6 +23,7 @@ import { APP_NAME } from '@shared/brand'
 import { appWindowIcon, configureBrand } from './branding'
 import { DesktopTray } from './tray'
 import { LanguagePreferences, registerLanguageIpc } from './language'
+import { ThemePreferences, registerThemeIpc } from './theme'
 import { translate } from '@shared/i18n/catalog'
 import { attachWindowRecovery } from './window-recovery'
 import { ScreenColorPicker, registerColorPickerIpc } from './color-picker'
@@ -56,8 +57,15 @@ let desktopTray: DesktopTray | undefined
 let vaultPolicy: VaultAutoLock | undefined
 const securityTesting = new SecurityTestingService()
 const mainOwners = new Set<number>()
+const theme = new ThemePreferences(app.getPath('userData'), state => {
+  quickTools.notifyAppearance()
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && mainOwners.has(win.webContents.id)) win.webContents.send('app:themeChanged', state)
+  }
+})
 const language = new LanguagePreferences(app.getPath('userData'), () => [app.getLocale()], state => {
   desktopTray?.refresh()
+  quickTools.notifyLanguage()
   for (const win of BrowserWindow.getAllWindows()) {
     try { if (!win.isDestroyed() && mainOwners.has(win.webContents.id)) win.webContents.send('app:languageChanged', state) } catch { /* Closing window. */ }
   }
@@ -67,7 +75,7 @@ let quitting = false
 let domainsCleanedForQuit = false
 let domainsCleanupPending = false
 const colorPicker: ScreenColorPicker = new ScreenColorPicker((selected) => { desktopTray?.refresh(); if (selected) desktopTray?.notifyColor(selected) }, (): boolean => !desktopOcr.isBusy())
-const desktopOcr: DesktopOcr = new DesktopOcr(() => desktopTray?.refresh(), (): boolean => !colorPicker.isBusy())
+const desktopOcr: DesktopOcr = new DesktopOcr(() => desktopTray?.refresh(), (): boolean => !colorPicker.isBusy(), () => language.state().resolved)
 const mockApi = new MockApiServer(() => desktopTray?.refresh())
 const clipboardManager = new ClipboardManager(app.getPath('userData'), () => {
   quickTools.notify(); desktopTray?.refresh()
@@ -104,7 +112,7 @@ function createWindow(route = '/'): BrowserWindow {
           titleBarOverlay: false
         }
       : {}),
-    backgroundColor: '#1C1C1E',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1C1E' : '#f5f6f9',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -129,10 +137,11 @@ function createWindow(route = '/'): BrowserWindow {
   })
   // Honor renderer beforeunload guards while allowing a deliberate close/discard.
   mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const t = (message: string): string => translate(language.state().resolved, message)
     const choice = dialog.showMessageBoxSync(mainWindow, {
-      type: 'warning', title: APP_NAME, message: 'This view has unsaved changes or a save in progress.',
-      detail: `Keep editing to save your work, and wait for any active save to finish. Unsaved edits will be discarded if you close. ${quitting ? 'DevFusion will stop.' : desktopTray?.hasTray() ? 'The window releases its memory; DevFusion stays in the tray.' : 'The window will close.'}`,
-      buttons: ['Keep editing', 'Close without saving'], defaultId: 0, cancelId: 0, noLink: true
+      type: 'warning', title: APP_NAME, message: t('This view has unsaved changes or a save in progress.'),
+      detail: `${t('Keep editing to save your work, and wait for any active save to finish. Unsaved edits will be discarded if you close.')} ${t(quitting ? 'DevFusion will stop.' : desktopTray?.hasTray() ? 'The window releases its memory; DevFusion stays in the tray.' : 'The window will close.')}`,
+      buttons: [t('Keep editing'), t('Close without saving')], defaultId: 0, cancelId: 0, noLink: true
     })
     if (choice === 1) event.preventDefault()
     else { quitting = false; domainsCleanedForQuit = false; localDomains.cancelQuit() }
@@ -161,6 +170,7 @@ function createWindow(route = '/'): BrowserWindow {
 
 function registerIpc(): void {
   registerLanguageIpc(ipcMain, language)
+  registerThemeIpc(ipcMain, theme)
   ipcMain.handle('window:minimize', (event) => {
     assertTrustedIpc(event)
     BrowserWindow.fromWebContents(event.sender)?.minimize()
@@ -281,6 +291,7 @@ if (!gotLock) {
     const dockIcon = appWindowIcon()
     if (process.platform === 'darwin' && dockIcon) app.dock?.setIcon(dockIcon)
     await language.start()
+    await theme.start()
     vaultPolicy = new VaultAutoLock(powerMonitor, (owner) => BrowserWindow.getAllWindows().find((win) => win.webContents.id === owner) ?? null, app.getPath('userData'), () => mainOwners.values().next().value)
     await vaultPolicy.start()
     await clipboardManager.start()
@@ -301,7 +312,7 @@ if (!gotLock) {
     powerMonitor.on('unlock-screen', () => clipboardManager.screenLock(false))
     powerMonitor.on('suspend', () => { clipboardManager.screenLock(true); quickTools.close() })
     powerMonitor.on('resume', () => clipboardManager.screenLock(false))
-    nativeTheme.on('updated', () => desktopTray?.refresh())
+    nativeTheme.on('updated', () => { desktopTray?.refresh(); quickTools.notifyAppearance() })
     desktopTray.start()
     // Window first — do not block cold start on vault disk I/O
     desktopTray.open()

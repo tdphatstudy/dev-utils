@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@renderer/lib/utils'
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function ContextMenu({ x, y, items, opener, label = 'File actions', onSelect, onClose }: Props): JSX.Element {
+  useUiLocale()
   const paletteShortcut = useShortcut('app.palette')
   const ref = useRef<HTMLDivElement>(null)
   const callbacks = useRef({ onSelect, onClose })
@@ -132,7 +134,7 @@ export function ContextMenu({ x, y, items, opener, label = 'File actions', onSel
       style={{ left: x, top: y }}
       className="fixed z-[220] overflow-y-auto overflow-x-hidden rounded-mac border border-mac-separator bg-mac-surface py-1 shadow-mac-lg"
       role="menu"
-      aria-label={label}
+      aria-label={uiText(label)}
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
@@ -164,7 +166,7 @@ export function ContextMenu({ x, y, items, opener, label = 'File actions', onSel
               callbacks.current.onClose()
             }}
           >
-            <span className="min-w-0 break-words">{item.label}</span>
+            <span className="min-w-0 break-words">{uiText(item.label)}</span>
             {item.shortcut && (
               <span className="shrink-0 font-mono text-[11px]">{item.shortcut}</span>
             )}

@@ -87,5 +87,11 @@
 .clip-settings-grid label { display:grid; gap:6px }
 .clip-settings textarea,.clip-settings select { width:100%; padding:8px; border:1px solid var(--mac-separator); border-radius:7px; background:var(--mac-bg); color:inherit }
 .clip-confirm[open] { display:grid; gap:16px }
+.clip-panel .clip-paste { color:var(--mac-accent-text,#007aff); border:0; background:var(--mac-selection,#007aff12); padding:6px 8px; font-size:11px }
+.clip-ocr { display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid var(--mac-separator); border-radius:8px; background:var(--mac-bg) }
+.clip-ocr label { display:flex; flex-direction:column; gap:7px; font-size:12px }
+.clip-ocr .clip-text { min-height:120px; flex:none }
+.clip-ocr p { margin:0; font-size:12px; color:var(--mac-label-secondary) }
+.clip-ocr progress { width:100% }
 @media(max-width:480px) { .clip-top { flex-wrap:wrap }.clip-top h2 { flex:1; font-size:14px }.clip-row { gap:7px; padding-inline:5px }.clip-kind { width:28px; height:28px }.clip-row kbd { display:none }.clip-panel .clip-filters button { padding:5px 7px }.clip-footer { font-size:9px; gap:4px }.clip-widget .clip-top { flex-wrap:nowrap }.clip-preview { gap:10px; padding:10px } }
 @media(prefers-reduced-motion:no-preference) { .clip-row-actions { transition:opacity .12s } }

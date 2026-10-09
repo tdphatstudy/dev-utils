@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw, Skull, ShieldAlert } from 'lucide-react'
@@ -155,13 +156,13 @@ export default function PortManager(): JSX.Element {
           onClick={() => void scan()}
         >
           <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
-          {busy ? 'Scanning…' : 'Refresh'}
+          {busy ? uiText('Scanning…') : uiText('Refresh')}
         </button>
         <div className="mac-segment">
           {(
             [
-              { id: 'all', label: 'All' },
-              { id: 'application', label: 'Application' },
+              { id: 'all', label: messageKey('All') },
+              { id: 'application', label: messageKey('Application') },
               { id: 'system', label: uiText('System') }
             ] as const
           ).map((f) => (
@@ -173,48 +174,45 @@ export default function PortManager(): JSX.Element {
               className="mac-segment-item"
               onClick={() => setFilter(f.id)}
             >
-              {f.label}
+              {uiText(f.label)}
             </button>
           ))}
         </div>
         <input
           className="mac-input max-w-[220px] font-mono text-[12px]"
-          placeholder="Filter port / PID / name…"
-          aria-label="Filter listeners by port, PID, process or address"
+          placeholder={uiText('Filter port / PID / name…')}
+          aria-label={uiText('Filter listeners by port, PID, process or address')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}
         />
-        {(query || filter !== 'all') && <button type="button" className="mac-btn-secondary" onClick={() => { setQuery(''); setFilter('all') }}>Clear filters</button>}
-        <CopyButton text={!filtered.length || busy || error ? '' : JSON.stringify(filtered, null, 2)} label="Copy JSON" />
+        {(query || filter !== 'all') && <button type="button" className="mac-btn-secondary" onClick={() => { setQuery(''); setFilter('all') }}>{uiText('Clear filters')}</button>}
+        <CopyButton text={!filtered.length || busy || error ? '' : JSON.stringify(filtered, null, 2)} label={uiText('Copy JSON')} />
         <div className="ml-auto flex items-center gap-3 text-[11px]">
-          <Legend color="bg-emerald-500" label="Application" />
+          <Legend color="bg-emerald-500" label={uiText('Application')} />
           <Legend color="bg-amber-500" label={uiText('System')} />
         </div>
       </ToolToolbar>
 
       <div className="border-b border-mac-separator bg-mac-control/20 px-4 py-2 text-[11px] leading-relaxed text-mac-label-secondary">
-        Scans <strong className="text-mac-label">TCP LISTEN</strong> only (fast).{' '}
-        <strong className="text-mac-label">Application</strong> (green) — dev servers (3000, 5173,
-        node…) · simple confirm.{' '}
-        <strong className="text-mac-warning">{uiText('System')}</strong> (amber) — OS / infra — type{' '}
-        <code className="font-mono text-mac-label">kill [port]</code>. Never kills this app or
-        protected PIDs or known critical process names. Process details may be hidden by OS permissions. Stopping a process closes all its listeners.
-      </div>
+        {uiText('Scans')} <strong className="text-mac-label">{uiText('TCP LISTEN')}</strong> {uiText('only (fast).')}{' '}
+        <strong className="text-mac-label">{uiText('Application')}</strong> {uiText('(green) — dev servers (3000, 5173, node…) · simple confirm.')}{' '}
+        <strong className="text-mac-warning">{uiText('System')}</strong> {uiText('(amber) — OS / infra — type')}{' '}
+        <code className="font-mono text-mac-label">kill [port]</code>{uiText('. Never kills this app or protected PIDs or known critical process names. Process details may be hidden by OS permissions. Stopping a process closes all its listeners.')}</div>
 
       <div className="min-h-0 flex-1 overflow-auto" aria-busy={busy}>
-        {!desktop && <p className="px-4 py-4 text-[12px] text-mac-label-secondary" role="status">Open the desktop app to inspect local TCP listeners.</p>}
-        {error && <p className="px-4 py-3 text-[12px] text-mac-danger" role="alert">{error}{scannedAt ? ' Showing the last successful scan; refresh before stopping a process.' : ''}</p>}
+        {!desktop && <p className="px-4 py-4 text-[12px] text-mac-label-secondary" role="status">{uiText('Open the desktop app to inspect local TCP listeners.')}</p>}
+        {error && <p className="px-4 py-3 text-[12px] text-mac-danger" role="alert">{error}{scannedAt ? ` ${uiText('Showing the last successful scan; refresh before stopping a process.')}` : ''}</p>}
         <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 bg-mac-surface/95 backdrop-blur">
             <tr className="border-b border-mac-separator text-[10px] uppercase tracking-wide text-mac-label-tertiary">
-              <th className="px-3 py-2 font-semibold">Tier</th>
-              <th className="px-3 py-2 font-semibold">Port</th>
-              <th className="px-3 py-2 font-semibold">Proto</th>
-              <th className="px-3 py-2 font-semibold">Address</th>
-              <th className="px-3 py-2 font-semibold">PID</th>
-              <th className="px-3 py-2 font-semibold">Process</th>
-              <th className="px-3 py-2 font-semibold">Reason</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Tier')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Port')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Proto')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Address')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('PID')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Process')}</th>
+              <th className="px-3 py-2 font-semibold">{uiText('Reason')}</th>
               <th className="px-3 py-2 font-semibold" />
             </tr>
           </thead>
@@ -222,7 +220,7 @@ export default function PortManager(): JSX.Element {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-10 text-center text-mac-label-tertiary">
-                  {busy ? 'Scanning TCP listeners…' : !desktop ? uiText('Desktop app required') : error ? 'Scan unavailable' : entries.length ? 'No listeners match these filters. Clear filters to show all.' : 'No visible TCP listeners found. Permissions can limit this scan.'}
+                  {busy ? uiText('Scanning TCP listeners…') : !desktop ? uiText('Desktop app required') : error ? uiText('Scan unavailable') : entries.length ? uiText('No listeners match these filters. Clear filters to show all.') : uiText('No visible TCP listeners found. Permissions can limit this scan.')}
                 </td>
               </tr>
             ) : (
@@ -243,7 +241,7 @@ export default function PortManager(): JSX.Element {
                   <td className="max-w-[140px] truncate px-3 py-2 font-mono text-mac-label-secondary">
                     {e.address}
                   </td>
-                  <td className="px-3 py-2 font-mono text-mac-label-secondary">{e.pid || 'Unavailable'}</td>
+                  <td className="px-3 py-2 font-mono text-mac-label-secondary">{e.pid || uiText('Unavailable')}</td>
                   <td className="max-w-[180px] truncate px-3 py-2 font-medium text-mac-label" title={e.processPath ?? e.processName}>
                     {e.processName}
                   </td>
@@ -261,12 +259,11 @@ export default function PortManager(): JSX.Element {
                       )}
                       onClick={() => openKill(e)}
                       disabled={busy || killing || Boolean(error) || e.pid <= 4 || isCriticalProcess(e.processName)}
-                      aria-label={`Stop ${e.processName}, PID ${e.pid}, port ${e.port}`}
-                      title={!e.pid ? 'Process ownership unavailable — cannot stop safely' : isCriticalProcess(e.processName) ? 'Critical process protected' : 'Stop this process and all its listeners'}
+                      aria-label={uiText('Stop {processName}, PID {pid}, port {port}', { processName: e.processName, pid: e.pid, port: e.port })}
+                      title={!e.pid ? uiText('Process ownership unavailable — cannot stop safely') : isCriticalProcess(e.processName) ? uiText('Critical process protected') : uiText('Stop this process and all its listeners')}
                     >
                       <Skull className="h-3.5 w-3.5" />
-                      Kill
-                    </button>
+                      {uiText('Kill')}</button>
                   </td>
                 </tr>
               ))
@@ -277,9 +274,9 @@ export default function PortManager(): JSX.Element {
 
       <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : entries.length ? 'success' : 'neutral'}>
-          {!desktop ? uiText('Desktop app required') : error ?? (busy ? 'Scanning…' : status)}
+          {!desktop ? uiText('Desktop app required') : error ?? (busy ? uiText('Scanning…') : status)}
         </ToolStatus>
-        {scannedAt && <span className="ml-auto text-[11px] text-mac-label-tertiary">{filtered.length}/{entries.length} shown · {new Date(scannedAt).toLocaleTimeString()}</span>}
+        {scannedAt && <span className="ml-auto text-[11px] text-mac-label-tertiary">{filtered.length}/{entries.length} {uiText('shown ·')} {new Date(scannedAt).toLocaleTimeString()}</span>}
       </footer>
 
       {killTarget && (
@@ -314,12 +311,12 @@ export default function PortManager(): JSX.Element {
               </div>
               <div className="min-w-0">
                 <h3 id="port-kill-title" className="text-[15px] font-semibold text-mac-label">
-                  {killTarget.tier === 'system' ? 'Kill system port?' : 'Kill application port?'}
+                  {killTarget.tier === 'system' ? uiText('Kill system port?') : uiText('Kill application port?')}
                 </h3>
                 <p id="port-kill-description" className="mt-1 text-[12px] leading-relaxed text-mac-label-secondary">
-                  End process{' '}
-                  <strong className="text-mac-label">{killTarget.processName}</strong> (PID{' '}
-                  <span className="font-mono">{killTarget.pid}</span>) listening on{' '}
+                  {uiText('End process')}{' '}
+                  <strong className="text-mac-label">{killTarget.processName}</strong> {uiText('(PID')}{' '}
+                  <span className="font-mono">{killTarget.pid}</span>{uiText(') listening on')}{' '}
                   <span className="font-mono text-mac-label">
                     {killTarget.protocol.toUpperCase()} :{killTarget.port}
                   </span>
@@ -332,9 +329,7 @@ export default function PortManager(): JSX.Element {
             {killTarget.tier === 'system' ? (
               <div className="mb-4 space-y-2">
                 <p className="text-[12px] text-amber-700 dark:text-amber-300">
-                  This is classified as <strong>system</strong>. Type the phrase below exactly to
-                  confirm — a wrong kill can disrupt OS services.
-                </p>
+                  {uiText('This is classified as')} <strong>{uiText('system')}</strong>{uiText('. Type the phrase below exactly to confirm — a wrong kill can disrupt OS services.')}</p>
                 <div className="rounded-mac bg-mac-control px-3 py-2 font-mono text-[13px] text-mac-label">
                   {systemPhrase}
                 </div>
@@ -342,7 +337,7 @@ export default function PortManager(): JSX.Element {
                   className="mac-input font-mono"
                   autoFocus
                   placeholder={systemPhrase}
-                  aria-label="Confirm stopping system process"
+                  aria-label={uiText('Confirm stopping system process')}
                   disabled={killing}
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
@@ -355,9 +350,7 @@ export default function PortManager(): JSX.Element {
               </div>
             ) : (
               <p className="mb-4 text-[12px] text-mac-label-secondary">
-                Application tier — confirm to force-stop this listener. Use for stuck dev servers
-                (e.g. :3000 still held after a crash).
-              </p>
+                {uiText('Application tier — confirm to force-stop this listener. Use for stuck dev servers (e.g. :3000 still held after a crash).')}</p>
             )}
 
             {error && (
@@ -385,7 +378,7 @@ export default function PortManager(): JSX.Element {
                 onClick={() => void doKill()}
               >
                 <Skull className="h-3.5 w-3.5" />
-                {killing ? 'Killing…' : `Kill :${killTarget.port}`}
+                {killing ? uiText('Killing…') : uiText('Kill :{port}', { port: killTarget.port })}
               </button>
             </div>
           </div>

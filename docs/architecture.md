@@ -198,6 +198,7 @@ khỏi UI của app khi kho đã mở.
 | Dữ liệu | Nơi lưu | Đặc tính |
 |---|---|---|
 | Preferences, recent ID, SSH paths | localStorage `devutils-app` | Persist; không lưu payload tool |
+| Shared desktop theme | `userData/theme.json` | Light/Dark/System metadata; seed từ preference localStorage hiện có, nativeTheme và quick UI đồng bộ |
 | Shortcut overrides | localStorage `devutils-app` | Command ID + tổ hợp/null; không ghi lại chuỗi phím đã gõ |
 | Draft/history tool | Zustand session-store | Chỉ RAM; security, vault/Keep, SSH, HTTP, URL và QR không lưu payload trong draft/history |
 | Danh sách/active vault | `app.getPath('userData')/privatebox-registry.json` | JSON plaintext chứa tên/path |
@@ -934,10 +935,11 @@ pins also expire. Deduplication, full-content search, labels, ordered merging an
 pure local transforms preserve original content. JSON transforms retain large
 integer lexemes and duplicate keys. Image OCR reuses the bundled local engine
 only on explicit action. The single-column history uses grouped, typed rows,
-search and filter pills. One click or Enter copies the original and closes the
-widget; Alt+Enter opens preview, Ctrl/Command+Shift+Enter copies plain text and
-Ctrl/Command+1…9 copies a visible entry. Preview/transform and multi-selection
-are explicit modes; settings use a modal. Pasting into another app remains explicit.
+search and filter pills. When a target is available, one click or Enter pastes the
+original into that app and closes the widget; Copy remains a separate action.
+Alt+Enter opens preview, Ctrl/Command+Shift+Enter uses plain text and
+Ctrl/Command+1…9 activates a visible entry. Preview/transform and multi-selection
+are explicit modes; settings use a modal. Paste requires an explicit user action.
 
 `clipboard-preferences.json` stores versioned feature preferences, never captured
 data. Version 1 opt-in preferences adopt the user-requested automatic capture;
@@ -974,6 +976,23 @@ automatic network calls, persisted candidate sets or storage-format changes.
 
 
 ### Admission bounds và refactor bảo mật (2026-10-08 / 09)
+
+Quick Clipboard Manager now captures an external paste target before taking
+focus. Fixed `clipboard:paste/pasteText` IPC accepts only a bounded entry/text,
+requires the active widget, and writes the clipboard before the platform adapter
+restores the target and invokes the OS paste shortcut. Target identity is main-only
+RAM; privacy/session changes invalidate pending actions. Windows validates HWND,
+PID, foreground and released modifiers; macOS needs System Events permission;
+X11 needs existing xdotool and Wayland returns Copy fallback. No clipboard text
+is passed to subprocesses. See [quick tool usage](quick-tools-clipboard-2026-10-08.md).
+
+Clipboard OCR accepts the trusted main app or current widget. It uses an invisible
+transient OCR runner, retains the original image, and shows loading/result/empty
+states in the same preview. Removed/expired entries and privacy revisions discard
+pending results. Quick OCR file recognition also uses this hidden runner.
+`app:theme/setTheme` persists validated theme metadata and applies nativeTheme;
+`quick:appearanceChanged` updates widgets already open. Helper media queries inherit
+the same native mode. Existing tool payload/history privacy remains unchanged.
 
 Quick window orchestration, geometry, session/resource policy và IPC nằm trong
 `src/main/quick-tools`; clipboard registrar thuộc `src/main/clipboard/ipc.ts`.
@@ -1013,3 +1032,59 @@ issuer CLI reads an external private key; current app features are ungated.
 Future entitlement enforcement belongs in main behind compiled public keys,
 with manual signed-file import and independent access to the user's own vault
 data/recovery. No license secret, policy or storage migration is introduced.
+
+## Release-readiness fixes (2026-10-09)
+
+Private Box uses a shared unsaved-change guard for route changes, file replacement,
+reload and native close. Route/file changes offer save, discard or cancel; reload
+is blocked while work is unsaved, and native close offers Keep editing or Close
+without saving. Saving authorizes navigation only when the latest draft was saved
+successfully. Rename preserves the current draft; binary rename keeps
+its original kind, encoding, MIME and bytes. Text-to-media rename refuses and asks
+for an explicit import. Drafts and protected recovery copies remain in memory.
+Blob audio/video playback uses only `media-src 'self' blob:` and releases object
+URLs when the viewer changes or unmounts.
+
+Windows device identity keeps the legacy WMIC result whenever any useful legacy
+values exist. If WMIC supplies none, the adapter queries the same four properties
+through bounded, fixed CIM commands. It does not reset vault metadata or device
+secrets. Device caches require a secure OS backend; Linux basic-text storage is
+refused. Hardware changes still require the original keys and recovery material.
+
+SQL parser and formatter run in a disposable lazy worker. Validation is debounced;
+format/minify require an action. Admission limits are 1 MiB input, 4 MiB output,
+50,000 tokens, 1,000 statements and 100 nesting levels, with a five-second deadline.
+Cancellation, superseding input and unmount terminate the worker. Dialect metadata
+is independent of parser imports, so opening unrelated tools does not load SQL.
+OCR crop selection retains one primary pointer owner and handles cancellation or
+lost capture. Helper copy receives a validated locale and finite interface payload.
+
+Clipboard polling uses a single adaptive timer (500–2,000 ms), stops while capture
+is disabled, paused, the screen is locked or a vault is unlocked, and skips hashing
+unchanged eligible entries. Enabled automatic capture continues in tray. Ignored
+or baseline content uses a length-framed streamed fingerprint,
+without JSON serialization or a retained plaintext comparison cache. Restored
+entries recompute fingerprints; the encrypted history format is unchanged. Very
+short clipboard changes between polls can be missed. Native image reads/encoding
+still have a cost; this change does not promise a fixed whole-app RAM budget.
+
+Interface copy remains separate from editor values and protocol identifiers.
+The bundled 13-language catalog has tuple and placeholder checks. `messageKey`
+marks deferred static metadata; rendering consumers translate it with the current
+locale. Source coverage checks registered and wrapped copy, including component
+props; code samples are excluded. Runtime tests verify representative complete
+flows and input preservation. Localized Markdown command search also keeps English
+aliases. These checks do not substitute for native-speaker editorial review.
+An active quick window receives only a validated, named locale event from main;
+the sandbox preload validates finite locale IDs without importing a runtime chunk.
+It unsubscribes on unmount and preserves inputs, pin state and in-flight work.
+All workspace/quick-window subscription cleanup functions return void through
+the context bridge; repeated cancellation cannot expose an Electron emitter.
+
+The pinned toolchain uses electron-builder 26 and electron-vite 5 with main bytecode
+enabled through `build.bytecode`. Dependency audit is a release gate for runtime
+and build dependencies. Two exact, hash-verified pnpm patches bound recursion in
+`braces@3.0.3` and formatting allocation in `sprintf-js@1.1.3`; the exceptions expire
+on 2026-11-09 and require an upstream review. Unknown advisories, changed versions,
+missing installed patches and incomplete audit responses fail the gate. Patch files
+use LF consistently across platforms. See [fix verification](release-fixes-2026-10-09.md).

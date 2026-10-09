@@ -1,3 +1,4 @@
+import { t as uiText } from '@renderer/i18n'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, FileSearch, LoaderCircle, ShieldCheck, ChevronDown } from 'lucide-react'
 import { useI18n } from '@renderer/i18n'
@@ -22,8 +23,8 @@ export function ToolWorkspace({ purpose, toolbar, input, children, details, busy
   const [pane, setPane] = useState<0 | 1>(0)
   useEffect(() => { setPane(hasResult || busy || error ? 1 : 0) }, [hasResult, busy, error])
   return <div className="flex h-full min-h-0 flex-col">
-    <ToolToolbar label="Tool actions">{toolbar}</ToolToolbar>
-    <SplitPane labels={['Input', 'Results']} activePane={pane} onPaneChange={setPane}>
+    <ToolToolbar label={uiText('Tool actions')}>{toolbar}</ToolToolbar>
+    <SplitPane labels={[uiText('Input'), uiText('Results')]} activePane={pane} onPaneChange={setPane}>
       <div className="flex h-full min-h-0 flex-col overflow-auto rounded-mac-lg border border-mac-separator bg-mac-surface">
         <div className="border-b border-mac-separator px-4 py-3 text-[13px] leading-relaxed text-mac-label-secondary">{t(purpose)}</div>
         <div className="min-w-0 space-y-4 p-3 sm:p-4">{input}
@@ -37,7 +38,7 @@ export function ToolWorkspace({ purpose, toolbar, input, children, details, busy
         {error && <p role="alert" className="rounded-mac-lg border border-mac-danger/30 bg-mac-danger/10 p-4 text-[13px] text-mac-danger">{t(error)}</p>}
         {hasResult ? children : <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-3 rounded-mac-lg border border-mac-separator bg-mac-surface p-6 text-center">
           {busy ? <LoaderCircle aria-hidden className="h-7 w-7 animate-spin text-mac-accent motion-reduce:animate-none" /> : <FileSearch aria-hidden className="h-8 w-8 text-mac-label-tertiary" />}
-          <p className="text-[14px] font-semibold">{t(busy ? 'Working…' : 'Ready when you are')}</p>
+          <p className="text-[14px] font-semibold">{t(busy ? 'Working…' : 'No results yet')}</p>
           <p className="max-w-xs text-[13px] leading-relaxed text-mac-label-secondary">{t(busy ? 'You can stop this operation at any time.' : 'Add your input, then use the action above to see results here.')}</p>
           {!busy && <ArrowRight aria-hidden className="h-4 w-4 text-mac-label-tertiary" />}
         </div>}

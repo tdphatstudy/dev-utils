@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { captureVaultDraft } from '@renderer/lib/vault-drafts'
@@ -6,6 +7,7 @@ import { useVaultLockUi } from '@renderer/store/vault-lock-ui'
 import type { VaultLockEvent } from '@shared/security-policy'
 
 export function VaultLockBoundary({ children }: { children: ReactNode }): JSX.Element {
+  useUiLocale()
   const location = useLocation()
   const [epoch, setEpoch] = useState(0)
   const [blocked, setBlocked] = useState(false)
@@ -80,7 +82,7 @@ export function VaultLockBoundary({ children }: { children: ReactNode }): JSX.El
   }, [blocked, error])
   return <>
     <div key={sensitive ? epoch : 'ordinary'} data-vault-content className="h-full" hidden={blocked}>{children}</div>
-    {protectedDraft && !sensitive && <div role="status" className="fixed bottom-3 right-3 z-40 max-w-sm rounded-mac-lg border border-mac-separator bg-mac-surface p-3 text-xs text-mac-label-secondary">Unsaved box changes are protected in memory. Open the original box to restore them before closing this window.</div>}
+    {protectedDraft && !sensitive && <div role="status" className="fixed bottom-3 right-3 z-40 max-w-sm rounded-mac-lg border border-mac-separator bg-mac-surface p-3 text-xs text-mac-label-secondary">{uiText('Unsaved box changes are protected in memory. Open the original box to restore them before closing this window.')}</div>}
     {blocked && <div ref={lockDialog} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="vault-lock-title" className="flex h-full items-center justify-center bg-mac-bg p-6 outline-none" onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation() }
       if (event.key !== 'Tab') return
@@ -91,15 +93,15 @@ export function VaultLockBoundary({ children }: { children: ReactNode }): JSX.El
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }}>
       <div className="max-w-md rounded-mac-xl border border-mac-separator bg-mac-surface p-6">
-        <h1 id="vault-lock-title" className="text-lg font-semibold text-mac-label">Box locked</h1>
-        <p className="mt-3 text-sm text-mac-label-secondary">{error ? 'Your unsaved changes are hidden, but could not be protected. Keep this window open and retry. Discard only if you no longer need them.' : 'Protecting your unsaved changes in memory…'}</p>
+        <h1 id="vault-lock-title" className="text-lg font-semibold text-mac-label">{uiText('Box locked')}</h1>
+        <p className="mt-3 text-sm text-mac-label-secondary">{error ? uiText('Your unsaved changes are hidden, but could not be protected. Keep this window open and retry. Discard only if you no longer need them.') : uiText('Protecting your unsaved changes in memory…')}</p>
         {error && <div className="mt-4 flex gap-3">
-          <button autoFocus type="button" className="mac-btn-primary" onClick={() => void retry()}>Retry protecting draft</button>
+          <button autoFocus type="button" className="mac-btn-primary" onClick={() => void retry()}>{uiText('Retry protecting draft')}</button>
           <button type="button" className="mac-btn-secondary" onClick={() => {
             const checkpoint = pending.current
             if (checkpoint?.event.canPreserveDraft) void window.devutils.security.releaseEmpty(checkpoint.event.id).catch(() => {})
             pending.current = null; setEpoch((value) => value + 1); setBlocked(false); setError(false)
-          }}>Discard unsaved changes</button>
+          }}>{uiText('Discard unsaved changes')}</button>
         </div>}
       </div>
     </div>}

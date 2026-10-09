@@ -222,11 +222,10 @@ export default function ImageConvert(): JSX.Element {
       <ToolToolbar>
         <button type="button" className="mac-btn-secondary" onClick={() => fileInput.current?.click()}>
           <ImageIcon className="h-3.5 w-3.5" />
-          Choose image
-        </button>
+          {uiText('Choose image')}</button>
           <input
             ref={fileInput}
-            aria-label="Choose source image"
+            aria-label={uiText('Choose source image')}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
             className="hidden"
@@ -238,8 +237,7 @@ export default function ImageConvert(): JSX.Element {
           />
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          Out
-          <select
+          {uiText('Out')}<select
             className="mac-input !w-auto !py-1"
             value={format}
             onChange={(e) => setFormat(e.target.value as ImageOutFormat)}
@@ -252,8 +250,7 @@ export default function ImageConvert(): JSX.Element {
 
         {format !== 'png' && (
           <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-            Quality
-            <input
+            {uiText('Quality')}<input
               type="range"
               min={5}
               max={100}
@@ -266,15 +263,14 @@ export default function ImageConvert(): JSX.Element {
         )}
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          Resize
-          <select
+          {uiText('Resize')}<select
             className="mac-input !w-auto !py-1"
             value={resizeMode}
             onChange={(e) => setResizeMode(e.target.value as ResizeMode)}
           >
-            <option value="percent">Percent</option>
-            <option value="max">Max box</option>
-            <option value="exact">Exact</option>
+            <option value="percent">{uiText('Percent')}</option>
+            <option value="max">{uiText('Max box')}</option>
+            <option value="exact">{uiText('Exact')}</option>
           </select>
         </label>
 
@@ -336,14 +332,14 @@ export default function ImageConvert(): JSX.Element {
               />
             </label>
             <select
-              aria-label="Resize fit"
+              aria-label={uiText('Resize fit')}
               className="mac-input !w-auto !py-1"
               value={fit}
               onChange={(e) => setFit(e.target.value as FitMode)}
             >
-              <option value="contain">Contain</option>
-              <option value="cover">Cover</option>
-              <option value="stretch">Stretch</option>
+              <option value="contain">{uiText('Contain')}</option>
+              <option value="cover">{uiText('Cover')}</option>
+              <option value="stretch">{uiText('Stretch')}</option>
             </select>
           </>
         )}
@@ -354,7 +350,7 @@ export default function ImageConvert(): JSX.Element {
           disabled={!srcUrl || busy || loading || Boolean(resizeError)}
           onClick={() => void convert()}
         >
-          {busy ? 'Converting…' : uiText('Convert')}
+          {busy ? uiText('Converting…') : uiText('Convert')}
         </button>
         <button
           type="button"
@@ -366,9 +362,8 @@ export default function ImageConvert(): JSX.Element {
           {uiText('Download')}</button>
       </ToolToolbar>
       <div className="shrink-0 border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">
-        {format === 'jpeg' && <label className="mr-3 inline-flex items-center gap-2">JPEG background<input type="color" aria-label="JPEG background" value={background} onChange={(event) => setBackground(event.target.value)} /></label>}
-        Local raster conversion · 32 MiB / 16 MP limit · metadata is removed; animated inputs become a still image. Contain preserves aspect inside the box; Cover crops centrally; Stretch changes aspect.
-      </div>
+        {format === 'jpeg' && <label className="mr-3 inline-flex items-center gap-2">{uiText('JPEG background')}<input type="color" aria-label={uiText('JPEG background')} value={background} onChange={(event) => setBackground(event.target.value)} /></label>}
+        {uiText('Local raster conversion · 32 MiB / 16 MP limit · metadata is removed; animated inputs become a still image. Contain preserves aspect inside the box; Cover crops centrally; Stretch changes aspect.')}</div>
 
       <SplitPane
         onDragOver={(e) => e.preventDefault()}
@@ -380,8 +375,7 @@ export default function ImageConvert(): JSX.Element {
       >
         <div className="flex min-h-0 flex-col rounded-mac-lg border border-mac-separator bg-mac-surface">
           <div className="border-b border-mac-separator px-3 py-1.5 text-[11px] font-medium text-mac-label-tertiary">
-            Original
-            {srcW > 0 && (
+            {uiText('Original')}{srcW > 0 && (
               <span className="ml-2 font-normal">
                 {srcW}×{srcH}
                 {srcBytes > 0 ? ` · ${formatBytes(srcBytes)}` : ''}
@@ -399,8 +393,7 @@ export default function ImageConvert(): JSX.Element {
             ) : (
               <div className="text-center text-[13px] text-mac-label-tertiary">
                 <ImageIcon className="mx-auto mb-2 h-8 w-8 opacity-50" strokeWidth={1.5} />
-                Drop an image or choose a file
-              </div>
+                {uiText('Drop an image or choose a file')}</div>
             )}
           </div>
         </div>
@@ -422,8 +415,7 @@ export default function ImageConvert(): JSX.Element {
               />
             ) : (
               <div className="text-center text-[13px] text-mac-label-tertiary">
-                Convert to preview result
-              </div>
+                {uiText('Convert to preview result')}</div>
             )}
           </div>
         </div>
@@ -431,10 +423,10 @@ export default function ImageConvert(): JSX.Element {
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error || resizeError ? 'danger' : currentOut ? 'success' : 'neutral'}>
-          {resizeError ?? error ?? (loading ? 'Loading image…' : busy ? 'Converting…' :
+          {resizeError ?? error ?? (loading ? uiText('Loading image…') : busy ? uiText('Converting…') :
             (currentOut
-              ? 'Local canvas convert · no upload'
-              : outUrl ? 'Settings changed — Convert again to update the output' : 'PNG / JPEG / WebP · resize · quality · all local'))}
+              ? uiText('Local canvas convert · no upload')
+              : outUrl ? uiText('Settings changed — Convert again to update the output') : uiText('PNG / JPEG / WebP · resize · quality · all local')))}
         </ToolStatus>
       </footer>
     </div>

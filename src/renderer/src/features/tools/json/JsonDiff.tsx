@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -86,18 +87,18 @@ export default function JsonDiff(): JSX.Element {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'lines', label: 'Lines' },
-            { value: 'tree', label: uiText('Tree') }
+            { value: 'lines', label: messageKey('Lines') },
+            { value: 'tree', label: messageKey('Tree') }
           ]}
         />
         <span className="text-[12px] text-mac-label-secondary">
-          {mode === 'lines' ? (normalize ? 'Compare formatted JSON' : 'Compare original text') : 'Compare values by JSONPath'}
+          {mode === 'lines' ? (normalize ? uiText('Compare formatted JSON') : uiText('Compare original text')) : uiText('Compare values by JSONPath')}
         </span>
-        {mode === 'lines' && <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary"><input type="checkbox" checked={normalize} onChange={(event) => setNormalize(event.target.checked)} className="accent-mac-accent" />Format before comparing</label>}
-        <button type="button" className="mac-btn-secondary" onClick={() => { setLeft(right); setRight(left) }}>Swap A / B</button>
+        {mode === 'lines' && <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary"><input type="checkbox" checked={normalize} onChange={(event) => setNormalize(event.target.checked)} className="accent-mac-accent" />{uiText('Format before comparing')}</label>}
+        <button type="button" className="mac-btn-secondary" onClick={() => { setLeft(right); setRight(left) }}>{uiText('Swap A / B')}</button>
         <button type="button" className="mac-btn-ghost" onClick={() => { setLeft(LEFT); setRight(RIGHT) }}>{uiText('Sample')}</button>
         <div className="ml-auto">
-          <CopyButton text={mode === 'tree' ? report : lineDiffReport(lineStats)} label="Copy diff" />
+          <CopyButton text={mode === 'tree' ? report : lineDiffReport(lineStats)} label={uiText('Copy diff')} />
         </div>
       </ToolToolbar>
 
@@ -105,32 +106,28 @@ export default function JsonDiff(): JSX.Element {
         <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
           <div className="flex min-h-[140px] min-w-0 flex-col gap-1 md:min-h-0">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-              Left (A)
-            </span>
-            <CodeEditor value={left} onChange={setLeft} language="json" label="Left JSON (A)" issue={!left.trim() || leftParsed.ok ? null : leftParsed} />
+              {uiText('Left (A)')}</span>
+            <CodeEditor value={left} onChange={setLeft} language="json" label={uiText('Left JSON (A)')} issue={!left.trim() || leftParsed.ok ? null : leftParsed} />
           </div>
           <div className="flex min-h-[140px] min-w-0 flex-col gap-1 md:min-h-0">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-              Right (B)
-            </span>
-            <CodeEditor value={right} onChange={setRight} language="json" label="Right JSON (B)" issue={!right.trim() || rightParsed.ok ? null : rightParsed} />
+              {uiText('Right (B)')}</span>
+            <CodeEditor value={right} onChange={setRight} language="json" label={uiText('Right JSON (B)')} issue={!right.trim() || rightParsed.ok ? null : rightParsed} />
           </div>
         </div>
 
         {mode === 'lines' ? (
           !normalize || (leftParsed.ok && rightParsed.ok) ? (
-            <DiffLinesView left={leftPretty} right={rightPretty} leftLabel={normalize ? 'A (formatted)' : 'A (original)'} rightLabel={normalize ? 'B (formatted)' : 'B (original)'} />
+            <DiffLinesView left={leftPretty} right={rightPretty} leftLabel={normalize ? uiText('A (formatted)') : uiText('A (original)')} rightLabel={normalize ? uiText('B (formatted)') : uiText('B (original)')} />
           ) : (
             <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
-              Fix JSON errors to highlight lines
-            </div>
+              {uiText('Fix JSON errors to highlight lines')}</div>
           )
         ) : (
           <div className="min-h-0 overflow-auto rounded-mac-lg border border-mac-separator bg-mac-surface">
             {!entries ? (
               <div className="flex h-full items-center justify-center text-[13px] text-mac-label-tertiary">
-                Fix JSON errors to compare tree
-              </div>
+                {uiText('Fix JSON errors to compare tree')}</div>
             ) : (
               <StructuralDiffList entries={entries} />
             )}
@@ -140,7 +137,7 @@ export default function JsonDiff(): JSX.Element {
 
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
-        {lineStats.coarse && mode === 'lines' && <span className="ml-auto text-[11px] text-mac-warning">Large input: changes grouped between equal prefix and suffix</span>}
+        {lineStats.coarse && mode === 'lines' && <span className="ml-auto text-[11px] text-mac-warning">{uiText('Large input: changes grouped between equal prefix and suffix')}</span>}
       </footer>
     </div>
   )

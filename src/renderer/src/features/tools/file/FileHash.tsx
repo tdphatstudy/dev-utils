@@ -100,11 +100,9 @@ export default function FileHash(): JSX.Element {
     <div className="flex h-full flex-col">
       <ToolToolbar>
         <button type="button" className="mac-btn-primary" disabled={busy || !available} onClick={() => void compute(algo, true)}>
-          <FileUp className="h-3.5 w-3.5" />Choose file
-        </button>
+          <FileUp className="h-3.5 w-3.5" />{uiText('Choose file')}</button>
         <label className="flex items-center gap-2 text-[12px] text-mac-label-secondary">
-          Algorithm
-          <select className="mac-input !w-auto !py-1" value={algo} disabled={busy} onChange={(e) => {
+          {uiText('Algorithm')}<select className="mac-input !w-auto !py-1" value={algo} disabled={busy} onChange={(e) => {
             const next = e.target.value as HashAlgorithm
             setAlgo(next)
             setHash('')
@@ -114,40 +112,40 @@ export default function FileHash(): JSX.Element {
             {FILE_HASH_ALGORITHMS.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
           </select>
         </label>
-        <button type="button" className="mac-btn-secondary" disabled={busy || !path} onClick={() => void compute(algo, false)}>Recheck file</button>
-        {busy && progress && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? 'Canceling…' : uiText('Cancel')}</button>}
-        <div className="ml-auto"><CopyButton text={busy ? '' : hash} label="Copy checksum" /></div>
+        <button type="button" className="mac-btn-secondary" disabled={busy || !path} onClick={() => void compute(algo, false)}>{uiText('Recheck file')}</button>
+        {busy && progress && <button type="button" className="mac-btn-secondary" disabled={canceling} onClick={() => void cancel()}>{canceling ? uiText('Canceling…') : uiText('Cancel')}</button>}
+        <div className="ml-auto"><CopyButton text={busy ? '' : hash} label={uiText('Copy checksum')} /></div>
       </ToolToolbar>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-5" aria-busy={busy}>
         <button type="button" disabled={busy || !available} onClick={() => void compute(algo, true)}
           className="flex min-h-32 flex-col items-center justify-center rounded-mac-xl border border-dashed border-mac-separator bg-mac-surface/60 p-5 transition-colors hover:border-mac-accent/40 disabled:opacity-60">
           <FileUp className="mb-3 h-8 w-8 text-mac-label-tertiary" strokeWidth={1.5} />
-          <span className="text-[14px] font-medium text-mac-label">{busy ? 'Reading file…' : path ? 'Choose another file' : 'Select a file to hash'}</span>
-          <span className="mt-1 max-w-sm text-center text-[12px] text-mac-label-secondary">{available ? 'Read locally in small blocks, including large files. Nothing is uploaded.' : 'Open the desktop app to select and hash local files.'}</span>
+          <span className="text-[14px] font-medium text-mac-label">{busy ? uiText('Reading file…') : path ? uiText('Choose another file') : uiText('Select a file to hash')}</span>
+          <span className="mt-1 max-w-sm text-center text-[12px] text-mac-label-secondary">{available ? uiText('Read locally in small blocks, including large files. Nothing is uploaded.') : uiText('Open the desktop app to select and hash local files.')}</span>
         </button>
         {path && <div className="rounded-mac-lg border border-mac-separator bg-mac-surface p-4">
           <dl className="grid gap-2 text-[13px]">
-            <Row label="Path" value={path} mono />
-            <Row label="Size" value={size != null ? formatBytes(size) : '—'} />
-            <Row label="Algorithm" value={algo.toUpperCase()} />
-            <Row label="Checksum" value={busy ? 'Computing…' : hash || '—'} mono />
+            <Row label={uiText('Path')} value={path} mono />
+            <Row label={uiText('Size')} value={size != null ? formatBytes(size) : '—'} />
+            <Row label={uiText('Algorithm')} value={algo.toUpperCase()} />
+            <Row label={uiText('Checksum')} value={busy ? 'Computing…' : hash || '—'} mono />
           </dl>
           {busy && progress && <div className="mt-3">
-            <progress aria-label="File hashing progress" className="h-2 w-full accent-mac-accent" max={Math.max(1, progress.totalBytes)} value={Math.min(progress.bytesRead, progress.totalBytes)} />
-            <p className="mt-1 text-[12px] text-mac-label-secondary">{formatBytes(progress.bytesRead)} / {formatBytes(progress.totalBytes)} read</p>
+            <progress aria-label={uiText('File hashing progress')} className="h-2 w-full accent-mac-accent" max={Math.max(1, progress.totalBytes)} value={Math.min(progress.bytesRead, progress.totalBytes)} />
+            <p className="mt-1 text-[12px] text-mac-label-secondary">{formatBytes(progress.bytesRead)} / {formatBytes(progress.totalBytes)} {uiText('read')}</p>
           </div>}
         </div>}
         <div className="rounded-mac-lg border border-mac-separator p-4">
-          <label htmlFor="file-checksum" className="mb-2 block text-[13px] font-medium">Expected checksum</label>
+          <label htmlFor="file-checksum" className="mb-2 block text-[13px] font-medium">{uiText('Expected checksum')}</label>
           <textarea id="file-checksum" className="mac-input min-h-20 font-mono text-[12px]" value={expected}
-            onChange={(e) => setExpected(e.target.value)} placeholder="Paste the published checksum" spellCheck={false} aria-describedby="file-checksum-help" />
+            onChange={(e) => setExpected(e.target.value)} placeholder={uiText('Paste the published checksum')} spellCheck={false} aria-describedby="file-checksum-help" />
           <p id="file-checksum-help" role="status" className={`mt-2 text-[12px] ${comparison === 'match' ? 'text-mac-success' : comparison === 'invalid' || comparison === 'mismatch' ? 'text-mac-danger' : 'text-mac-label-secondary'}`}>{comparisonText}</p>
-          <p className="mt-2 text-[11px] text-mac-label-tertiary">Use the same algorithm as the published checksum. MD5 and SHA-1 are legacy integrity checks; a match does not prove a file's source is trustworthy.</p>
+          <p className="mt-2 text-[11px] text-mac-label-tertiary">{uiText('Use the same algorithm as the published checksum. MD5 and SHA-1 are legacy integrity checks; a match does not prove a file\'s source is trustworthy.')}</p>
         </div>
       </div>
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={error ? 'danger' : hash && !busy ? 'success' : 'neutral'}>
-          {error ?? (busy ? canceling ? 'Canceling file read…' : 'Reading locally… Large files may take a moment.' : canceled ? 'Canceled · no checksum produced. Recheck to try again.' : hash ? 'Checksum ready · local only' : available ? 'No checksum yet' : 'Desktop app required')}
+          {error ?? (busy ? canceling ? uiText('Canceling file read…') : uiText('Reading locally… Large files may take a moment.') : canceled ? uiText('Canceled · no checksum produced. Recheck to try again.') : hash ? uiText('Checksum ready · local only') : available ? uiText('No checksum yet') : uiText('Desktop app required'))}
         </ToolStatus>
       </footer>
     </div>

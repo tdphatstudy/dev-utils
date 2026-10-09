@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VaultStatus, RecoverMetadataResult } from '@shared/secret-box/types'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
@@ -6,6 +7,7 @@ import { DesktopLogin } from './DesktopLogin'
 import { DesktopDesktop } from './DesktopDesktop'
 
 export default function PrivateBoxApp(): JSX.Element {
+  useUiLocale()
   const refreshVersion = useRef(0)
   const [status, setStatus] = useState<VaultStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,23 +46,21 @@ export default function PrivateBoxApp(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#1c1c1e] text-[13px] text-white/50">
-        Loading…
-      </div>
+      <div className="flex h-full items-center justify-center bg-[#1c1c1e] text-[13px] text-white/50">{uiText('Loading…')}{' '}</div>
     )
   }
 
   if ((!status && error) || (status?.initializationError && !status.vaults.length)) {
     return <div className="flex h-full flex-col items-center justify-center overflow-auto p-6">
       <div className="max-w-lg space-y-4">
-        <h2 className="text-lg font-semibold">Private Box could not open</h2>
+        <h2 className="text-lg font-semibold">{uiText('Private Box could not open')}</h2>
         <p role="alert" className="break-words text-sm text-mac-danger">{error ?? status?.initializationError}</p>
-        <p className="text-sm text-mac-label-secondary">{window.devutils?.privateBox ? 'Keep the existing folder and metadata. Restore from your original backup before trying again.' : 'Open the DevFusion desktop app to manage encrypted boxes and local files.'}</p>
-        <button type="button" className="mac-btn-secondary" onClick={() => void refresh()}>Retry</button>
+        <p className="text-sm text-mac-label-secondary">{window.devutils?.privateBox ? uiText('Keep the existing folder and metadata. Restore from your original backup before trying again.') : uiText('Open the DevFusion desktop app to manage encrypted boxes and local files.')}</p>
+        <button type="button" className="mac-btn-secondary" onClick={() => void refresh()}>{uiText('Retry')}</button>
         <button type="button" className="mac-btn-secondary ml-2" disabled={!window.devutils?.privateBox} onClick={() => void (async () => {
           try { if (await window.devutils.privateBox.pickVaultFolder()) await refresh() }
           catch (e) { setError(e instanceof Error ? e.message : 'Could not add existing box') }
-        })()}>Open another existing box…</button>
+        })()}>{uiText('Open another existing box…')}</button>
       </div>
     </div>
   }
@@ -68,7 +68,7 @@ export default function PrivateBoxApp(): JSX.Element {
   if (!status?.vaults.length || showCreate) {
     return (
       <SetupWizard
-        title={status?.vaults.length ? 'Create another box' : 'Set up Private Box'}
+        title={status?.vaults.length ? uiText('Create another box') : uiText('Set up Private Box')}
         error={error ?? status?.initializationError ?? null}
         onCancel={status?.vaults.length ? () => setShowCreate(false) : undefined}
         onDone={() => {
@@ -135,10 +135,10 @@ export default function PrivateBoxApp(): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {recovery && <div role="status" className="shrink-0 space-y-1 border-b border-mac-separator p-3 text-[12px]">
-        <p className="text-mac-success">Metadata recovered. Verified {recovery.checkedDocuments} encrypted document(s); signed in with the verified keys.</p>
-        <p className="break-all text-mac-label-secondary">{recovery.preservedMetadataPath ? `Previous metadata kept at ${recovery.preservedMetadataPath}` : `Backup retained at ${recovery.backupPath}`}</p>
-        <CopyButton text={recovery.preservedMetadataPath ?? recovery.backupPath} label="Copy recovery path" />
-        <button type="button" className="mac-btn-ghost ml-2" onClick={() => setRecovery(null)}>Dismiss</button>
+        <p className="text-mac-success">{uiText('Metadata recovered. Verified')}{' '}{recovery.checkedDocuments}{' '}{uiText('encrypted document(s); signed in with the verified keys.')}</p>
+        <p className="break-all text-mac-label-secondary">{recovery.preservedMetadataPath ? uiText('Previous metadata kept at {preservedMetadataPath}', { preservedMetadataPath: recovery.preservedMetadataPath }) : uiText('Backup retained at {backupPath}', { backupPath: recovery.backupPath })}</p>
+        <CopyButton text={recovery.preservedMetadataPath ?? recovery.backupPath} label={uiText('Copy recovery path')} />
+        <button type="button" className="mac-btn-ghost ml-2" onClick={() => setRecovery(null)}>{uiText('Dismiss')}</button>
       </div>}
       <div className="min-h-0 flex-1">
     <DesktopDesktop
@@ -148,8 +148,8 @@ export default function PrivateBoxApp(): JSX.Element {
         await window.devutils.privateBox.clearAccess()
         await refresh()
       }}
-      onCreateNew={() => {
-        void window.devutils.privateBox.clearAccess()
+      onCreateNew={async () => {
+        await window.devutils.privateBox.clearAccess()
         setShowCreate(true)
       }}
       onRefresh={() => void refresh()}

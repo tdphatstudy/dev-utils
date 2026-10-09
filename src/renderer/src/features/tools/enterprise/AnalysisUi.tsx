@@ -7,6 +7,7 @@ import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { ToolWorkspace, type ToolWorkspaceProps } from '@renderer/components/ui/ToolWorkspace'
 
 export function AnalysisShell(props: ToolWorkspaceProps): JSX.Element {
+  useUiLocale()
   return <ToolWorkspace {...props} />
 }
 
@@ -18,7 +19,7 @@ export function AnalysisInput({ label, value, revision, onChange, onError, accep
   useEffect(() => { generation.current++ }, [value])
   useEffect(() => () => { generation.current++ }, [])
   return <div className="flex h-full min-h-0 min-w-0 flex-col gap-2"><div className="flex shrink-0 justify-end">
-    <label className="mac-btn-secondary cursor-pointer !text-[12px] focus-within:ring-2 focus-within:ring-mac-accent"><Upload aria-hidden="true" className="h-3.5 w-3.5" />{uiText('Open local file')}<input aria-label={`Open ${uiText(label)} file`} type="file" accept={accept} className="sr-only" onChange={async event => {
+    <label className="mac-btn-secondary cursor-pointer !text-[12px] focus-within:ring-2 focus-within:ring-mac-accent"><Upload aria-hidden="true" className="h-3.5 w-3.5" />{uiText('Open local file')}<input aria-label={uiText('Open {value1} file', { value1: uiText(label) })} type="file" accept={accept} className="sr-only" onChange={async event => {
       const file = event.target.files?.[0]; event.target.value = ''
       if (!file) return
       const revision = ++generation.current

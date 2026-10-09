@@ -42,7 +42,10 @@ export interface QuickToolsApi {
 }
 export interface WidgetApi extends QuickToolsApi {
   clipboard: ClipboardApi
-  context(): Promise<{ kind: QuickWidget; locale: LocaleId; dark: boolean }>
+  context(): Promise<{ kind: QuickWidget; locale: LocaleId; dark: boolean; canPaste: boolean }>
+  onAppearanceChanged(callback: (dark: boolean) => void): () => void
+  onLanguageChanged(callback: (locale: LocaleId) => void): () => void
+  onPasteTargetChanged(callback: (available: boolean) => void): () => void
   close(): Promise<void>
   pin(value: boolean): Promise<void>
   copyText(text: string): Promise<void>

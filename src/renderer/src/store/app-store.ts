@@ -7,7 +7,8 @@ import { isShortcutCommandId, normalizeShortcut, type ShortcutOverrides } from '
 
 export type { ToolLoadingMode } from './app-preferences'
 
-export type ThemeMode = 'dark' | 'light' | 'system'
+import type { ThemeMode } from '@shared/theme'
+export type { ThemeMode } from '@shared/theme'
 
 /** Where to land when the app starts at `/`. */
 export type LaunchMode = 'home' | 'last'

@@ -30,16 +30,16 @@ export function CommandPalette(): JSX.Element {
             if (opener.current?.isConnected) opener.current.focus()
           }}>
           <Dialog.Title className="sr-only">{uiText('Search tools')}</Dialog.Title>
-          <Dialog.Description className="sr-only">Search tools by name or task. Use the arrow keys to choose a tool and Enter to open it.</Dialog.Description>
+          <Dialog.Description className="sr-only">{uiText('Search tools by name or task. Use the arrow keys to choose a tool and Enter to open it.')}</Dialog.Description>
           <ErrorBoundary scope="route" onHome={() => setOpen(false)} homeLabel="Close search">
-            <Suspense fallback={<LoadingState className="min-h-[240px]" label="Opening tool search…" detail="Search will be ready in a moment." slowDetail="Search is taking longer than usual. You can close this window and use the toolbox." />}>
+            <Suspense fallback={<LoadingState className="min-h-[240px]" label={uiText('Opening tool search…')} detail="Search will be ready in a moment." slowDetail={uiText('Search is taking longer than usual. You can close this window and use the toolbox.')} />}>
               <CommandPaletteContents onNavigate={() => {
                 opener.current = document.getElementById('workspace')
                 setOpen(false)
               }} />
             </Suspense>
           </ErrorBoundary>
-          <Dialog.Close asChild><button type="button" aria-label="Close tool search" title="Close tool search" className="mac-btn-ghost absolute right-3 top-3 !h-8 !w-8 !min-h-0 !p-0"><X aria-hidden="true" className="h-4 w-4" /></button></Dialog.Close>
+          <Dialog.Close asChild><button type="button" aria-label={uiText('Close tool search')} title={uiText('Close tool search')} className="mac-btn-ghost absolute right-3 top-3 !h-8 !w-8 !min-h-0 !p-0"><X aria-hidden="true" className="h-4 w-4" /></button></Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

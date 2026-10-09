@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { OcrView, OcrResult, OcrSelection, OcrProgress } from '@shared/ocr/types'
+import type { OcrInterface } from '@shared/ocr/interface'
 
 const api = {
-  view: (): Promise<OcrView> => ipcRenderer.invoke('ocrHelper:view'),
+  view: (): Promise<OcrView & { ui: OcrInterface }> => ipcRenderer.invoke('ocrHelper:view'),
   ready: (): Promise<void> => ipcRenderer.invoke('ocrHelper:ready'),
   select: (selection: OcrSelection): Promise<void> => ipcRenderer.invoke('ocrHelper:select', selection),
   complete: (result: OcrResult): Promise<void> => ipcRenderer.invoke('ocrHelper:complete', result),

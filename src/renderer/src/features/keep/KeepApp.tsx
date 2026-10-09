@@ -349,9 +349,7 @@ export default function KeepApp(): JSX.Element {
 
   if (!ready) {
     return (
-      <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-mac-bg text-[13px] text-mac-label-secondary">
-        Loading Keep…
-      </div>
+      <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-mac-bg text-[13px] text-mac-label-secondary">{uiText('Loading Keep…')}{' '}</div>
     )
   }
 
@@ -364,20 +362,17 @@ export default function KeepApp(): JSX.Element {
               <StickyNote className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-[18px] font-semibold text-mac-label">Keep</h1>
-              <p className="text-[12px] text-mac-label-secondary">Encrypted notes · Default Secret Box</p>
+              <h1 className="text-[18px] font-semibold text-mac-label">{uiText('Keep')}</h1>
+              <p className="text-[12px] text-mac-label-secondary">{uiText('Encrypted notes · Default Secret Box')}</p>
             </div>
           </div>
-          <p className="mb-3 text-[12px] leading-relaxed text-mac-label-secondary">
-            Notes are sealed in your local Default Secret Box. Device key is automatic; enter your
-            password (key B) to open.
-          </p>
+          <p className="mb-3 text-[12px] leading-relaxed text-mac-label-secondary">{uiText('Notes are sealed in your local Default Secret Box. Device key is automatic; enter your password (key B) to open.')}{' '}</p>
           <input
             type="password"
-            aria-label="Keep password"
+            aria-label={uiText('Keep password')}
             disabled={!desktop || busy}
             className="mac-input w-full font-mono"
-            placeholder="Password (key B)"
+            placeholder={uiText('Password (key B)')}
             value={keyB}
             onChange={(e) => setKeyB(e.target.value)}
             onKeyDown={(e) => {
@@ -393,7 +388,7 @@ export default function KeepApp(): JSX.Element {
             className="mac-btn-primary mt-4 w-full"
             onClick={() => void unlock(keyB)}
           >
-            {busy ? 'Unlocking…' : 'Open Keep'}
+            {busy ? uiText('Unlocking…') : uiText('Open Keep')}
           </button>
         </div>
       </div>
@@ -404,13 +399,13 @@ export default function KeepApp(): JSX.Element {
     <div className="keep-app flex h-full min-h-0 flex-col bg-mac-bg text-mac-label">
       <header className="flex shrink-0 items-center gap-3 border-b border-mac-separator px-4 py-3">
         <StickyNote className="h-5 w-5 text-mac-accent" />
-        <span className="text-[16px] font-medium">Keep</span>
+        <span className="text-[16px] font-medium">{uiText('Keep')}</span>
         <div className="relative min-w-0 max-w-md flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mac-label-tertiary" />
           <input
             className="mac-input w-full !pl-9"
-            placeholder="Search notes"
-            aria-label="Search notes by title or body"
+            placeholder={uiText('Search notes')}
+            aria-label={uiText('Search notes by title or body')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -418,8 +413,8 @@ export default function KeepApp(): JSX.Element {
         <button
           type="button"
           className="mac-btn-ghost !h-9 !w-9 !p-0"
-          title="Sign out of box"
-          aria-label="Sign out of box"
+          title={uiText('Sign out of box')}
+          aria-label={uiText('Sign out of box')}
           disabled={busy || saving || signingOut}
           onClick={() => requestLeave(signOut)}
         >
@@ -439,9 +434,7 @@ export default function KeepApp(): JSX.Element {
             }}
             className="flex min-h-12 w-full items-center gap-2 rounded-lg border border-mac-separator bg-mac-surface px-4 py-3 text-left text-[14px] text-mac-label-secondary shadow-mac hover:bg-mac-control-hover"
           >
-            <Plus className="h-4 w-4" />
-            Take a note…
-          </button>
+            <Plus className="h-4 w-4" />{uiText('Take a note…')}{' '}</button>
         ) : (
           <NoteEditor
             note={composer}
@@ -449,7 +442,7 @@ export default function KeepApp(): JSX.Element {
             onClose={() => {
               void createNote(composer)
             }}
-            submitLabel="Save note"
+            submitLabel={uiText('Save note')}
             onCancel={() => requestLeave(() => { setCreating(false); setComposer(emptyKeepNote()); setShowPalette(false) })}
             busy={saving}
             showPalette={showPalette}
@@ -463,20 +456,20 @@ export default function KeepApp(): JSX.Element {
           <p role="alert" className="mx-auto mb-4 max-w-3xl text-center text-[12px] text-mac-danger">{error}</p>
         )}
         {busy && cards.length === 0 && (
-          <p role="status" aria-live="polite" className="text-center text-[13px] text-mac-label-secondary">Loading notes…</p>
+          <p role="status" aria-live="polite" className="text-center text-[13px] text-mac-label-secondary">{uiText('Loading notes…')}</p>
         )}
         {unreadable.length > 0 && <details className="mx-auto mb-4 max-w-3xl rounded-lg border border-mac-danger/40 p-3 text-[12px] text-mac-danger">
-          <summary>{unreadable.length} note(s) could not be read. Files were kept.</summary>
+          <summary>{unreadable.length}{' '}{uiText('note(s) could not be read. Files were kept.')}</summary>
           <ul className="mt-2 space-y-1">{unreadable.map((issue) => <li key={issue} className="break-words">{issue}</li>)}</ul>
         </details>}
         {!busy && !error && !unreadable.length && filtered.length === 0 && (
           <p className="text-center text-[13px] text-mac-label-tertiary">
-            {query ? 'No matching notes' : 'No notes yet — take one above'}
+            {query ? uiText('No matching notes') : uiText('No notes yet — take one above')}
           </p>
         )}
 
         {pinned.length > 0 && (
-          <Section title="Pinned">
+          <Section title={uiText('Pinned')}>
             <div className="columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4">
               {pinned.map((c) => (
                 <KeepCard
@@ -490,7 +483,7 @@ export default function KeepApp(): JSX.Element {
         )}
 
         {others.length > 0 && (
-          <Section title={pinned.length ? 'Others' : undefined}>
+          <Section title={pinned.length ? uiText('Others') : undefined}>
             <div className="columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4">
               {others.map((c) => (
                 <KeepCard
@@ -503,15 +496,15 @@ export default function KeepApp(): JSX.Element {
           </Section>
         )}
         {nextCursor && <div className="mx-auto max-w-3xl text-center">
-          <p role="status" className="mb-2 text-[12px] text-mac-label-secondary">{cards.length} notes loaded. Load more to search the remaining notes.</p>
-          <button type="button" disabled={busy || saving} className="rounded-lg border border-mac-separator px-4 py-2 text-[13px] disabled:opacity-40" onClick={() => void loadNotes(nextCursor)}>{busy ? 'Loading…' : 'Load more notes'}</button>
+          <p role="status" className="mb-2 text-[12px] text-mac-label-secondary">{cards.length}{' '}{uiText('notes loaded. Load more to search the remaining notes.')}</p>
+          <button type="button" disabled={busy || saving} className="rounded-lg border border-mac-separator px-4 py-2 text-[13px] disabled:opacity-40" onClick={() => void loadNotes(nextCursor)}>{busy ? uiText('Loading…') : uiText('Load more notes')}</button>
         </div>}
       </div>
 
       </div>
 
       {editing && !recoveryDialog && (
-        <Modal open title="Edit note" description="Changes are saved only when you choose Save changes." onClose={closeEditor} busy={saving}>
+        <Modal open title={uiText('Edit note')} description={uiText('Changes are saved only when you choose Save changes.')} onClose={closeEditor} busy={saving}>
             {error && <p role="alert" className="mb-3 rounded-lg bg-mac-surface p-3 text-[12px] text-mac-danger">{error}</p>}
             <NoteEditor
               note={draft}
@@ -522,7 +515,7 @@ export default function KeepApp(): JSX.Element {
                 })()
               }}
               onDelete={() => requestDelete(editing)}
-              submitLabel="Save changes"
+              submitLabel={uiText('Save changes')}
               onCancel={closeEditor}
               busy={saving}
               showPalette={showPalette}
@@ -531,14 +524,14 @@ export default function KeepApp(): JSX.Element {
         </Modal>
       )}
       {deleteTarget && (
-        <Modal open title="Delete note?" description="This permanently deletes the saved note and discards its unsaved changes. This cannot be undone." onClose={cancelDelete} busy={saving}>
+        <Modal open title={uiText('Delete note?')} description={uiText('This permanently deletes the saved note and discards its unsaved changes. This cannot be undone.')} onClose={cancelDelete} busy={saving}>
           <p className="mb-4 break-words rounded-lg border border-mac-separator bg-mac-control p-3 text-[14px] font-medium text-mac-label">
-            {deleteTarget.card.note.title.trim().slice(0, 120) || 'Untitled note'}{deleteTarget.card.note.title.trim().length > 120 ? '…' : ''}
+            {deleteTarget.card.note.title.trim().slice(0, 120) || uiText('Untitled note')}{deleteTarget.card.note.title.trim().length > 120 ? '…' : ''}
           </p>
           {deleteError && <p role="alert" className="mb-4 text-[13px] leading-relaxed text-mac-danger">{deleteError}</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="mac-btn-secondary" disabled={saving} onClick={cancelDelete}>{uiText('Cancel')}</button>
-            <button type="button" className="mac-btn-primary" style={{ backgroundColor: 'var(--mac-danger-fill)' }} disabled={saving} onClick={() => void deleteCard()}>{saving ? 'Deleting…' : 'Delete note'}</button>
+            <button type="button" className="mac-btn-primary" style={{ backgroundColor: 'var(--mac-danger-fill)' }} disabled={saving} onClick={() => void deleteCard()}>{saving ? uiText('Deleting…') : uiText('Delete note')}</button>
           </div>
         </Modal>
       )}
@@ -595,11 +588,11 @@ function KeepCard({ card, onOpen }: { card: NoteCard; onOpen: () => void }): JSX
             card.note.title && 'mt-1.5'
           )}
         >
-          {card.note.body.length > 280 ? `${card.note.body.slice(0, 280)}…` : card.note.body}
+          {card.note.body.length > 280 ? uiText('{value1}…', { value1: card.note.body.slice(0, 280) }) : card.note.body}
         </p>
       )}
       {!card.note.title && !card.note.body && (
-        <p className="text-[13px] italic text-mac-label-tertiary">Empty note</p>
+        <p className="text-[13px] italic text-mac-label-tertiary">{uiText('Empty note')}</p>
       )}
     </button>
   )
@@ -632,16 +625,16 @@ function NoteEditor({
     <div className={cn('keep-editor rounded-xl border border-mac-separator shadow-mac', bg)}>
       <input
         className="w-full bg-transparent px-4 pt-3 text-[16px] font-medium text-mac-label outline-none placeholder:text-mac-label-tertiary"
-        placeholder="Title"
-        aria-label="Note title"
+        placeholder={uiText('Title')}
+        aria-label={uiText('Note title')}
         disabled={busy}
         value={note.title}
         onChange={(e) => onChange({ ...note, title: e.target.value })}
       />
       <textarea
         className="min-h-[120px] w-full resize-none bg-transparent px-4 py-2 text-[14px] leading-relaxed text-mac-label outline-none placeholder:text-mac-label-tertiary"
-        placeholder="Take a note…"
-        aria-label="Note body"
+        placeholder={uiText('Take a note…')}
+        aria-label={uiText('Note body')}
         disabled={busy}
         value={note.body}
         onChange={(e) => onChange({ ...note, body: e.target.value })}
@@ -651,8 +644,8 @@ function NoteEditor({
         <button
           type="button"
           className="mac-btn-ghost !h-9 !w-9 !p-0"
-          title="Pin"
-          aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
+          title={uiText('Pin')}
+          aria-label={note.pinned ? uiText('Unpin note') : uiText('Pin note')}
           disabled={busy}
           aria-pressed={note.pinned}
           onClick={() => onChange({ ...note, pinned: !note.pinned })}
@@ -662,8 +655,8 @@ function NoteEditor({
         <button
           type="button"
           className="mac-btn-ghost !h-9 !w-9 !p-0"
-          title="Background"
-          aria-label="Choose note background"
+          title={uiText('Background')}
+          aria-label={uiText('Choose note background')}
           aria-expanded={showPalette}
           disabled={busy}
           onClick={() => setShowPalette(!showPalette)}
@@ -674,8 +667,8 @@ function NoteEditor({
           <button
             type="button"
             className="mac-btn-ghost !h-9 !w-9 !p-0 hover:!text-mac-danger"
-            title="Delete"
-            aria-label="Permanently delete note"
+            title={uiText('Delete')}
+            aria-label={uiText('Permanently delete note')}
             disabled={busy}
             onClick={onDelete}
           >
@@ -689,7 +682,7 @@ function NoteEditor({
           onClick={onClose}
           disabled={busy}
         >
-          {busy ? uiText('Saving…') : submitLabel}
+          {busy ? uiText('Saving…') : uiText(submitLabel)}
         </button>
 
         {showPalette && (
@@ -699,7 +692,7 @@ function NoteEditor({
                 key={c.id}
                 type="button"
                 title={c.label}
-                aria-label={`${c.label} background`}
+                aria-label={uiText('{label} background', { label: c.label })}
                 aria-pressed={note.color === c.id}
                 disabled={busy}
                 className={cn(

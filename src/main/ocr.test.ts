@@ -52,6 +52,24 @@ it('creates no idle renderer, starts on demand and destroys the entire engine re
   expect(f.windows.every(w => w.destroyed)).toBe(true); expect(value.isBusy()).toBe(false)
   expect(source.listenerCount('destroyed')).toBe(0); expect(f.copy).not.toHaveBeenCalled()
 })
+it('keeps the OCR runner hidden and returns results directly for inline clipboard recognition', async () => {
+  const value = ocr(), source = owner()
+  const pending = value.recognize({ id: 'inline', bytes, kind: 'image', language: 'eng' }, source, false)
+  await vi.waitFor(() => expect(f.windows[0]?.webContents.mainFrame.url).toBe('devfusion-ocr://local/ocr.html'))
+  expect(f.windows[0].show).not.toHaveBeenCalled(); expect(f.windows[0].focus).not.toHaveBeenCalled()
+  await value.complete(event(f.windows[0]), output)
+  expect(await pending).toEqual(output); expect(f.windows).toHaveLength(1); expect(f.windows[0].destroyed).toBe(true)
+})
+it('provides trusted interface locale and labels without translating extracted user text', async () => {
+  const value = f.ocr = new DesktopOcr(() => {}, () => true, () => 'vi')
+  const source = owner(), pending = value.recognize({ id: 'localized', bytes, kind: 'image', language: 'eng' }, source)
+  await ready()
+  const view = value.view(event(f.windows[0]))
+  expect(view.ui).toMatchObject({ locale: 'vi', intl: 'vi', direction: 'ltr' })
+  expect(view.ui.messages.Cancel).toBe('Hủy')
+  await value.complete(event(f.windows[0]), output)
+  expect(await pending).toEqual(output)
+})
 it('selects a native-pixel region across all displays then replaces the engine with a lightweight result popup', async () => {
   const value = ocr(), pending = value.capture({ id: 'tray', mode: 'region', language: 'eng+vie' })
   await ready(1)
@@ -64,7 +82,7 @@ it('selects a native-pixel region across all displays then replaces the engine w
   await value.complete(event(f.windows[2]), output)
   expect(await pending).toEqual(output); expect(f.windows[2].destroyed).toBe(true)
   const popup = f.windows[3]
-  expect(value.view(event(popup))).toEqual({ kind: 'result', result: output })
+  expect(value.view(event(popup))).toMatchObject({ kind: 'result', result: output, ui: { locale: 'en' } })
   expect(popup.webContents.mainFrame.url).toBe(pathToFileURL('/fixture/ocr-helper.html').href)
   expect(f.copy).not.toHaveBeenCalled()
   f.copy.mockResolvedValueOnce(undefined)

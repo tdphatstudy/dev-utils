@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { convertLineEndings, countLines, detectLineEnding, lineEndingCounts, type LineEnding } from '@shared/file/text'
@@ -16,7 +17,7 @@ export default function LineEndings(): JSX.Element {
   const [input, setInput] = useState(SAMPLE)
   const [target, setTarget] = useState<LineEnding>('lf')
   useToolDraft('file.lineendings', input, setInput, {
-    label: 'Line endings',
+    label: messageKey('Line endings'),
     historyOnUnmount: true
   })
 
@@ -29,8 +30,7 @@ export default function LineEndings(): JSX.Element {
     <div className="flex h-full flex-col">
       <ToolToolbar>
         <span className="text-[12px] text-mac-label-secondary">
-          Detected: <strong className="text-mac-label">{detected}</strong> · {lines} lines
-        </span>
+          {uiText('Detected:')} <strong className="text-mac-label">{detected}</strong> · {lines} {uiText('lines')}</span>
         <SegmentedControl
           value={target}
           onChange={setTarget}
@@ -41,8 +41,7 @@ export default function LineEndings(): JSX.Element {
           ]}
         />
         <button type="button" className="mac-btn-primary" disabled={!input || input === output} onClick={() => setInput(output)}>
-          Apply to input
-        </button>
+          {uiText('Apply to input')}</button>
         <div className="ml-auto flex gap-2">
           <CopyButton text={output} />
           <button type="button" className="mac-btn-ghost" onClick={() => setInput(SAMPLE)}>
@@ -52,15 +51,15 @@ export default function LineEndings(): JSX.Element {
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="text" label="Original text" placeholder="Paste text…" />
-        <CodeEditor value={output} language="text" label={`Converted text (${target.toUpperCase()})`} readOnly />
+        <CodeEditor value={input} onChange={setInput} language="text" label={uiText('Original text')} placeholder={uiText('Paste text…')} />
+        <CodeEditor value={output} language="text" label={uiText('Converted text ({value1})', { value1: target.toUpperCase() })} readOnly />
       </SplitPane>
 
       <footer className="shrink-0 border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={!input ? 'neutral' : detected === 'mixed' ? 'warning' : 'success'}>
-          {!input ? 'Open a UTF-8 file or paste text to begin' : `Input: ${counts.crlf} CRLF · ${counts.lf} LF · ${counts.cr} CR · output ${new TextEncoder().encode(output).length.toLocaleString()} bytes (${target.toUpperCase()})`}
+          {!input ? uiText('Open a UTF-8 file or paste text to begin') : uiText('Input: {crlf} CRLF · {lf} LF · {cr} CR · output {value4} bytes ({value5})', { crlf: counts.crlf, lf: counts.lf, cr: counts.cr, value4: new TextEncoder().encode(output).length.toLocaleString(), value5: target.toUpperCase() })}
         </ToolStatus>
-        <p className="mt-1 text-[11px] text-mac-label-tertiary">Editing normalizes editor line breaks to LF. UTF-8 file import/download preserves the BOM and final newline; only line endings are converted.</p>
+        <p className="mt-1 text-[11px] text-mac-label-tertiary">{uiText('Editing normalizes editor line breaks to LF. UTF-8 file import/download preserves the BOM and final newline; only line endings are converted.')}</p>
       </footer>
     </div>
   )

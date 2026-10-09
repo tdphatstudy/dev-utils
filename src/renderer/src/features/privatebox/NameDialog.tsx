@@ -39,9 +39,9 @@ export function NameDialog({
   }
 
   return (
-    <Modal open={open} title={title} onClose={onCancel} className="max-w-sm">
+    <Modal open={open} title={uiText(title)} onClose={onCancel} className="max-w-sm">
         <label className="mt-4 block text-[12px]">
-          <span className="mb-1 block text-mac-label-secondary">{label}</span>
+          <span className="mb-1 block text-mac-label-secondary">{uiText(label)}</span>
           <input
             className="mac-input font-mono"
             value={value}
@@ -56,7 +56,7 @@ export function NameDialog({
           <button type="button" className="mac-btn-ghost" onClick={onCancel}>
             {uiText('Cancel')}</button>
           <button type="button" className="mac-btn-primary" disabled={!value.trim()} onClick={submit}>
-            {confirmLabel}
+            {uiText(confirmLabel)}
           </button>
         </div>
     </Modal>

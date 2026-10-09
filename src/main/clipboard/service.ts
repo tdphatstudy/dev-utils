@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { unlink } from 'node:fs/promises'
 import { safeStorage } from 'electron'
@@ -7,10 +7,11 @@ import { DEFAULT_CLIPBOARD, MAX_CLIP_IMAGE, MAX_CLIP_MEMORY, MAX_CLIP_TEXT, vali
 import { atomicWriteFile } from '../secret-box/atomic-write'
 import { readBoundedFile } from '../bounded-read'
 import { readNativeClipboard, validClipPng, writeNativeClipboard } from './native'
+import { fingerprint } from './fingerprint'
 
 type Entry = { summary: ClipSummary; content: ClipContent; fingerprint: string; memoryBytes: number }
 const size = (c: ClipContent): number => Buffer.byteLength(c.text) + Buffer.byteLength(c.html ?? '') + Buffer.byteLength(c.png ?? '', 'base64')
-const fingerprint = (c: ClipContent): string => createHash('sha256').update(JSON.stringify(c)).digest('hex')
+const sameContent = (a: ClipContent, b: ClipContent): boolean => a.text === b.text && a.html === b.html && a.png === b.png
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
 const sensitive = (c: ClipContent, excluded: readonly string[]): boolean => sensitiveClip(c.text, excluded) || !!c.html && sensitiveClip(c.html, excluded)
 function safePreferences(value: unknown): ClipboardPreferences {
@@ -30,7 +31,10 @@ export class ClipboardManager {
   private error: string | null = null
   private encryptionAvailable = false
   private polling = false
-  private timer?: ReturnType<typeof setInterval>
+  private timer?: ReturnType<typeof setTimeout>
+  private started = false
+  private unchanged = 0
+  private lastContent: ClipContent | null = null
   private writes: Promise<unknown> = Promise.resolve()
   private saveTimer?: ReturnType<typeof setTimeout>
   private disposed = false
@@ -61,9 +65,22 @@ export class ClipboardManager {
       } catch (error) { this.entries = []; if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.error = 'Encrypted history could not be read. The existing file was kept. Turn off encrypted storage to discard it.' }
     }
     this.baseline = false
+    this.started = true
     if (this.preferences.enabled) void this.poll()
-    this.timer = setInterval(() => { void this.poll() }, 500); this.timer.unref()
+    else this.schedulePoll()
     this.changed()
+  }
+  private schedulePoll(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+    if (!this.started || this.disposed || this.polling || this.paused || this.blocked() || !this.preferences.enabled) return
+    this.timer = setTimeout(() => { this.timer = undefined; void this.poll() }, Math.min(2000, 500 * 2 ** this.unchanged))
+    this.timer.unref()
+  }
+  private resetPolling(): void {
+    this.unchanged = 0
+    this.lastContent = null
+    this.schedulePoll()
   }
   private restore(value: unknown): void {
     const e = value as Entry | null, s = e?.summary, c = e?.content
@@ -85,50 +102,56 @@ export class ClipboardManager {
       if (oldest < 0) oldest = 0
       this.entries.splice(oldest, 1)
     }
+    if (this.lastContent && !this.entries.some(entry => entry.content === this.lastContent)) this.lastContent = null
     if (before !== this.entries.length) this.scheduleSave()
   }
-  private makeEntry(content: ClipContent, id: string = randomUUID()): Entry {
+  private makeEntry(content: ClipContent, id: string = randomUUID(), hash = fingerprint(content)): Entry {
     const at = this.now(), bytes = size(content)
-    return { content: { ...content }, fingerprint: fingerprint(content), memoryBytes: Buffer.byteLength(JSON.stringify(content)), summary: { id, kind: classifyClip(content.text, !!content.png), preview: content.png ? 'PNG image' : content.text.slice(0, 200), label: '', pinned: false, firstAt: at, lastAt: at, copies: 1, bytes, hasHtml: !!content.html } }
+    return { content: { ...content }, fingerprint: hash, memoryBytes: Buffer.byteLength(JSON.stringify(content)), summary: { id, kind: classifyClip(content.text, !!content.png), preview: content.png ? 'PNG image' : content.text.slice(0, 200), label: '', pinned: false, firstAt: at, lastAt: at, copies: 1, bytes, hasHtml: !!content.html } }
   }
-  privacyChanged(): void { this.revision++; this.baseline = true; this.last = null; this.changed() }
+  privacyChanged(): void { this.revision++; this.baseline = true; this.last = null; this.resetPolling(); this.changed() }
+  visibilityRevision(): number { return this.revision }
   screenLock(locked: boolean): void { this.screenLocked = locked; this.privacyChanged() }
   pause(value: unknown): ClipboardState { if (typeof value !== 'boolean') throw new Error('Invalid pause state.'); this.paused = value; if (!value && this.error?.startsWith('Clipboard could not be read.')) this.error = null; this.privacyChanged(); return this.state() }
   async poll(explicit = false): Promise<void> {
     if (this.disposed || this.polling) return
+    clearTimeout(this.timer); this.timer = undefined
     const before = this.entries.length; this.prune(); if (before !== this.entries.length) { this.changed(); this.scheduleSave() }
-    if (this.blocked() || this.paused || !explicit && !this.preferences.enabled) { this.baseline = true; return }
+    if (this.blocked() || this.paused || !explicit && !this.preferences.enabled) { this.baseline = true; this.lastContent = null; return }
     this.polling = true
     const revision = this.revision
     let deadline: ReturnType<typeof setTimeout> | undefined
     try {
       const content = await Promise.race([this.read(), new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('Clipboard read timed out.')), 5000); deadline.unref() })])
       if (this.disposed || this.revision !== revision || this.blocked() || this.paused || !explicit && !this.preferences.enabled) return
-      if (content === 'private') { this.baseline = false; if (this.last !== 'private') { this.last = 'private'; this.skipped++; this.changed() }; return }
-      if (!content) { this.baseline = false; this.last = null; if (explicit) throw new Error('Clipboard content is empty, unsupported or too large.'); return }
+      if (content === 'private') { this.baseline = false; this.lastContent = null; if (this.last !== 'private') { this.unchanged = 0; this.last = 'private'; this.skipped++; this.changed() } else this.unchanged = Math.min(2, this.unchanged + 1); return }
+      if (!content) { this.baseline = false; this.lastContent = null; if (this.last === null) this.unchanged = Math.min(2, this.unchanged + 1); else this.unchanged = 0; this.last = null; if (explicit) throw new Error('Clipboard content is empty, unsupported or too large.'); return }
+      if (!explicit && this.lastContent && sameContent(content, this.lastContent)) { this.unchanged = Math.min(2, this.unchanged + 1); return }
       const hash = fingerprint(content)
-      if (!explicit && this.baseline) { this.baseline = false; this.last = hash; return }
+      if (!explicit && this.baseline) { this.baseline = false; this.last = hash; this.lastContent = this.entries.find(entry => entry.fingerprint === hash)?.content ?? null; return }
       this.baseline = false
-      if (hash === this.last && !explicit) return
+      if (hash === this.last && !explicit) { this.unchanged = Math.min(2, this.unchanged + 1); return }
+      this.unchanged = 0
+      this.lastContent = null
       this.last = hash
       if (sensitive(content, this.preferences.excludeText)) { this.skipped++; this.changed(); return }
       const existing = this.entries.find(entry => entry.fingerprint === hash)
-      if (existing) { existing.summary.lastAt = this.now(); existing.summary.copies++ }
-      else this.entries.push(this.makeEntry(content))
+      if (existing) { existing.summary.lastAt = this.now(); existing.summary.copies++; this.lastContent = existing.content }
+      else { const entry = this.makeEntry(content, undefined, hash); this.entries.push(entry); this.lastContent = entry.content }
       this.prune(); this.changed(); this.scheduleSave()
     } catch (error) { if (this.disposed || this.revision !== revision) return; if (explicit) throw error; this.error ??= 'Clipboard could not be read. Pause and resume to retry.'; this.paused = true; this.changed() }
-    finally { clearTimeout(deadline); this.polling = false }
+    finally { clearTimeout(deadline); this.polling = false; this.schedulePoll() }
   }
   async captureCurrent(): Promise<void> { this.checkVisible(); if (this.paused) throw new Error('Resume clipboard capture first.'); await this.poll(true) }
   private entry(id: unknown): Entry { this.checkVisible(); this.prune(); if (typeof id !== 'string' || !idPattern.test(id)) throw new Error('Invalid clipboard entry.'); const entry = this.entries.find(value => value.summary.id === id); if (!entry) throw new Error('This clipboard entry expired or was removed.'); return entry }
   content(id: unknown): ClipContent { return { ...this.entry(id).content } }
-  async copy(id: unknown, mode: unknown): Promise<void> { if (mode !== 'plain' && mode !== 'original') throw new Error('Choose plain text or original formats.'); const c = this.content(id); await this.write(c, mode === 'original'); this.last = fingerprint(mode === 'plain' ? { text: c.text, ...(c.png ? { png: c.png } : {}) } : c) }
-  async copyText(value: unknown, independentQuickInput = false): Promise<void> { if (!independentQuickInput) this.checkVisible(); if (typeof value !== 'string' || Buffer.byteLength(value) > MAX_CLIP_TEXT) throw new Error('Copy text must be at most 256 KiB.'); await this.write({ text: value }, false); this.last = independentQuickInput ? null : fingerprint({ text: value }) }
+  async copy(id: unknown, mode: unknown): Promise<void> { if (mode !== 'plain' && mode !== 'original') throw new Error('Choose plain text or original formats.'); const c = this.content(id); await this.write(c, mode === 'original'); this.last = fingerprint(mode === 'plain' ? { text: c.text, ...(c.png ? { png: c.png } : {}) } : c); this.resetPolling() }
+  async copyText(value: unknown, independentQuickInput = false): Promise<void> { if (!independentQuickInput) this.checkVisible(); if (typeof value !== 'string' || Buffer.byteLength(value) > MAX_CLIP_TEXT) throw new Error('Copy text must be at most 256 KiB.'); await this.write({ text: value }, false); this.last = independentQuickInput ? null : fingerprint({ text: value }); this.resetPolling() }
   async copyImage(value: unknown): Promise<void> {
     if (typeof value !== 'string' || value.length > Math.ceil(MAX_CLIP_IMAGE / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) throw new Error('Choose a PNG up to 4 MiB.')
     const bytes = Buffer.from(value, 'base64')
     if (!validClipPng(bytes)) throw new Error('Choose a PNG up to 4 MiB and 16 million pixels.')
-    const content = { text: '', png: value }; await this.write(content, true); this.last = null
+    const content = { text: '', png: value }; await this.write(content, true); this.last = null; this.resetPolling()
   }
   update(id: unknown, value: unknown): void {
     const entry = this.entry(id), update = value as { pinned?: boolean; label?: string } | null
@@ -138,8 +161,8 @@ export class ClipboardManager {
     if (update.label !== undefined) entry.summary.label = update.label
     this.changed(); this.scheduleSave()
   }
-  remove(value: unknown): void { this.checkVisible(); if (!Array.isArray(value) || value.length > 300 || value.some(id => typeof id !== 'string' || !idPattern.test(id))) throw new Error('Invalid clipboard selection.'); this.entries = this.entries.filter(entry => !value.includes(entry.summary.id)); this.changed(); this.scheduleSave() }
-  async clear(): Promise<void> { this.entries = []; this.revision++; this.baseline = true; this.last = null; clearTimeout(this.saveTimer); await this.queue(async () => { await unlink(this.historyPath).catch(error => { if (error.code !== 'ENOENT') throw error }); this.error = null }); this.changed() }
+  remove(value: unknown): void { this.checkVisible(); if (!Array.isArray(value) || value.length > 300 || value.some(id => typeof id !== 'string' || !idPattern.test(id))) throw new Error('Invalid clipboard selection.'); this.entries = this.entries.filter(entry => !value.includes(entry.summary.id)); this.lastContent = null; this.changed(); this.scheduleSave() }
+  async clear(): Promise<void> { this.entries = []; this.revision++; this.baseline = true; this.last = null; this.resetPolling(); clearTimeout(this.saveTimer); await this.queue(async () => { await unlink(this.historyPath).catch(error => { if (error.code !== 'ENOENT') throw error }); this.error = null }); this.changed() }
   async configure(value: unknown): Promise<ClipboardState> {
     const next = safePreferences(value)
     if (next.persist && !this.encryptionAvailable) throw new Error('Secure OS storage is unavailable. Use memory-only history.')
@@ -150,6 +173,7 @@ export class ClipboardManager {
       if (!next.persist) await unlink(this.historyPath).catch(error => { if (error.code !== 'ENOENT') throw error })
       await atomicWriteFile(join(this.directory, 'clipboard-preferences.json'), JSON.stringify({ version: 2, preferences: next }), 'utf8', 0o600)
       this.preferences = next; this.revision++; this.baseline = true; this.last = null; this.error = null
+      this.resetPolling()
       this.entries = this.entries.filter(entry => !sensitive(entry.content, next.excludeText)); this.prune()
       await this.persist()
     })
@@ -170,6 +194,6 @@ export class ClipboardManager {
     if (this.disposed || this.revision !== revision || !this.preferences.persist) return
     await atomicWriteFile(this.historyPath, encrypted, 'utf8', 0o600, () => { if (this.disposed || this.revision !== revision || !this.preferences.persist) throw new Error('Clipboard state changed.') })
   }
-  async dispose(): Promise<void> { clearInterval(this.timer); clearTimeout(this.saveTimer); this.revision++; await this.queue(() => this.persist()).catch(() => {}); this.disposed = true; this.entries = []; this.last = null }
+  async dispose(): Promise<void> { this.started = false; clearTimeout(this.timer); clearTimeout(this.saveTimer); this.timer = undefined; this.revision++; await this.queue(() => this.persist()).catch(() => {}); this.disposed = true; this.entries = []; this.last = null; this.lastContent = null }
   async flush(): Promise<void> { clearTimeout(this.saveTimer); await this.queue(() => this.persist()).catch(() => {}) }
 }

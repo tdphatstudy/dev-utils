@@ -6,6 +6,9 @@ import { appWindowIcon, resourcePath } from './branding'
 import { assertTrustedIpc, isRendererUrl } from './ipc-trust'
 import { is } from './env'
 import { captureDesktopFrames } from './screen-snapshot'
+import { LOCALES, type LocaleId } from '@shared/i18n/locales'
+import { translate } from '@shared/i18n/catalog'
+import { OCR_INTERFACE_MESSAGES, type OcrInterface } from '@shared/ocr/interface'
 import { pixelRect, validateImageSize, validateLanguage, validateOcrId, validateOcrInput, validateOcrResult, MAX_OCR_BYTES, type CaptureMode, type OcrInput, type OcrLanguage, type OcrProgress, type OcrResult, type OcrView, type OcrSelection } from '@shared/ocr/types'
 
 type Helper = { win: BrowserWindow; view: OcrView; url: string; ready: Promise<void>; markReady: () => void }
@@ -22,7 +25,7 @@ function snapshotHeader(image: string): Buffer {
 export class DesktopOcr {
   private job: Job | null = null
   private protocolReady = false
-  constructor(private readonly changed: () => void = () => {}, private readonly canStart: () => boolean = () => true) {}
+  constructor(private readonly changed: () => void = () => {}, private readonly canStart: () => boolean = () => true, private readonly locale: () => LocaleId = () => 'en') {}
   isBusy(): boolean { return !!this.job && this.job.phase !== 'result' }
   dispose(): void { if (this.job) this.closeJob(this.job) }
 
@@ -116,16 +119,16 @@ export class DesktopOcr {
     } finally { clearTimeout(timer) }
     if (show && this.current(job) && !helper.win.isDestroyed()) { helper.win.show(); helper.win.focus() }
   }
-  private async run(job: Job, input: OcrInput): Promise<void> {
+  private async run(job: Job, input: OcrInput, show = true): Promise<void> {
     if (!this.current(job)) return
     job.phase = 'run'; this.destroyHelpers(job)
-    try { await this.load(job, this.helper(job, { kind: 'run', input })) }
+    try { await this.load(job, this.helper(job, { kind: 'run', input }), show) }
     catch (error) { if (this.current(job)) this.closeJob(job, error) }
   }
-  recognize(value: unknown, owner: WebContents): Promise<OcrResult | null> {
+  recognize(value: unknown, owner: WebContents, show = true): Promise<OcrResult | null> {
     const input = validateOcrInput(value), id = validateOcrId((value as { id?: unknown }).id)
     const { job, result } = this.start(id, input.language, owner)
-    void this.run(job, input)
+    void this.run(job, input, show)
     return result
   }
   capture(value: unknown, owner?: WebContents): Promise<OcrResult | null> {
@@ -177,7 +180,12 @@ export class DesktopOcr {
         !isRendererUrl(event.senderFrame.url, helper.url) || (kind && helper.view.kind !== kind)) throw new Error('This action is available only in the active OCR window.')
     return { job, helper }
   }
-  view(event: IpcMainInvokeEvent): OcrView { return this.trusted(event).helper.view }
+  view(event: IpcMainInvokeEvent): OcrView & { ui: OcrInterface } {
+    const view = this.trusted(event).helper.view
+    const locale = this.locale(), preferences = LOCALES.find(value => value.id === locale)!
+    const messages = Object.fromEntries(OCR_INTERFACE_MESSAGES.map(message => [message, translate(locale, message)])) as OcrInterface['messages']
+    return { ...view, ui: { locale, intl: preferences.intl, direction: preferences.direction, messages } }
+  }
   ready(event: IpcMainInvokeEvent): void { this.trusted(event).helper.markReady() }
   async select(event: IpcMainInvokeEvent, value: unknown): Promise<void> {
     const { job, helper } = this.trusted(event, 'region')

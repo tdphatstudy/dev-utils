@@ -1,3 +1,4 @@
+import { interfaceErrorMessage } from '@shared/i18n/error-message'
 import { useEffect, useState } from 'react'
 import { Keyboard, Globe } from 'lucide-react'
 import { GLOBAL_ACTIONS, type GlobalShortcutState, type GlobalAction } from '@shared/quick-tools'
@@ -15,7 +16,7 @@ export function GlobalShortcutSettings(): JSX.Element {
   const binding = normalizeShortcut(candidate)
   const conflicts = binding && state ? shortcutCommands.filter(command => { const current = shortcutBinding(command, overrides, state.platform); return current && resolvedShortcut(current, state.platform) === resolvedShortcut(binding, state.platform) }) : []
   const other = binding && state ? GLOBAL_ACTIONS.filter(item => item.id !== action && state.bindings[item.id] && resolvedShortcut(state.bindings[item.id]!, state.platform) === resolvedShortcut(binding, state.platform)) : []
-  const run = async (work: () => Promise<void>): Promise<void> => { if (!api || busy) return; setBusy(true); setNotice(''); try { await work() } catch (error) { setNotice(error instanceof Error ? t(error.message) : t('The action failed. Try again.')); const latest = await api.shortcuts().catch(() => null); if (latest) setState(latest) } finally { setBusy(false) } }
+  const run = async (work: () => Promise<void>): Promise<void> => { if (!api || busy) return; setBusy(true); setNotice(''); try { await work() } catch (error) { setNotice(t(interfaceErrorMessage(error))); const latest = await api.shortcuts().catch(() => null); if (latest) setState(latest) } finally { setBusy(false) } }
   return <section id="global-shortcuts" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4">
     <h2 className="flex items-center gap-2 text-[14px] font-semibold"><Globe size={16} aria-hidden />{t('Global quick shortcuts')}</h2>
     <p className="mt-2 text-[12px] leading-relaxed text-mac-label-secondary">{t('Works with the main window closed while DevFusion runs in the tray. Quit stops shortcuts.')}</p>

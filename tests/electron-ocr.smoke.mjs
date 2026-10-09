@@ -53,20 +53,24 @@ try {
         await fixture.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html style="background:white"><body style="margin:25px;color:black;font:34px Arial">DevFusion SCREEN OCR 123</body></html>'))
         const data=await fixture.webContents.executeJavaScript('(()=>{const c=document.createElement("canvas");c.width=1200;c.height=240;const ctx=c.getContext("2d");ctx.fillStyle="white";ctx.fillRect(0,0,1200,240);ctx.fillStyle="black";ctx.font="48px Arial";ctx.fillText("DevFusion OCR 123",40,80);ctx.fillText("Tiếng Việt: Xin chào thế giới",40,170);return c.toDataURL("image/png")})()')
         const png=nativeImage.createFromDataURL(data), bytes=new Uint8Array(png.toPNG())
-        const result=await ocr.recognize({id:'image',kind:'image',bytes,language:'eng+vie'},fixture.webContents)
+        const pendingImage=ocr.recognize({id:'image',kind:'image',bytes,language:'eng+vie'},fixture.webContents,false)
+        const hiddenRunner=await until(()=>BrowserWindow.getAllWindows().find(w=>w!==fixture))
+        assert(!hiddenRunner.isVisible(),'Inline OCR exposed its engine window')
+        const result=await pendingImage
         assert(result?.text.includes('DevFusion OCR 123') && result.text.includes('Xin chào'),'Real English/Vietnamese OCR failed: '+result?.text)
         assert(result.ocrPages===1 && BrowserWindow.getAllWindows().length===1,'Image completion retained OCR renderer')
         console.log('PASS real offline PNG OCR, English + Vietnamese, engine renderer released')
+        if(process.argv.includes('--inline-only')) {clearInterval(meter);fixture.destroy();console.log('PASS invisible OCR runner with real bundled models; no screen captured');app.exit(0);return}
         const stages=[];const report=ocr.progress.bind(ocr)
         ocr.progress=(event,value)=>{stages.push(value.stage);return report(event,value)}
         // Native text PDF should not start an OCR worker/core/model.
         const native=await ocr.recognize({id:'pdf-native',kind:'pdf',bytes:textPdf(),language:'eng'},fixture.webContents)
         assert(native?.text.includes('DevFusion PDF native text') && native.ocrPages===0,'Native PDF text extraction failed')
-        assert(!stages.includes('Loading OCR engine'),'Text PDF loaded OCR core/model')
+        assert(!stages.includes('Preparing text recognition'),'Text PDF loaded OCR core/model')
         console.log('PASS real PDF text layer bypasses OCR model/worker')
         const scanned=await ocr.recognize({id:'pdf-scan',kind:'pdf',bytes:scanPdf(png.toJPEG(95)),language:'eng+vie'},fixture.webContents)
         assert(scanned?.text.includes('DevFusion OCR 123') && scanned.ocrPages===2 && scanned.pages===2,'Scanned PDF OCR failed: '+scanned?.text)
-        assert(stages.includes('Loading OCR engine'),'Scan skipped OCR engine')
+        assert(stages.includes('Preparing text recognition'),'Scan skipped OCR engine')
         console.log('PASS real scanned PDF rendering → sequential OCR → renderer release')
         const forced=await ocr.recognize({id:'pdf-force',kind:'pdf',bytes:textPdf(),language:'eng',forceOcr:true},fixture.webContents)
         assert(forced?.text.includes('DevFusion PDF native text') && forced.ocrPages===1,'Force OCR PDF mode failed')
@@ -115,7 +119,7 @@ try {
   await build({ stdin: { contents: source, resolveDir: process.cwd(), loader: 'ts' }, outfile: entry, bundle: true, platform: 'node', format: 'cjs', packages: 'external', alias: { '@shared': resolve('src/shared') } })
   const electron = createRequire(import.meta.url)('electron')
   const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-  const child = spawn(electron, [entry], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(electron, [entry, ...(process.argv.includes('--inline-only') ? ['--inline-only'] : [])], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr)
   let timer
   const code = await new Promise((done, reject) => {

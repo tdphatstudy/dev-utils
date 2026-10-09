@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText } from '@renderer/i18n'
 import { useToolPreloadStore } from '@renderer/store/tool-preload-store'
 import { useAppStore, type LaunchMode, type ThemeMode, type ToolLoadingMode } from '@renderer/store/app-store'
@@ -58,7 +59,7 @@ export function SettingsPage(): JSX.Element {
           <h1 className="mt-0.5 text-[20px] font-semibold tracking-[-0.02em] text-mac-label">
             {uiText('Settings')}</h1>
           <p className="mt-1 text-[14px] text-mac-label-secondary">
-            {uiText('Make DevFusion feel right for you. Your preferences are saved on this device.')}</p>
+            {uiText('Customize appearance and behavior. Preferences are saved on this device.')}</p>
         </div>
 
         <section aria-labelledby="language-heading" className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
@@ -76,7 +77,7 @@ export function SettingsPage(): JSX.Element {
 
         <section className="rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
           <h2 className="mb-2 text-[13px] font-semibold text-mac-label">{uiText('Desktop tray')}</h2>
-          <p className="text-[14px] leading-relaxed text-mac-label-secondary">{tray === true ? t('Closing clears drafts and history and locks boxes. The app stays in the tray. Mock API keeps running until Stop or Quit.') : tray === false ? t('The tray is unavailable. Closing the last window exits on Windows and Linux.') : window.devutils?.app ? uiText('Checking desktop tray…') : uiText('The tray is available in the desktop app.')}</p>
+          <p className="text-[14px] leading-relaxed text-mac-label-secondary">{tray === true ? t('Closing the main window clears tool drafts and session history and locks boxes. DevFusion stays in the tray. Mock API continues until Stop or Quit.') : tray === false ? t('The tray is unavailable. Closing the last window exits on Windows and Linux.') : window.devutils?.app ? uiText('Checking desktop tray…') : uiText('The tray is available in the desktop app.')}</p>
           <p className="mt-2 text-[13px] text-mac-label-tertiary">{t('No automatic startup or screen polling. Quit stops the app completely.')}</p>
           {window.devutils?.app && <button type="button" className="mac-btn-secondary mt-3" onClick={() => { void window.devutils.app.quit().catch(() => setQuitError('Could not quit. Try Quit from the tray menu.')) }}>{uiText('Quit DevFusion')}</button>}
           {quitError && <p role="alert" className="mt-2 text-[13px] text-mac-danger">{quitError}</p>}
@@ -92,21 +93,21 @@ export function SettingsPage(): JSX.Element {
               label={uiText('Theme')}
               onChange={(v) => setTheme(v as ThemeMode)}
               options={[
-                { value: 'dark', label: uiText('Dark') },
-                { value: 'light', label: uiText('Light') },
-                { value: 'system', label: uiText('System') }
+                { value: 'dark', label: messageKey('Dark') },
+                { value: 'light', label: messageKey('Light') },
+                { value: 'system', label: messageKey('System') }
               ]}
             />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <span className="text-[14px] text-mac-label-secondary">{uiText('Surface')}</span>
-            <SegmentedControl label={uiText('Surface')} value={surfaceMode} onChange={(value) => setSurfaceMode(value as SurfaceMode)} options={[{ value: 'glass', label: 'Liquid Glass' }, { value: 'solid', label: uiText('Solid') }]} />
+            <SegmentedControl label={uiText('Surface')} value={surfaceMode} onChange={(value) => setSurfaceMode(value as SurfaceMode)} options={[{ value: 'glass', label: 'Liquid Glass' }, { value: 'solid', label: messageKey('Solid') }]} />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <span className="text-[14px] text-mac-label-secondary">{uiText('Motion')}</span>
-            <SegmentedControl label={uiText('Motion')} value={motionMode} onChange={(value) => setMotionMode(value as MotionMode)} options={[{ value: 'system', label: uiText('Follow system') }, { value: 'reduced', label: uiText('Reduced') }]} />
+            <SegmentedControl label={uiText('Motion')} value={motionMode} onChange={(value) => setMotionMode(value as MotionMode)} options={[{ value: 'system', label: messageKey('Follow system') }, { value: 'reduced', label: messageKey('Reduced') }]} />
           </div>
-          <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Glass adds depth; Solid removes transparency. Editors stay solid. Follow system respects reduced motion.')}</p>
+          <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Glass uses translucent backgrounds; Solid uses opaque backgrounds. Editors stay opaque. Follow system applies your device’s reduced-motion setting.')}</p>
           <div className="mt-4 flex items-center justify-between gap-4">
             <span className="text-[14px] text-mac-label-secondary">{uiText('Sidebar')}</span>
             <button
@@ -124,7 +125,7 @@ export function SettingsPage(): JSX.Element {
           <h2 id="security-heading" className="text-[13px] font-semibold text-mac-label">{uiText('Security & privacy')}</h2>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <span className="text-[14px] text-mac-label-secondary">{uiText('Tool input retention')}</span>
-            <SegmentedControl label={uiText('Tool input retention')} value={inputRetention} onChange={(value) => setInputRetention(value as 'session' | 'off')} options={[{ value: 'session', label: uiText('This window') }, { value: 'off', label: uiText('Off') }]} />
+            <SegmentedControl label={uiText('Tool input retention')} value={inputRetention} onChange={(value) => setInputRetention(value as 'session' | 'off')} options={[{ value: 'session', label: messageKey('This window') }, { value: 'off', label: messageKey('Off') }]} />
           </div>
           <p className="mt-3 text-[12px] leading-relaxed text-mac-label-secondary">{t('Off clears cached inputs and history. Current input clears when you leave the tool. Sensitive tools never cache input.')}</p>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -152,8 +153,8 @@ export function SettingsPage(): JSX.Element {
               label={uiText('Tool loading')}
               onChange={(value) => setToolLoadingMode(value as ToolLoadingMode)}
               options={[
-                { value: 'on-demand', label: uiText('On demand') },
-                { value: 'preload', label: uiText('Preload') }
+                { value: 'on-demand', label: messageKey('On demand') },
+                { value: 'preload', label: messageKey('Preload') }
               ]}
             />
           </div>
@@ -165,12 +166,12 @@ export function SettingsPage(): JSX.Element {
           {toolLoadingMode === 'preload' && (
             <p role="status" aria-live={preparation.phase === 'ready' || preparation.phase === 'partial' ? 'polite' : 'off'} aria-atomic="true" className="mt-2 text-[13px] text-mac-label-secondary">
               {preparation.phase === 'ready'
-                ? `${preparation.prepared} tool interfaces prepared.`
+                ? uiText('{prepared} tool interfaces prepared.', { prepared: preparation.prepared })
                 : preparation.phase === 'partial'
-                  ? `${preparation.prepared} of ${preparation.total} tool interfaces prepared. ${preparation.failed} could not be prepared; other tools remain available.`
+                  ? uiText('{prepared} of {total} tool interfaces prepared. {failed} could not be prepared; other tools remain available.', { prepared: preparation.prepared, total: preparation.total, failed: preparation.failed })
                   : preparation.phase === 'paused'
-                    ? `Preparation paused while this window is hidden · ${preparation.prepared} of ${preparation.total}.`
-                    : `Preparing tool interfaces · ${preparation.prepared} of ${preparation.total}.`}
+                    ? uiText('Preparation paused while this window is hidden · {prepared} of {total}.', { prepared: preparation.prepared, total: preparation.total })
+                    : uiText('Preparing tool interfaces · {prepared} of {total}.', { prepared: preparation.prepared, total: preparation.total })}
             </p>
           )}
           <p className="mt-2 text-[12px] leading-relaxed text-mac-label-tertiary">
@@ -191,8 +192,8 @@ export function SettingsPage(): JSX.Element {
               label={uiText('Start at')}
               onChange={(v) => setLaunchMode(v as LaunchMode)}
               options={[
-                { value: 'home', label: uiText('Home') },
-                { value: 'last', label: uiText('Last tool') }
+                { value: 'home', label: messageKey('Home') },
+                { value: 'last', label: messageKey('Last tool') }
               ]}
             />
           </div>

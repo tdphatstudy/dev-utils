@@ -105,10 +105,10 @@ export function SaveToBoxButton({
         className={cn('mac-btn-secondary', className)}
         disabled={disabled || busy || !content.trim() || !desktop}
         onClick={() => void save()}
-        title={desktop ? 'Save into Default Secret Box' : 'Save to Box requires the desktop app'}
+        title={desktop ? uiText('Save into Default Secret Box') : uiText('Save to Box requires the desktop app')}
       >
         <HardDrive className="h-3.5 w-3.5" />
-        {busy ? uiText('Saving…') : 'Save to Box'}
+        {busy ? uiText('Saving…') : uiText('Save to Box')}
       </button>
       {okMsg && (
         <span role="status" className="text-[11px] text-mac-success">{okMsg}</span>
@@ -121,19 +121,17 @@ export function SaveToBoxButton({
             className="w-full max-w-sm rounded-mac-xl border border-mac-separator bg-mac-surface p-5 shadow-mac-lg"
             role="dialog"
             aria-modal
-            aria-label="Unlock Default Secret Box"
+            aria-label={uiText('Unlock Default Secret Box')}
           >
-            <h3 className="text-[15px] font-semibold">Unlock Default Secret Box</h3>
+            <h3 className="text-[15px] font-semibold">{uiText('Unlock Default Secret Box')}</h3>
             <p className="mt-1 text-[12px] text-mac-label-secondary">
-              Device key is automatic on this PC. Enter your second key (password) to encrypt the
-              save.
-            </p>
+              {uiText('Device key is automatic on this PC. Enter your second key (password) to encrypt the save.')}</p>
             <input
               type="password"
-              aria-label="Secret Box password"
+              aria-label={uiText('Secret Box password')}
               className="mac-input mt-3 font-mono"
               autoFocus
-              placeholder="Key B / password"
+              placeholder={uiText('Key B / password')}
               value={keyB}
               disabled={busy}
               onChange={(e) => setKeyB(e.target.value)}
@@ -166,8 +164,7 @@ export function SaveToBoxButton({
                 disabled={busy || !keyB.trim()}
                 onClick={() => void save(keyB)}
               >
-                Unlock & Save
-              </button>
+                {uiText('Unlock & Save')}</button>
             </div>
           </div>
         </div>

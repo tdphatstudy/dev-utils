@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -28,7 +29,7 @@ export default function YamlStudio(): JSX.Element {
   useUiLocale()
   const [input, setInput] = useState(SAMPLE)
   const [view, setView] = useState<ViewMode>('tree')
-  useToolDraft('yaml.studio', input, setInput, { label: 'YAML Studio', historyOnUnmount: true })
+  useToolDraft('yaml.studio', input, setInput, { label: messageKey('YAML Studio'), historyOnUnmount: true })
 
   const { analysis, pending } = useYamlAnalysis(input)
   const waiting: YamlParseResult = { ok: false, error: 'Processing YAML…' }
@@ -60,7 +61,7 @@ export default function YamlStudio(): JSX.Element {
           type="button"
           className="mac-btn-primary"
           disabled={!input.trim() || !formatted.ok}
-          title="Format while preserving YAML comments and aliases"
+          title={uiText('Format while preserving YAML comments and aliases')}
           onClick={() => {
             if (formatted.ok && formatted.text) setInput(formatted.text)
           }}
@@ -70,7 +71,7 @@ export default function YamlStudio(): JSX.Element {
           type="button"
           className="mac-btn-secondary"
           disabled={!input.trim() || !asJson.ok}
-          title="Convert through JSON; YAML comments and aliases will be removed"
+          title={uiText('Convert through JSON; YAML comments and aliases will be removed')}
           onClick={() => {
             if (asJson.ok && asJson.text) {
               const back = jsonToYaml(asJson.text)
@@ -78,14 +79,13 @@ export default function YamlStudio(): JSX.Element {
             }
           }}
         >
-          Normalize via JSON
-        </button>
+          {uiText('Normalize via JSON')}</button>
         <div className="ml-auto flex items-center gap-2">
           <SegmentedControl
             value={view}
             onChange={setView}
             options={[
-              { value: 'tree', label: uiText('Tree') },
+              { value: 'tree', label: messageKey('Tree') },
               { value: 'yaml', label: 'YAML' },
               { value: 'json', label: 'JSON' }
             ]}
@@ -114,19 +114,19 @@ export default function YamlStudio(): JSX.Element {
       </ToolToolbar>
 
       <SplitPane>
-        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder="Paste YAML…" label="YAML input" issue={pending || !input.trim() || parsed.ok ? null : parsed} onRun={() => { if (formatted.ok && formatted.text) setInput(formatted.text) }} />
+        <CodeEditor value={input} onChange={setInput} language="yaml" placeholder={uiText('Paste YAML…')} label={uiText('YAML input')} issue={pending || !input.trim() || parsed.ok ? null : parsed} onRun={() => { if (formatted.ok && formatted.text) setInput(formatted.text) }} />
         {view === 'tree' ? (
           parsed.ok && asJson.ok ? (
             <TreeView data={treeData} />
           ) : (
             <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[13px] text-mac-label-tertiary">
-              {pending ? 'Processing YAML…' : input.trim() ? (asJson.ok ? 'Fix the highlighted YAML error to see the tree.' : asJson.error) : 'Paste YAML or open a file to get started.'}
+              {pending ? uiText('Processing YAML…') : input.trim() ? (asJson.ok ? uiText('Fix the highlighted YAML error to see the tree.') : asJson.error) : uiText('Paste YAML or open a file to get started.')}
             </div>
           )
         ) : view === 'json' ? (
-          <CodeEditor value={jsonOut} language="json" readOnly label="JSON output" issue={input.trim() && !asJson.ok ? asJson : null} />
+          <CodeEditor value={jsonOut} language="json" readOnly label={uiText('JSON output')} issue={input.trim() && !asJson.ok ? asJson : null} />
         ) : (
-          <CodeEditor value={yamlOut} language="yaml" readOnly label="Formatted YAML" issue={null} />
+          <CodeEditor value={yamlOut} language="yaml" readOnly label={uiText('Formatted YAML')} issue={null} />
         )}
       </SplitPane>
 

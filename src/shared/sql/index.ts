@@ -1,63 +1,10 @@
-import { format as formatSqlLib, type SqlLanguage } from 'sql-formatter'
+import { format as formatSqlLib } from 'sql-formatter'
 import { Parser } from 'node-sql-parser'
 import { compactSql } from './compact'
+import { assertSqlInput, MAX_SQL_OUTPUT_BYTES } from './limits'
 
-export type SqlDialectId =
-  | 'generic'
-  | 'mysql'
-  | 'mariadb'
-  | 'postgresql'
-  | 'sqlserver'
-  | 'sqlite'
-  | 'plsql'
-  | 'bigquery'
-  | 'snowflake'
-
-export interface SqlDialectMeta {
-  id: SqlDialectId
-  label: string
-  /** sql-formatter language */
-  formatter: SqlLanguage
-  /**
-   * node-sql-parser database option (when null → format-only validate via formatter throw)
-   * @see https://github.com/taozhi8833998/node-sql-parser
-   */
-  parserDb: string | null
-  /** human note when validate uses a different engine */
-  validateNote?: string
-}
-
-export const SQL_DIALECTS: SqlDialectMeta[] = [
-  { id: 'generic', label: 'Generic SQL', formatter: 'sql', parserDb: 'MySQL', validateNote: 'validate ≈ MySQL' },
-  { id: 'mysql', label: 'MySQL', formatter: 'mysql', parserDb: 'MySQL' },
-  { id: 'mariadb', label: 'MariaDB', formatter: 'mariadb', parserDb: 'MariaDB' },
-  { id: 'postgresql', label: 'PostgreSQL', formatter: 'postgresql', parserDb: 'PostgresQL' },
-  { id: 'sqlserver', label: 'SQL Server (T-SQL)', formatter: 'tsql', parserDb: 'TransactSQL' },
-  { id: 'sqlite', label: 'SQLite', formatter: 'sqlite', parserDb: 'Sqlite' },
-  {
-    id: 'plsql',
-    label: 'Oracle (PL/SQL)',
-    formatter: 'plsql',
-    parserDb: null,
-    validateNote: 'Formatting supported; Oracle syntax is not fully validated'
-  },
-  {
-    id: 'bigquery',
-    label: 'BigQuery',
-    formatter: 'bigquery',
-    parserDb: 'BigQuery'
-  },
-  {
-    id: 'snowflake',
-    label: 'Snowflake',
-    formatter: 'snowflake',
-    parserDb: 'Snowflake'
-  }
-]
-
-export function getSqlDialect(id: SqlDialectId): SqlDialectMeta {
-  return SQL_DIALECTS.find((d) => d.id === id) ?? SQL_DIALECTS[0]!
-}
+import { getSqlDialect, type SqlDialectId } from './dialects'
+export { SQL_DIALECTS, getSqlDialect, type SqlDialectId, type SqlDialectMeta } from './dialects'
 
 export type SqlResult =
   | { ok: true; text: string; note?: string }
@@ -77,7 +24,9 @@ export function formatSql(input: string, options: FormatSqlOptions = {}): SqlRes
   if (!trimmed) return { ok: false, error: 'Empty input', note: dialect.validateNote }
 
   try {
+    assertSqlInput(input, dialect.id)
     const indent = options.minify ? 0 : (options.indent ?? 2)
+    if (!Number.isInteger(indent) || indent < 0 || indent > 8) throw new Error('SQL indentation must be between 0 and 8 spaces.')
     const text = formatSqlLib(input, {
       language: dialect.formatter,
       tabWidth: Math.max(0, indent),
@@ -91,6 +40,7 @@ export function formatSql(input: string, options: FormatSqlOptions = {}): SqlRes
       : text.endsWith('\n')
         ? text
         : `${text}\n`
+    if (out.length > MAX_SQL_OUTPUT_BYTES || new TextEncoder().encode(out).byteLength > MAX_SQL_OUTPUT_BYTES) throw new Error('Formatted SQL exceeds 4 MiB. Reduce the query size or indentation.')
     return { ok: true, text: out, note: dialect.validateNote }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Format failed'
@@ -118,6 +68,7 @@ export function validateSql(
   }
 
   try {
+    assertSqlInput(input, dialect.id)
     const parser = new Parser()
     parser.astify(input, { database: dialect.parserDb })
     return { ok: true, text: input, note: dialect.validateNote }

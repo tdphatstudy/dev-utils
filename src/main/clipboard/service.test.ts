@@ -10,6 +10,7 @@ vi.mock('electron', async () => {
   return { safeStorage: { isAsyncEncryptionAvailable: async () => f.available, isEncryptionAvailable: () => f.available, getSelectedStorageBackend: () => 'gnome_libsecret', encryptStringAsync: async (s: string) => encrypt(s), decryptStringAsync: async (b: Buffer) => ({ result: decrypt(b) }), encryptString: encrypt, decryptString: decrypt }, clipboard: {}, ClipboardItem: class {} }
 })
 import { ClipboardManager } from './service'
+import * as clipboardFingerprint from './fingerprint'
 import { DEFAULT_CLIPBOARD } from '@shared/clipboard/types'
 let directory: string, manager: ClipboardManager, value: any, locked: boolean, clock: number
 const read = vi.fn(async () => value), write = vi.fn(), changed = vi.fn()
@@ -17,6 +18,64 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'devfusion-cli
 afterEach(async () => { await manager.dispose(); vi.useRealTimers(); if (!directory.startsWith(join(tmpdir(), 'devfusion-clipboard-test-'))) throw new Error('Unsafe fixture cleanup'); await rm(directory, { recursive: true, force: true }) })
 const enable = async (): Promise<void> => { await manager.configure({ ...DEFAULT_CLIPBOARD, enabled: true }); await manager.poll() }
 const capture = async (text: string): Promise<void> => { clock++; value = { text }; await manager.poll() }
+it('compares unchanged eligible payloads without serializing and hashing them again', async () => {
+  const hashing = vi.spyOn(clipboardFingerprint, 'fingerprint')
+  const serialize = vi.fn(() => ({ text: value.text, html: value.html }))
+  value = { text: 'unchanged content '.repeat(10_000), toJSON: serialize }
+  await manager.poll()
+  const serializations = serialize.mock.calls.length
+  const fingerprints = hashing.mock.calls.length
+  expect(serializations).toBeGreaterThan(0)
+  value = { ...value }
+  await manager.poll(); await manager.poll()
+  expect(serialize).toHaveBeenCalledTimes(serializations)
+  expect(hashing).toHaveBeenCalledTimes(fingerprints)
+  expect(manager.list()).toHaveLength(1)
+  value = { ...value, html: '<p>New format</p>' }
+  await manager.poll()
+  expect(serialize.mock.calls.length).toBeGreaterThan(serializations)
+  expect(manager.list()).toHaveLength(2)
+  expect(hashing.mock.calls.length).toBeGreaterThan(fingerprints)
+  hashing.mockRestore()
+})
+it('fingerprints ignored baselines and exclusions without serializing or retaining their content', async () => {
+  const serialize = vi.fn(() => ({ text: value.text, html: value.html }))
+  value = { text: 'uncaptured resume baseline', png: 'A'.repeat(5_000_000), toJSON: serialize }
+  manager.privacyChanged()
+  await manager.poll(); await manager.poll()
+  expect(serialize).not.toHaveBeenCalled()
+  expect(manager.state().count).toBe(0)
+  expect(manager.state().bytes).toBe(0)
+  value = { text: 'password=fixture', png: 'A'.repeat(5_000_000), toJSON: serialize }
+  await manager.poll(); await manager.poll()
+  expect(serialize).not.toHaveBeenCalled()
+  expect(manager.state()).toMatchObject({ count: 0, bytes: 0, skipped: 1 })
+})
+it('backs off unchanged reads to two seconds, restores fast capture after a change and leaves no inactive poll timer', async () => {
+  await manager.dispose(); vi.useFakeTimers(); read.mockClear()
+  manager = new ClipboardManager(directory, changed, () => locked, read, write, () => clock)
+  await manager.start(); await vi.advanceTimersByTimeAsync(0)
+  expect(read).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(500); expect(read).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(1000); expect(read).toHaveBeenCalledTimes(3)
+  await vi.advanceTimersByTimeAsync(1999); expect(read).toHaveBeenCalledTimes(3)
+  clock++; value = { text: 'new clipboard content' }
+  await vi.advanceTimersByTimeAsync(1); expect(read).toHaveBeenCalledTimes(4)
+  expect(manager.list()[0].preview).toBe(value.text)
+  await vi.advanceTimersByTimeAsync(500); expect(read).toHaveBeenCalledTimes(5)
+  manager.pause(true); expect(vi.getTimerCount()).toBe(0)
+  manager.pause(false); expect(vi.getTimerCount()).toBe(1)
+  manager.screenLock(true); expect(vi.getTimerCount()).toBe(0)
+  manager.screenLock(false); expect(vi.getTimerCount()).toBe(1)
+  locked = true; manager.privacyChanged(); expect(vi.getTimerCount()).toBe(0)
+  locked = false; manager.privacyChanged(); expect(vi.getTimerCount()).toBe(1)
+  await manager.configure({ ...DEFAULT_CLIPBOARD, enabled: false }); expect(vi.getTimerCount()).toBe(0)
+  const calls = read.mock.calls.length
+  await vi.advanceTimersByTimeAsync(10_000); expect(read).toHaveBeenCalledTimes(calls)
+  await manager.captureCurrent(); expect(read).toHaveBeenCalledTimes(calls + 1)
+  expect(vi.getTimerCount()).toBe(0)
+  await manager.dispose(); expect(vi.getTimerCount()).toBe(0)
+})
 it('captures subsequent copies automatically, deduplicates non-adjacent copies and searches beyond list previews', async () => {
   expect(manager.state().preferences.enabled).toBe(true)
   expect(manager.list()).toHaveLength(0)

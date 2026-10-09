@@ -58,7 +58,7 @@ export function KeyValueEditor({
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full table-fixed border-collapse text-[13px]" aria-label={`${labelPrefix} fields`}>
+        <table className="w-full table-fixed border-collapse text-[13px]" aria-label={uiText('{field} fields', { field: uiText(labelPrefix) })}>
           <thead className="sticky top-0 z-10 bg-mac-surface text-[12px] text-mac-label-secondary">
             <tr className="border-b border-mac-separator">
               <th className="w-10 px-2 py-2 font-medium"><span className="sr-only">{uiText('Enabled')}</span></th>
@@ -71,10 +71,10 @@ export function KeyValueEditor({
             {rows.map((row, index) => (
               <tr key={row.id} className="border-b border-mac-separator/70 hover:bg-mac-control/40">
                 <td className="px-1 py-1 text-center">
-                  <label className="flex min-h-[34px] w-full cursor-pointer items-center justify-center" title={row.enabled ? 'Include this field in the request' : 'Field excluded from the request; enable to include it'}>
+                  <label className="flex min-h-[34px] w-full cursor-pointer items-center justify-center" title={row.enabled ? uiText('Include this field in the request') : uiText('Field excluded from the request; enable to include it')}>
                   <input
                     type="checkbox"
-                    aria-label={`Enable ${labelPrefix} ${index + 1}`}
+                    aria-label={uiText('Enable {field} {index}', { field: uiText(labelPrefix), index: index + 1 })}
                     checked={row.enabled}
                     onChange={(e) => update(row.id, { enabled: e.target.checked })}
                     className="h-4 w-4 accent-mac-accent"
@@ -86,8 +86,8 @@ export function KeyValueEditor({
                     ref={(element) => { if (element) inputs.current.set(row.id, element); else inputs.current.delete(row.id) }}
                     className={cn('mac-input !rounded-md !border-transparent !bg-transparent !px-2 !py-1 font-mono focus:!border-[var(--mac-input-border)] focus:!bg-mac-control', !row.enabled && '!text-mac-label-secondary')}
                     value={row.key}
-                    aria-label={`${labelPrefix} ${index + 1} key`}
-                    placeholder={keyPlaceholder}
+                    aria-label={uiText('{field} {index} key', { field: uiText(labelPrefix), index: index + 1 })}
+                    placeholder={uiText(keyPlaceholder)}
                     onChange={(e) => update(row.id, { key: e.target.value })}
                     spellCheck={false}
                   />
@@ -96,8 +96,8 @@ export function KeyValueEditor({
                   <input
                     className={cn('mac-input !rounded-md !border-transparent !bg-transparent !px-2 !py-1 font-mono focus:!border-[var(--mac-input-border)] focus:!bg-mac-control', !row.enabled && '!text-mac-label-secondary')}
                     value={row.value}
-                    aria-label={`${labelPrefix} ${index + 1} value`}
-                    placeholder={valuePlaceholder}
+                    aria-label={uiText('{field} {index} value', { field: uiText(labelPrefix), index: index + 1 })}
+                    placeholder={uiText(valuePlaceholder)}
                     onChange={(e) => update(row.id, { value: e.target.value })}
                     spellCheck={false}
                   />
@@ -107,8 +107,8 @@ export function KeyValueEditor({
                     type="button"
                     className="mac-btn-ghost !p-1 text-mac-label-tertiary hover:text-mac-danger"
                     onClick={() => remove(row.id)}
-                    title={`Remove ${labelPrefix.toLowerCase()} ${index + 1} (Undo available)`}
-                    aria-label={`Remove ${labelPrefix} ${index + 1}`}
+                    title={uiText('Remove {field} {index} (Undo available)', { field: uiText(labelPrefix), index: index + 1 })}
+                    aria-label={uiText('Remove {field} {index}', { field: uiText(labelPrefix), index: index + 1 })}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -118,7 +118,7 @@ export function KeyValueEditor({
           </tbody>
         </table>
         {rows.length === 0 && (
-          <div className="px-3 py-6 text-center text-[13px] text-mac-label-secondary">No {labelPrefix === 'Row' ? 'fields' : `${labelPrefix.toLowerCase()} fields`} yet. Add a row to include a key and value.</div>
+          <div className="px-3 py-6 text-center text-[13px] text-mac-label-secondary">{uiText('No fields yet. Add a row to include a key and value.')}</div>
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-mac-separator p-2">
@@ -126,7 +126,7 @@ export function KeyValueEditor({
           <Plus className="h-3.5 w-3.5" />
           {uiText('Add row')}</button>
         {removed && <>
-          <span className="text-[12px] text-mac-label-secondary" role="status">{labelPrefix} removed.</span>
+          <span className="text-[12px] text-mac-label-secondary" role="status">{uiText('Field removed.')}</span>
           <button type="button" className="mac-btn-ghost !text-[13px]" onClick={() => {
             const next = [...rows]
             next.splice(Math.min(removed.index, next.length), 0, removed.row)

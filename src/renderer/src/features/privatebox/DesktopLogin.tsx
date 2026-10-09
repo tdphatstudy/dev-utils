@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { FolderPlus, UserPlus, Shield } from 'lucide-react'
 import type { VaultListItem, VaultMode, RecoverMetadataInput } from '@shared/secret-box/types'
@@ -27,6 +28,7 @@ export function DesktopLogin({
   onCreateNew,
   onAddExisting
 }: Props): JSX.Element {
+  useUiLocale()
   const [selectedId, setSelectedId] = useState<string | null>(activeId)
   const [keyA, setKeyA] = useState('')
   const [keyB, setKeyB] = useState('')
@@ -96,10 +98,8 @@ export function DesktopLogin({
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[22%] bg-white/10 shadow-mac-lg backdrop-blur">
             <Shield className="h-7 w-7 text-white" strokeWidth={1.5} />
           </div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-white">Private Box</h1>
-          <p className="mt-1 max-w-sm text-[13px] text-white/80">
-            Choose a box to sign in — like a desktop user. Keys stay only in memory.
-          </p>
+          <h1 className="text-[22px] font-semibold tracking-tight text-white">{uiText('Private Box')}</h1>
+          <p className="mt-1 max-w-sm text-[13px] text-white/80">{uiText('Choose a box to sign in — like a desktop user. Keys stay only in memory.')}{' '}</p>
         </div>
 
         <div className="flex w-full max-w-3xl flex-wrap items-start justify-center gap-5">
@@ -129,7 +129,7 @@ export function DesktopLogin({
                   {v.name}
                 </span>
                 <span className="text-[10px] uppercase tracking-wide text-white/70">
-                  {v.mode === 'device' ? 'This PC' : v.mode === 'portable' ? 'Portable' : 'Box'}
+                  {v.mode === 'device' ? uiText('This PC') : v.mode === 'portable' ? uiText('Portable') : uiText('Box')}
                 </span>
               </button>
             )
@@ -144,7 +144,7 @@ export function DesktopLogin({
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-white/30 bg-white/5">
               <UserPlus className="h-6 w-6" strokeWidth={1.5} />
             </div>
-            <span className="text-[12px] font-medium">New box</span>
+            <span className="text-[12px] font-medium">{uiText('New box')}</span>
           </button>
 
           <button
@@ -156,7 +156,7 @@ export function DesktopLogin({
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-white/30 bg-white/5">
               <FolderPlus className="h-6 w-6" strokeWidth={1.5} />
             </div>
-            <span className="text-[12px] font-medium">Add folder</span>
+            <span className="text-[12px] font-medium">{uiText('Add folder')}</span>
           </button>
         </div>
 
@@ -173,20 +173,20 @@ export function DesktopLogin({
               {selected.metadataError && <div role="alert" className="space-y-2 rounded-mac bg-mac-danger/20 p-3 text-[12px] text-red-300">
                 <p className="break-words">{selected.metadataError}</p>
                 {selected.metadataBackupPath && <>
-                  <p>A metadata backup passed format validation. Preserve the current file and verify this backup belongs to your box before restoring it.</p>
+                  <p>{uiText('A metadata backup passed format validation. Preserve the current file and verify this backup belongs to your box before restoring it.')}</p>
                   <p className="break-all font-mono">{selected.metadataBackupPath}</p>
-                  <CopyButton text={selected.metadataBackupPath} label="Copy backup path" />
+                  <CopyButton text={selected.metadataBackupPath} label={uiText('Copy backup path')} />
                   <label className="flex items-start gap-2">
                     <input type="checkbox" checked={recoveryMode} disabled={busy} onChange={(e) => setRecoveryMode(e.target.checked)} />
-                    <span>Recover from this backup after verifying my original keys and every encrypted document.</span>
+                    <span>{uiText('Recover from this backup after verifying my original keys and every encrypted document.')}</span>
                   </label>
-                  <p>The damaged metadata is preserved separately. The backup and documents stay intact. Verification may take time for larger boxes.</p>
-                  <p>Automatic verification: up to 1,000 encrypted documents / 256 MiB total, 96 MiB per file. It refuses larger boxes without skipping files.</p>
+                  <p>{uiText('The damaged metadata is preserved separately. The backup and documents stay intact. Verification may take time for larger boxes.')}</p>
+                  <p>{uiText('Automatic verification: up to 1,000 encrypted documents / 256 MiB total, 96 MiB per file. It refuses larger boxes without skipping files.')}</p>
                 </>}
               </div>}
               {mode === 'portable' && (
                 <label className="block text-[12px]">
-                  <span className="mb-1 block text-white/80">Key A</span>
+                  <span className="mb-1 block text-white/80">{uiText('Key A')}</span>
                   <input
                     className="mac-input mac-vault-input border-white/30 bg-white/10 font-mono text-white placeholder:text-white/70"
                     type="password"
@@ -200,7 +200,7 @@ export function DesktopLogin({
               )}
               <label className="block text-[12px]">
                 <span className="mb-1 block text-white/80">
-                  {mode === 'device' ? 'Password' : 'Key B'}
+                  {mode === 'device' ? uiText('Password') : uiText('Key B')}
                 </span>
                 <input
                   className="mac-input mac-vault-input border-white/30 bg-white/10 font-mono text-white placeholder:text-white/70"
@@ -229,7 +229,7 @@ export function DesktopLogin({
               disabled={busy || !!selected.metadataError && !recoveryMode || !keyB.trim() || (mode === 'portable' && !keyA.trim())}
               onClick={() => void submit()}
             >
-              {busy ? recoveryMode ? 'Verifying backup & documents…' : 'Signing in…' : recoveryMode ? 'Verify backup & recover' : 'Sign in'}
+              {busy ? recoveryMode ? uiText('Verifying backup & documents…') : uiText('Signing in…') : recoveryMode ? uiText('Verify backup & recover') : uiText('Sign in')}
             </button>
             {busy && recoveryMode && <button type="button" className="mac-btn-secondary mt-2 w-full" disabled={cancelling} onClick={() => {
               setCancelling(true)
@@ -237,12 +237,12 @@ export function DesktopLogin({
                 setCancelling(false)
                 setError(e instanceof Error ? e.message : 'Could not cancel recovery')
               })
-            }}>{cancelling ? 'Cancelling verification…' : 'Cancel recovery'}</button>}
+            }}>{cancelling ? uiText('Cancelling verification…') : uiText('Cancel recovery')}</button>}
           </div>
         )}
 
         {!selected && vaults.length > 0 && (
-          <p className="mt-8 text-[12px] text-white/70">Select a box to continue</p>
+          <p className="mt-8 text-[12px] text-white/70">{uiText('Select a box to continue')}</p>
         )}
       </div>
     </div>

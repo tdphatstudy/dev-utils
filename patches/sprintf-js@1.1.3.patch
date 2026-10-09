@@ -1,0 +1,24 @@
+diff --git a/src/sprintf.js b/src/sprintf.js
+index 65d6324645ef1d0133614a71497751009dc5c912..9ceee750449498e59220927c4facb6a9e8445cfa 100644
+--- a/src/sprintf.js
++++ b/src/sprintf.js
+@@ -142,6 +142,9 @@
+     var sprintf_cache = Object.create(null)
+ 
+     function sprintf_parse(fmt) {
++        if (typeof fmt !== 'string' || fmt.length > 65536) {
++            throw new RangeError('[sprintf] format exceeds structural limits')
++        }
+         if (sprintf_cache[fmt]) {
+             return sprintf_cache[fmt]
+         }
+@@ -155,6 +158,9 @@
+                 parse_tree.push('%')
+             }
+             else if ((match = re.placeholder.exec(_fmt)) !== null) {
++                if ((match[6] && Number(match[6]) > 65536) || (match[7] && Number(match[7]) > 100)) {
++                    throw new RangeError('[sprintf] width or precision exceeds structural limits')
++                }
+                 if (match[2]) {
+                     arg_names |= 1
+                     var field_list = [], replacement_field = match[2], field_match = []

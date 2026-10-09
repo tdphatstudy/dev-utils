@@ -1,3 +1,4 @@
+import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useId, useRef, type ReactNode, type RefObject } from 'react'
 import { X } from 'lucide-react'
@@ -18,6 +19,7 @@ interface Props {
 
 /** Shared modal: contains focus, restores the opener and never dismisses a write. */
 export function Modal({ open, title, description, children, onClose, busy = false, className, dismissible = true, initialFocusRef }: Props): JSX.Element {
+  useUiLocale()
   const masked = useVaultLockUi((state) => state.masked)
   const descriptionId = useId()
   const opener = useRef<HTMLElement | null>(null)
@@ -48,8 +50,8 @@ export function Modal({ open, title, description, children, onClose, busy = fals
           {dismissible && <button
             type="button"
             className="mac-btn-ghost absolute right-3 top-3 !h-8 !w-8 !min-h-8 !p-0"
-            aria-label="Close dialog"
-            title={busy ? 'Wait for the current operation to finish' : 'Close (Esc)'}
+            aria-label={uiText('Close dialog')}
+            title={busy ? uiText('Wait for the current operation to finish') : uiText('Close (Esc)')}
             disabled={busy}
             onClick={onClose}
           >

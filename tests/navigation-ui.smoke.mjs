@@ -38,7 +38,7 @@ const drawer = () => page.getByRole('dialog', { name: 'Find a tool', exact: true
 try {
   await page.goto(url + '/#/')
   await page.getByRole('heading', { name: 'DevFusion', exact: true }).waitFor()
-  const homeSearch = page.getByRole('searchbox', { name: 'What would you like to do?', exact: true })
+  const homeSearch = page.getByRole('searchbox', { name: 'Find a tool', exact: true })
   const searchBounds = await homeSearch.boundingBox()
   const quickBounds = await page.getByRole('heading', { name: 'Quick access', exact: true }).boundingBox()
   assert.ok(searchBounds.y < quickBounds.y, 'Search is not before quick access')

@@ -23,6 +23,9 @@ page.on('request', request => requests.push(request.url()))
 page.on('pageerror', error => errors.push(error.message))
 await page.addInitScript(() => {
   const state = window.__ocr = { calls: [], cancel: [], pending: null, delay: false, progress: null, copied: '', failCopy: false }
+  const languageListeners = new Set()
+  state.language = 'en'
+  state.setLanguage = language => { state.language = language; for (const callback of languageListeners) callback({ language, resolved: language }) }
   const output = { text: 'DevFusion OCR fixture\nTiếng Việt <script>literal</script>', pages: 2, ocrPages: 1, confidence: 93 }
   const run = async request => {
     state.calls.push({ id: request.id, kind: request.kind, mode: request.mode, language: request.language, forceOcr: request.forceOcr })
@@ -31,7 +34,7 @@ await page.addInitScript(() => {
     return output
   }
   window.devutils = {
-    platform: async () => 'win32', app: { trayAvailable: async () => true, onOpenTool: () => () => {} },
+    platform: async () => 'win32', app: { trayAvailable: async () => true, onOpenTool: () => () => {}, language: async () => ({ language: state.language, resolved: state.language }), onLanguageChanged: callback => { languageListeners.add(callback); return () => languageListeners.delete(callback) } },
     window: { minimize() {}, maximize() {}, close() {} }, privateBox: { ensureDefault: async () => ({ id: 'fixture' }) },
     ocr: { recognize: run, capture: run, cancel: async id => { state.cancel.push(id); state.pending?.(null); state.pending = null; return true }, onProgress: callback => { state.progress = callback; return () => { state.progress = null } } }
   }
@@ -43,12 +46,12 @@ try {
   await page.getByRole('heading', { name: 'DevFusion', exact: true }).waitFor()
   assert.ok(!requests.some(value => /ocr-assets|tesseract|\/pdf-/.test(value)))
   await page.getByRole('link', { name: 'OCR · Image / PDF', exact: true }).click()
-  await page.getByRole('button', { name: 'Extract file text', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Extract text (OCR)', exact: true }).waitFor()
   assert.ok(!requests.some(value => /ocr-assets|tesseract|\/pdf-/.test(value)), 'Opening OCR preloaded its engines')
-  assert.equal(await page.getByRole('button', { name: 'Extract file text', exact: true }).isDisabled(), true)
-  await page.getByLabel('Upload image or PDF').setInputFiles({ name: 'fixture.png', mimeType: 'image/png', buffer: png })
-  await page.getByRole('button', { name: 'Extract file text', exact: true }).click()
-  await page.getByRole('status').filter({ hasText: 'Text is ready.' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Extract text (OCR)', exact: true }).isDisabled(), true)
+  await page.getByLabel('Choose image or PDF').setInputFiles({ name: 'fixture.png', mimeType: 'image/png', buffer: png })
+  await page.getByRole('button', { name: 'Extract text (OCR)', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Review and edit the text' }).waitFor()
   assert.match(await page.getByRole('textbox', { name: 'Extracted text', exact: true }).inputValue(), /<script>literal<\/script>/)
   await page.getByRole('textbox', { name: 'Extracted text', exact: true }).fill('Corrected text')
   await page.getByRole('button', { name: 'Copy', exact: true }).click()
@@ -59,24 +62,24 @@ try {
   await page.evaluate(() => { window.__ocr.failCopy = false })
   await page.getByRole('button', { name: 'Copy', exact: true }).click()
   await page.getByRole('checkbox', { name: /OCR every PDF page/ }).check()
-  await page.getByRole('button', { name: 'Extract file text', exact: true }).click()
-  await page.getByRole('status').filter({ hasText: 'Text is ready.' }).waitFor()
+  await page.getByRole('button', { name: 'Extract text (OCR)', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Review and edit the text' }).waitFor()
   assert.equal(await page.evaluate(() => window.__ocr.calls.at(-1).forceOcr), true)
-  console.log('PASS OCR UI upload, language/mode, literal text, corrections and clipboard retry; no engine preload')
+  console.log('PASS OCR local file selection, language/mode, literal text, corrections and clipboard retry; no engine preload')
   await page.evaluate(() => { window.__ocr.delay = true })
-  await page.getByRole('button', { name: 'Select region', exact: true }).click()
+  await page.getByRole('button', { name: 'Select screen region…', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Recognizing text' }).waitFor()
-  assert.equal(await page.getByRole('button', { name: 'Extract file text', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('button', { name: 'Extract text (OCR)', exact: true }).isDisabled(), true)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Extraction canceled.' }).waitFor()
   assert.equal(await page.evaluate(() => window.__ocr.calls.at(-1).mode), 'region')
   assert.match(await page.getByRole('textbox', { name: 'Extracted text', exact: true }).inputValue(), /DevFusion OCR fixture/)
-  await page.getByLabel('Upload image or PDF').setInputFiles({ name: 'fake.pdf', mimeType: 'application/pdf', buffer: png })
+  await page.getByLabel('Choose image or PDF').setInputFiles({ name: 'fake.pdf', mimeType: 'application/pdf', buffer: png })
   await page.getByRole('alert').filter({ hasText: 'file content must match' }).waitFor()
-  const bomb = Buffer.alloc(24); bomb.set([137, 80, 78, 71]); bomb.writeUInt32BE(100000, 16); bomb.writeUInt32BE(100000, 20)
-  await page.getByLabel('Upload image or PDF').setInputFiles({ name: 'huge.png', mimeType: 'image/png', buffer: bomb })
+  const bomb = Buffer.alloc(24); bomb.set([137, 80, 78, 71, 13, 10, 26, 10]); bomb.writeUInt32BE(100000, 16); bomb.writeUInt32BE(100000, 20)
+  await page.getByLabel('Choose image or PDF').setInputFiles({ name: 'huge.png', mimeType: 'image/png', buffer: bomb })
   await page.getByRole('alert').filter({ hasText: '16 million pixels' }).waitFor()
-  await page.getByRole('button', { name: 'Current screen', exact: true }).click()
+  await page.getByRole('button', { name: 'Capture current screen', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Recognizing text' }).waitFor()
   await page.getByRole('link', { name: 'Color Picker', exact: true }).click()
   await page.getByRole('button', { name: 'Pick screen color', exact: true }).waitFor()
@@ -90,14 +93,29 @@ try {
   if (process.env.BRAND_SCREENSHOT_DIR) {
     await mkdir(process.env.BRAND_SCREENSHOT_DIR, { recursive: true })
     await page.setViewportSize({ width: 1100, height: 820 })
-    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-dark.png') })
+    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-dark.png'), animations: 'disabled' })
     await page.evaluate(() => document.documentElement.classList.remove('dark'))
-    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-light.png') })
+    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-light.png'), animations: 'disabled' })
   }
+  const literal = 'Copy · clipboard · <script>Tiếng Việt</script>'
+  await page.getByRole('textbox', { name: 'Extracted text', exact: true }).fill(literal)
+  await page.evaluate(() => window.__ocr.setLanguage('vi'))
+  await page.getByRole('button', { name: 'Nhận dạng văn bản (OCR)', exact: true }).waitFor()
+  assert.equal(await page.getByRole('textbox', { name: 'Văn bản nhận dạng', exact: true }).inputValue(), literal, 'Interface translation changed OCR output')
+  await page.getByRole('button', { name: 'Sao chép', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__ocr.copied), literal)
+  await page.getByText('Quyền riêng tư và giới hạn OCR', { exact: true }).click()
+  await page.getByText('Tệp được xử lý trên thiết bị.', { exact: false }).waitFor()
+  if (process.env.BRAND_SCREENSHOT_DIR) {
+    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-vi-light.png'), animations: 'disabled' })
+    await page.evaluate(() => document.documentElement.classList.add('dark'))
+    await page.screenshot({ path: join(process.env.BRAND_SCREENSHOT_DIR, 'devfusion-ocr-vi-dark.png'), animations: 'disabled' })
+  }
+  console.log('PASS Vietnamese OCR controls and privacy text; live language change preserves and copies literal output')
   const preview = await browser.newPage()
   await preview.goto(url + '#/tool/text.ocr')
-  await preview.getByRole('alert').filter({ hasText: 'OCR requires the DevFusion desktop app.' }).waitFor()
-  assert.equal(await preview.getByRole('button', { name: 'Select region', exact: true }).isDisabled(), true)
+  await preview.getByRole('alert').filter({ hasText: 'Desktop app required' }).waitFor()
+  assert.equal(await preview.getByRole('button', { name: 'Select screen region…', exact: true }).isDisabled(), true)
   await preview.close(); assert.deepEqual(errors, [])
   console.log('PASS OCR responsive layout and honest desktop-required state')
   const helper = await browser.newPage({ viewport: { width: 800, height: 600 } })

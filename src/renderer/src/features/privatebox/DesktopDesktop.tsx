@@ -21,6 +21,7 @@ import { cn } from '@renderer/lib/utils'
 import { isVaultAccessError } from '@shared/secret-box/access-errors'
 import { useVaultDraftRecovery } from '@renderer/hooks/useVaultDraftRecovery'
 import { useShortcutSet } from '@renderer/shortcuts/useShortcuts'
+import { useUnsavedChanges } from '@renderer/hooks/useUnsavedChanges'
 
 type NamePrompt =
   | { kind: 'file'; type: DocType; initial: string }
@@ -29,8 +30,8 @@ type NamePrompt =
 
 interface Props {
   status: VaultStatus
-  onSignOut: () => void
-  onCreateNew: () => void
+  onSignOut: () => void | Promise<void>
+  onCreateNew: () => void | Promise<void>
   onRefresh: () => void
 }
 
@@ -117,8 +118,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
           {'{ }'}
         </div>
         <div className="absolute -right-0.5 -top-0.5 rounded bg-[#007aff] px-0.5 text-[7px] font-bold uppercase tracking-wide text-white shadow-sm">
-          json
-        </div>
+          {uiText('json')}</div>
       </div>
     )
   }
@@ -143,8 +143,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
       <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#ff9f0a]/20 to-[#ff375f]/15 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
         <ImageIcon className="h-6 w-6 text-[#ff9f0a]" strokeWidth={1.5} />
         <div className="absolute -right-0.5 -top-0.5 rounded bg-[#ff9f0a] px-0.5 text-[7px] font-bold uppercase text-white">
-          img
-        </div>
+          {uiText('img')}</div>
       </div>
     )
   }
@@ -153,8 +152,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
       <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#bf5af2]/25 to-[#5e5ce6]/20 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
         <Film className="h-6 w-6 text-[#bf5af2]" strokeWidth={1.5} />
         <div className="absolute -right-0.5 -top-0.5 rounded bg-[#bf5af2] px-0.5 text-[7px] font-bold uppercase text-white">
-          vid
-        </div>
+          {uiText('vid')}</div>
       </div>
     )
   }
@@ -163,8 +161,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
       <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-gradient-to-br from-[#30d158]/20 to-[#64d2ff]/15 shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
         <Music className="h-6 w-6 text-[#30d158]" strokeWidth={1.5} />
         <div className="absolute -right-0.5 -top-0.5 rounded bg-[#30d158] px-0.5 text-[7px] font-bold uppercase text-white">
-          aud
-        </div>
+          {uiText('aud')}</div>
       </div>
     )
   }
@@ -172,9 +169,7 @@ function FileGlyph({ entry }: { entry: DirEntry }): JSX.Element {
     return (
       <div className="relative flex h-12 w-11 flex-col items-center justify-center overflow-hidden rounded-[6px] border border-black/10 bg-mac-control shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
         <File className="h-6 w-6 text-mac-label-secondary" strokeWidth={1.5} />
-        <div className="absolute -right-0.5 -top-0.5 rounded bg-mac-label-tertiary px-0.5 text-[7px] font-bold uppercase text-white">
-          file
-        </div>
+        <div className="absolute -right-0.5 -top-0.5 rounded bg-mac-label-tertiary px-0.5 text-[7px] font-bold uppercase text-white">{uiText('file')}{' '}</div>
       </div>
     )
   }
@@ -198,7 +193,9 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const listVersion = useRef(0)
   const openVersion = useRef(0)
   const saving = useRef(false)
+  const mutating = useRef(false)
   const desktopRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   const activeName = status.vaults.find((v) => v.id === status.activeId)?.name ?? 'Private Box'
   const [cwd, setCwd] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
@@ -230,6 +227,15 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
   const crumbs = useMemo(() => (cwd ? cwd.split('/').filter(Boolean) : []), [cwd])
   const selected = entries.find((e) => e.id === selectedId) ?? null
+  const { requestLeave, dialog: leaveDialog } = useUnsavedChanges({ dirty, busy, onSave: () => save() })
+  const affectsDocument = (entry: DirEntry): boolean => Boolean(doc && (doc.relativePath === entry.relativePath || entry.kind === 'dir' && doc.relativePath.startsWith(entry.relativePath + '/')))
+  const clearEditor = (): void => {
+    openVersion.current++
+    setDoc(null)
+    setDraft('')
+    draftRef.current = ''
+    setDirty(false)
+  }
 
   const loadList = useCallback(async (): Promise<void> => {
     if (cwd !== cwdRef.current) return
@@ -261,59 +267,63 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     setDirty(false)
   }, [status.activeId])
 
-  const openEntry = async (entry: DirEntry): Promise<void> => {
-    if (saving.current) return
-    if (entry.kind === 'dir') {
-      if (dirty && !window.confirm('Discard unsaved changes?')) return
-      openVersion.current++; setBusy(false)
-      setDoc(null)
-      setDraft('')
-      setDirty(false)
-      setSelectedId(null)
-      setCwd(entry.relativePath)
+  const openEntry = (entry: DirEntry): void => {
+    if (entry.kind === 'file' && doc?.relativePath === entry.relativePath) {
+      const editor = editorRef.current
+      const focusTarget = editor?.querySelector<HTMLElement>('.cm-content') ?? editor?.querySelector<HTMLElement>('audio, video, button')
+      focusTarget?.focus()
       return
     }
-    if (dirty && doc && doc.relativePath !== entry.relativePath) {
-      if (!window.confirm('Discard unsaved changes?')) return
-    }
-    const version = ++openVersion.current
-    setBusy(true)
-    setError(null)
-    try {
-      const file = await window.devutils.privateBox.readFile(entry.relativePath, sessionId)
-      if (version !== openVersion.current) return
-      setDoc(file)
-      setDraft(file.content)
-      setDirty(false)
-      setSelectedId(entry.id)
-    } catch (e) {
-      if (version !== openVersion.current) return
-      if (isNeedsAccess(e)) onSignOut()
-      else setError(e instanceof Error ? e.message : 'Open failed')
-    } finally {
-      if (version === openVersion.current) setBusy(false)
-    }
+    requestLeave(async () => {
+      if (entry.kind === 'dir') {
+        clearEditor()
+        setSelectedId(null)
+        setCwd(entry.relativePath)
+        return
+      }
+      const version = ++openVersion.current
+      setBusy(true)
+      setError(null)
+      try {
+        const file = await window.devutils.privateBox.readFile(entry.relativePath, sessionId)
+        if (version !== openVersion.current) return
+        setDoc(file)
+        setDraft(file.content)
+        draftRef.current = file.content
+        setDirty(false)
+        setSelectedId(entry.id)
+      } catch (e) {
+        if (version !== openVersion.current) return
+        if (isNeedsAccess(e)) await onSignOut()
+        else setError(e instanceof Error ? e.message : 'Open failed')
+      } finally {
+        if (version === openVersion.current) setBusy(false)
+      }
+    })
   }
 
-  const save = async (): Promise<void> => {
-    if (!doc || saving.current) return
+  const save = async (): Promise<boolean> => {
+    if (!doc || saving.current || mutating.current) return false
     if (isBinaryKind(doc.type) || doc.encoding === 'base64') {
       setError('Media files are view-only — use Export or re-import to replace')
-      return
+      return false
     }
     saving.current = true
     const version = openVersion.current
     setBusy(true)
     setError(null)
     try {
-      if (doc.type === 'json') JSON.parse(draft)
-      const next = await window.devutils.privateBox.writeFile(doc.relativePath, draft, doc.sessionId)
-      if (version !== openVersion.current) return
+      const content = draftRef.current
+      if (doc.type === 'json') JSON.parse(content)
+      const next = await window.devutils.privateBox.writeFile(doc.relativePath, content, doc.sessionId)
+      if (version !== openVersion.current) return false
       setDoc(next)
       setDirty(draftRef.current !== next.content)
       await loadList()
+      return version === openVersion.current && draftRef.current === next.content
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
+      return false
     } finally {
       saving.current = false
       setBusy(false)
@@ -321,7 +331,8 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }
 
   const exportCurrent = async (): Promise<void> => {
-    if (!doc) return
+    if (!doc || saving.current || mutating.current) return
+    mutating.current = true
     setBusy(true)
     setError(null)
     try {
@@ -329,6 +340,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed')
     } finally {
+      mutating.current = false
       setBusy(false)
     }
   }
@@ -336,15 +348,21 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   const handleNameConfirm = async (name: string): Promise<void> => {
     const promptState = namePrompt
     setNamePrompt(null)
-    if (!promptState) return
+    if (!promptState || saving.current || mutating.current) return
+    mutating.current = true
+    const version = openVersion.current
+    const originalDraft = draftRef.current
     setBusy(true)
     setError(null)
     try {
       if (promptState.kind === 'file') {
         const file = await window.devutils.privateBox.createFile(cwd, name, promptState.type, sessionId)
         await loadList()
+        if (version !== openVersion.current) return
+        if (draftRef.current !== originalDraft) { setError('File created. Your current document changed during creation and remains open.'); return }
         setDoc(file)
         setDraft(file.content)
+        draftRef.current = file.content
         setDirty(false)
         setSelectedId(file.id)
       } else if (promptState.kind === 'folder') {
@@ -357,67 +375,65 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           name,
           sessionId
         )
-        if (doc?.relativePath === promptState.entry.relativePath && updated.kind === 'file') {
-          const file = await window.devutils.privateBox.readFile(updated.relativePath, sessionId)
+        if (doc && affectsDocument(promptState.entry)) {
+          const relativePath = updated.relativePath + doc.relativePath.slice(promptState.entry.relativePath.length)
+          const renamed = { ...doc, relativePath, ...(updated.kind === 'file' ? { name: updated.name } : {}) }
+          setDoc(renamed)
+          const file = await window.devutils.privateBox.readFile(relativePath, sessionId)
+          if (version !== openVersion.current) return
           setDoc(file)
-          setDraft(file.content)
-          setDirty(false)
-          setSelectedId(file.id)
+          setDirty(draftRef.current !== file.content)
+          setSelectedId(updated.id)
         }
         await loadList()
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed')
     } finally {
+      mutating.current = false
       setBusy(false)
     }
   }
 
-  const removeEntry = async (entry: DirEntry): Promise<void> => {
-    if (!window.confirm(`Delete “${entry.name}”?`)) return
-    setBusy(true)
-    try {
-      await window.devutils.privateBox.remove(entry.relativePath, sessionId)
-      if (doc?.relativePath === entry.relativePath) {
-        setDoc(null)
-        setDraft('')
-        setDirty(false)
+  const removeEntry = (entry: DirEntry): void => {
+    const remove = async (): Promise<void> => {
+      if (saving.current || mutating.current || !window.confirm(uiText('Delete “{name}”?', { name: entry.name }))) return
+      mutating.current = true
+      setBusy(true)
+      try {
+        await window.devutils.privateBox.remove(entry.relativePath, sessionId)
+        if (affectsDocument(entry)) clearEditor()
+        setSelectedId(null)
+        await loadList()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Delete failed')
+      } finally {
+        mutating.current = false
+        setBusy(false)
       }
-      setSelectedId(null)
-      await loadList()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed')
-    } finally {
-      setBusy(false)
     }
+    if (affectsDocument(entry)) requestLeave(remove)
+    else void remove()
   }
 
   const goTo = (path: string): void => {
-    if (saving.current) return
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
-    openVersion.current++; setBusy(false)
-    setDoc(null)
-    setDraft('')
-    setDirty(false)
-    setSelectedId(null)
-    setCwd(path)
+    requestLeave(() => {
+      clearEditor()
+      setSelectedId(null)
+      setCwd(path)
+    })
   }
 
   const closeEditor = (): void => {
-    if (saving.current) return
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
-    openVersion.current++; setBusy(false)
-    setDoc(null)
-    setDraft('')
-    setDirty(false)
+    requestLeave(clearEditor)
   }
 
   const startCreateFile = (type: DocType): void => {
-    setNamePrompt({
+    requestLeave(() => setNamePrompt({
       kind: 'file',
       type,
       initial: type === 'json' ? 'document.json' : type === 'markdown' ? 'notes.md' : 'notes.txt'
-    })
+    }))
   }
 
   // Global shortcuts while desktop is focused
@@ -485,29 +501,29 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   }, [doc, dirty, selected, namePrompt, menu, busy, draft, cwd, shortcuts])
 
   const emptyMenuItems: ContextMenuItem[] = [
-    { id: 'new-text', label: 'New Text File', shortcut: shortcuts.label('vault.new-text') },
-    { id: 'new-md', label: 'New Markdown' },
-    { id: 'new-json', label: 'New JSON', shortcut: shortcuts.label('vault.new-json') },
+    { id: 'new-text', label: uiText('New Text File'), shortcut: shortcuts.label('vault.new-text') },
+    { id: 'new-md', label: uiText('New Markdown') },
+    { id: 'new-json', label: uiText('New JSON'), shortcut: shortcuts.label('vault.new-json') },
     { id: 'sep1', label: '', separator: true },
-    { id: 'new-folder', label: 'New Folder', shortcut: shortcuts.label('vault.new-folder') },
-    { id: 'import', label: 'Import file / media…' },
+    { id: 'new-folder', label: uiText('New Folder'), shortcut: shortcuts.label('vault.new-folder') },
+    { id: 'import', label: uiText('Import file / media…') },
     { id: 'sep2', label: '', separator: true },
-    { id: 'refresh', label: 'Refresh' }
+    { id: 'refresh', label: uiText('Refresh') }
   ]
 
   const itemMenuItems = (entry: DirEntry): ContextMenuItem[] => [
-    { id: 'open', label: 'Open', shortcut: shortcuts.label('vault.open') },
+    { id: 'open', label: uiText('Open'), shortcut: shortcuts.label('vault.open') },
     ...(entry.kind === 'file'
-      ? [{ id: 'export', label: 'Export as plain…' } as ContextMenuItem]
+      ? [{ id: 'export', label: uiText('Export saved file…') } as ContextMenuItem]
       : []),
     { id: 'sep1', label: '', separator: true },
-    { id: 'rename', label: 'Rename', shortcut: shortcuts.label('vault.rename') },
-    { id: 'delete', label: 'Delete', shortcut: shortcuts.label('vault.delete'), danger: true },
+    { id: 'rename', label: uiText('Rename'), shortcut: shortcuts.label('vault.rename') },
+    { id: 'delete', label: uiText('Delete'), shortcut: shortcuts.label('vault.delete'), danger: true },
     { id: 'sep2', label: '', separator: true },
-    { id: 'new-text', label: 'New Text File' },
-    { id: 'new-json', label: 'New JSON' },
-    { id: 'import', label: 'Import file / media…' },
-    { id: 'new-folder', label: 'New Folder' }
+    { id: 'new-text', label: uiText('New Text File') },
+    { id: 'new-json', label: uiText('New JSON') },
+    { id: 'import', label: uiText('Import file / media…') },
+    { id: 'new-folder', label: uiText('New Folder') }
   ]
 
   const onMenuSelect = (id: string): void => {
@@ -523,15 +539,21 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
     else if (id === 'delete' && target) void removeEntry(target)
     else if (id === 'export' && target && target.kind === 'file') {
       void (async () => {
+        if (saving.current || mutating.current) return
+        mutating.current = true
+        setBusy(true)
         try {
           const path = await window.devutils.privateBox.exportToDisk(target.relativePath, sessionId)
           if (path) setError(null)
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Export failed')
-        }
+        } finally { mutating.current = false; setBusy(false) }
       })()
     } else if (id === 'import') {
       void (async () => {
+        if (saving.current || mutating.current) return
+        mutating.current = true
+        setBusy(true)
         try {
           const dir =
             target?.kind === 'dir' ? target.relativePath : cwd
@@ -539,7 +561,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           if (result) await loadList()
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Import failed')
-        }
+        } finally { mutating.current = false; setBusy(false) }
       })()
     }
   }
@@ -547,19 +569,20 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
   return (
     <div ref={desktopRef} className="relative flex h-full min-h-0 flex-col overflow-hidden bg-mac-bg">
       {recoveryDialog}
+      {leaveDialog}
       <NameDialog
         open={!!namePrompt}
         title={
           namePrompt?.kind === 'folder'
-            ? 'New folder'
+            ? uiText('New folder')
             : namePrompt?.kind === 'rename'
-              ? 'Rename'
+              ? uiText('Rename')
               : namePrompt?.kind === 'file'
-                ? `New ${namePrompt.type} file`
+                ? uiText('New {type} file', { type: namePrompt.type })
                 : ''
         }
         initialValue={namePrompt?.initial ?? ''}
-        confirmLabel={namePrompt?.kind === 'rename' ? 'Rename' : 'Create'}
+        confirmLabel={namePrompt?.kind === 'rename' ? uiText('Rename') : uiText('Create')}
         onCancel={() => setNamePrompt(null)}
         onConfirm={(v) => void handleNameConfirm(v)}
       />
@@ -569,7 +592,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           x={menu.x}
           y={menu.y}
           opener={menu.opener}
-          label={menu.target ? `Actions for ${menu.target.name}` : 'Folder actions'}
+          label={menu.target ? uiText('Actions for {name}', { name: menu.target.name }) : uiText('Folder actions')}
           items={menu.target ? itemMenuItems(menu.target) : emptyMenuItems}
           onSelect={onMenuSelect}
           onClose={() => setMenu(null)}
@@ -587,19 +610,17 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
             {status.rootPath}
           </div>
         </div>
-        <button type="button" className="mac-btn-ghost !text-[12px]" onClick={onCreateNew}>
-          New box
+        <button type="button" className="mac-btn-ghost !text-[12px]" disabled={busy} onClick={() => requestLeave(onCreateNew)}>
+          {uiText('New box')}
         </button>
         <button
           type="button"
           className="mac-btn-secondary !text-[12px]"
-          onClick={() => {
-            if (dirty && !window.confirm('Discard unsaved changes and sign out?')) return
-            onSignOut()
-          }}
+          disabled={busy}
+          onClick={() => requestLeave(onSignOut)}
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          {uiText('Sign out')}
         </button>
       </header>
 
@@ -609,9 +630,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
           <Home className="h-3.5 w-3.5" />
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-mac bg-mac-control/60 px-1 py-0.5 text-[12px]">
-          <button type="button" className="mac-btn-ghost !px-1.5 !py-0.5 shrink-0" onClick={() => goTo('')}>
-            Desktop
-          </button>
+          <button type="button" className="mac-btn-ghost !px-1.5 !py-0.5 shrink-0" onClick={() => goTo('')}>{uiText('Desktop')}{' '}</button>
           {crumbs.map((c, i) => (
             <span key={`${c}-${i}`} className="flex shrink-0 items-center gap-0.5">
               <ChevronRight className="h-3 w-3 text-mac-label-tertiary" />
@@ -631,7 +650,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
       <div
         className="relative min-h-0 flex-1 overflow-auto bg-gradient-to-b from-mac-bg via-mac-bg to-mac-surface/40 p-5"
         role="group"
-        aria-label="Private Box files"
+        aria-label={uiText('Private Box files')}
         tabIndex={0}
         onClick={() => {
           setSelectedId(null)
@@ -655,8 +674,8 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
             <div className="mb-3 opacity-45">
               <MacFolderGlyph />
             </div>
-            <p className="font-medium text-mac-label-secondary">This folder is empty</p>
-            <p className="mt-1 text-[11px]">Right-click for New File / New Folder</p>
+            <p className="font-medium text-mac-label-secondary">{uiText('This folder is empty')}</p>
+            <p className="mt-1 text-[11px]">{uiText('Right-click for New File / New Folder')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] content-start gap-3">
@@ -716,7 +735,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
 
       {/* Type-aware editor window (mac traffic lights) */}
       {doc && (
-        <div className="absolute inset-x-3 bottom-3 top-24 z-30 flex flex-col overflow-hidden rounded-mac-xl border border-mac-separator bg-mac-surface shadow-mac-lg sm:inset-x-8 sm:bottom-5 sm:top-20">
+        <div ref={editorRef} className="absolute inset-x-3 bottom-3 top-24 z-30 flex flex-col overflow-hidden rounded-mac-xl border border-mac-separator bg-mac-surface shadow-mac-lg sm:inset-x-8 sm:bottom-5 sm:top-20">
           <div className="flex shrink-0 items-center gap-3 border-b border-mac-separator bg-mac-sidebar/90 px-3 py-2 backdrop-blur">
             <div className="flex items-center gap-1.5">
               <button
@@ -734,14 +753,14 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 {dirty ? <span className="text-mac-warning"> •</span> : null}
               </div>
               <div className="text-[10px] text-mac-label-tertiary">
-                {doc.type === 'markdown' && `Notion blocks · type / · Enter new block${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
-                {doc.type === 'json' && `Format · Minify · Tree${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
-                {doc.type === 'text' && `Plain text · LF/CRLF${shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : ''}`}
-                {doc.type === 'image' && 'Image preview · encrypted · Export to save out'}
-                {doc.type === 'video' && 'Video player · encrypted · Export to save out'}
-                {doc.type === 'audio' && 'Audio player · encrypted · Export to save out'}
-                {doc.type === 'binary' && 'Binary file · encrypted · Export to open elsewhere'}
-                {doc.type === 'keep-note' && 'Keep note'}
+                {doc.type === 'markdown' && uiText('Notion blocks · type / · Enter new block') + (shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : '')}
+                {doc.type === 'json' && uiText('Format · Minify · Tree') + (shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : '')}
+                {doc.type === 'text' && uiText('Plain text · LF/CRLF') + (shortcuts.label('vault.save') ? ' · ' + shortcuts.label('vault.save') : '')}
+                {doc.type === 'image' && uiText('Image preview · encrypted · Export to save out')}
+                {doc.type === 'video' && uiText('Video player · encrypted · Export to save out')}
+                {doc.type === 'audio' && uiText('Audio player · encrypted · Export to save out')}
+                {doc.type === 'binary' && uiText('Binary file · encrypted · Export to open elsewhere')}
+                {doc.type === 'keep-note' && uiText('Keep note')}
               </div>
             </div>
             {isBinaryKind(doc.type) || doc.encoding === 'base64' ? (
@@ -750,9 +769,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
                 className="mac-btn-secondary !text-[12px]"
                 disabled={busy}
                 onClick={() => void exportCurrent()}
-              >
-                Export…
-              </button>
+              >{uiText('Export…')}{' '}</button>
             ) : (
               <button
                 type="button"
@@ -788,7 +805,7 @@ export function DesktopDesktop({ status, onSignOut, onCreateNew, onRefresh }: Pr
       {(error || busy) && (
         <footer className="shrink-0 border-t border-mac-separator px-3 py-1.5 text-[12px]">
           {error ? (
-            <span className="text-mac-danger">{error}</span>
+            <span role="alert" className="text-mac-danger">{uiText(error)}</span>
           ) : (
             <span className="text-mac-label-tertiary">{uiText('Working…')}</span>
           )}

@@ -55,14 +55,14 @@ export function TextInputActions({ value, onChange, output, fileName, accept, pr
   }
   return (
     <>
-      {actions.includes('open') && <input ref={inputRef} type="file" accept={accept} className="hidden" aria-label="Open text file" onChange={(event) => {
+      {actions.includes('open') && <input ref={inputRef} type="file" accept={accept} className="hidden" aria-label={uiText('Open text file')} onChange={(event) => {
         const file = event.target.files?.[0]
         event.target.value = ''
         if (file) void openFile(file)
       }} />}
-      {actions.includes('open') && <button type="button" className="mac-btn-secondary whitespace-nowrap" disabled={busy} aria-busy={busy} aria-describedby={error ? errorId : undefined} onClick={() => inputRef.current?.click()} title="Replace input with a local UTF-8 file (up to 8 MB)">{busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <FolderOpen className="h-3.5 w-3.5" aria-hidden />}{busy ? 'Reading…' : 'Open file'}</button>}
-      {actions.includes('download') && <button type="button" className="mac-btn-secondary whitespace-nowrap" disabled={!output || busy} onClick={download} title={output ? `Download ${fileName}` : 'Create output before downloading'}><Download className="h-3.5 w-3.5" aria-hidden />{uiText('Download')}</button>}
-      {actions.includes('clear') && <button type="button" className="mac-btn-ghost whitespace-nowrap" disabled={!value || busy} onClick={() => { setError(null); onChange('') }} title="Clear input (undo in the editor to restore)"><Trash2 className="h-3.5 w-3.5" aria-hidden />{uiText('Clear')}</button>}
+      {actions.includes('open') && <button type="button" className="mac-btn-secondary whitespace-nowrap" disabled={busy} aria-busy={busy} aria-describedby={error ? errorId : undefined} onClick={() => inputRef.current?.click()} title={uiText('Replace input with a local UTF-8 file (up to 8 MB)')}>{busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <FolderOpen className="h-3.5 w-3.5" aria-hidden />}{busy ? uiText('Reading…') : uiText('Open file')}</button>}
+      {actions.includes('download') && <button type="button" className="mac-btn-secondary whitespace-nowrap" disabled={!output || busy} onClick={download} title={output ? uiText('Download {fileName}', { fileName: fileName }) : uiText('Create output before downloading')}><Download className="h-3.5 w-3.5" aria-hidden />{uiText('Download')}</button>}
+      {actions.includes('clear') && <button type="button" className="mac-btn-ghost whitespace-nowrap" disabled={!value || busy} onClick={() => { setError(null); onChange('') }} title={uiText('Clear input (undo in the editor to restore)')}><Trash2 className="h-3.5 w-3.5" aria-hidden />{uiText('Clear')}</button>}
       {error && <span id={errorId} role="alert" className="w-full text-[12px] leading-relaxed text-mac-danger">{error}</span>}
     </>
   )

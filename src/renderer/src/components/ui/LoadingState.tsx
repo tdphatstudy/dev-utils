@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { AppLogo } from '@renderer/components/chrome/AppLogo'
 import { cn } from '@renderer/lib/utils'
+import { useI18n } from '@renderer/i18n'
 
 export function LoadingState({
   label = 'Loading…',
-  detail = 'Preparing your workspace.',
+  detail = 'Preparing the interface…',
   slowDetail = 'This is taking longer than usual.',
   action,
   className
@@ -15,6 +16,7 @@ export function LoadingState({
   action?: ReactNode
   className?: string
 }): JSX.Element {
+  const { t } = useI18n()
   const [slow, setSlow] = useState(false)
   useEffect(() => {
     setSlow(false)
@@ -32,8 +34,8 @@ export function LoadingState({
         </div>
         {/* Keep the live status outside a busy region: its slow notice must be announced. */}
         <div role="status" aria-live="polite" aria-atomic="true">
-          <p className="text-[15px] font-semibold tracking-tight text-mac-label">{label}</p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">{slow ? slowDetail : detail}</p>
+          <p className="text-[15px] font-semibold tracking-tight text-mac-label">{t(label)}</p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-mac-label-secondary">{t(slow ? slowDetail : detail)}</p>
         </div>
         {action}
       </div>

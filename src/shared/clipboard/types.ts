@@ -31,6 +31,8 @@ export interface ClipboardApi {
   content(id: string): Promise<ClipContent>
   copy(id: string, mode: 'plain' | 'original', close?: boolean): Promise<void>
   copyText(text: string, close?: boolean): Promise<void>
+  paste(id: string, mode: 'plain' | 'original'): Promise<void>
+  pasteText(text: string): Promise<void>
   update(id: string, value: { pinned?: boolean; label?: string }): Promise<void>
   remove(ids: string[]): Promise<void>
   clear(): Promise<void>

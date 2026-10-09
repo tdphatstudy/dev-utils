@@ -16,9 +16,12 @@ khi DevFusion còn chạy. Quit thoát app và gỡ phím tắt.
   Sau Resume/unlock, app bỏ qua nội dung đang có để tránh thu lại dữ liệu riêng tư;
   **Save current clipboard** trong menu thêm nội dung hiện tại khi người dùng chọn.
 - Tìm trong toàn bộ text và nhãn, lọc Text/JSON/URL/Color/Image hoặc chỉ mục ghim.
-  Một lần bấm vào hàng copy bản gốc và đóng widget. Mũi tên chọn mục; Enter copy;
-  Alt+Enter hoặc nút con mắt mở preview; Ctrl/⌘+Shift+Enter copy plain text;
-  Ctrl/⌘+1…9 copy
+  Mở bằng global shortcut khi con trỏ đang ở input của ứng dụng đích: nút **Paste**,
+  bấm hàng hoặc Enter khôi phục focus về ứng dụng đó, dán tại con trỏ và đóng widget.
+  Nút Copy vẫn copy bản gốc; khi không có target hợp lệ, hàng/Enter dùng Copy.
+  Mũi tên chọn mục;
+  Alt+Enter hoặc nút con mắt mở preview; Ctrl/⌘+Shift+Enter dùng plain text;
+  Ctrl/⌘+1…9 dùng mục
   các mục đang hiển thị. **Pin** ở header giữ cửa sổ khi chuyển focus; ghim từng
   mục trong danh sách là thao tác riêng để ưu tiên lưu giữ mục đó.
 - Preview có JSON format/minify, Base64 UTF-8, URL encode/decode, trim, sort và
@@ -26,9 +29,12 @@ khi DevFusion còn chạy. Quit thoát app và gỡ phím tắt.
   Menu ba chấm → Select multiple → chọn các mục text → Merge & copy để ghép
   theo thứ tự chọn. Checkbox và công cụ chỉnh sửa chỉ xuất hiện trong chế độ này
   hoặc preview. Settings dùng dialog; history mặc định là một danh sách dễ quét.
-- PNG có preview và OCR chủ động trong widget, dùng engine/model local hiện có.
+- PNG có preview và OCR chủ động trong widget và cửa sổ chính, dùng engine/model local hiện có.
+  **Extract text (OCR)** hiện loading và kết quả bên dưới ảnh; giữ nguyên ảnh gốc,
+  có Copy text/Paste text riêng. Renderer chạy engine ẩn và bị hủy khi hoàn tất;
+  không mở cửa sổ OCR khác. Kết quả lỗi, rỗng và privacy invalidation hiển thị tại chỗ.
   Copy original formats giữ text/HTML/PNG đã hỗ trợ; HTML không được thực thi
-  trong preview. Copy xong người dùng paste vào app đích bằng phím paste của OS.
+  trong preview. Paste dùng cùng format đã chọn; Copy vẫn cho phép paste thủ công.
 - Tất cả chín mục Tray → Open tool mở widget riêng. Color vào eyedropper ngay,
   có kính phóng đại và popup kết quả. UUID có sẵn một giá trị, tạo thêm 1/5/10;
   Timestamp hiện giờ hiện tại và chuyển Unix/ISO khi nhập. JSON/Base64 xem kết quả
@@ -52,7 +58,7 @@ không khẳng định vượt mọi clipboard app ở mọi tính năng.
 | [CopyQ](https://hluk.github.io/CopyQ/) | Rich/custom formats, tags/tabs, shortcut cấu hình, scripting và paste vào app đích | Widget chuyên biệt và shortcut cấu hình; giới hạn format rõ ràng, bridge có thao tác cố định |
 | [PowerToys Advanced Paste](https://learn.microsoft.com/en-us/windows/powertoys/advanced-paste) | Chuyển text/JSON/Markdown local, OCR, history; AI là khả năng tùy chọn | Các phép chuyển đổi offline, JSON giữ nguyên số/key, nhiều mục text ghép được; không thêm yêu cầu AI/account |
 
-Điểm trọng tâm của bản này là một luồng **global shortcut → tìm → copy và đóng**;
+Điểm trọng tâm là luồng **global shortcut → tìm → Paste vào ứng dụng trước đó**;
 preview/biến đổi là lựa chọn bổ sung. Các widget dùng chung tray/brand/toolbox nhưng tải độc
 lập; dữ liệu clipboard không đi vào session history/drafts chung. Tự che lịch sử
 và dừng capture khi Box đang mở hoặc màn hình khóa giúp tránh tự ghi lại nội dung
@@ -88,7 +94,16 @@ biết mọi bí mật trong text/ảnh hoặc biết nguồn app đã copy.
   quan sát lại nội dung sau thay đổi, không phải bộ đếm mọi thao tác Copy của OS.
   Timeout đọc năm giây tạm dừng capture để người dùng Resume và thử lại.
   Chỉ một item text/HTML/PNG; không nhập file list, multi-item hoặc custom format.
-- Không có tự paste vào app khác, sync thiết bị, remote link preview, script
+- Paste chỉ chạy sau thao tác chủ động trong widget, với target do main ghi nhận
+  trước khi widget chiếm focus. Windows kiểm tra HWND/PID, foreground và modifier
+  keys rồi dùng Ctrl+V qua SendInput; không đưa clipboard content vào command line.
+  HWND/PID chỉ giữ trong RAM đến khi widget đóng. Không tự chọn input khác hay
+  di chuyển con trỏ trong tài liệu. Target đóng, OS chặn focus/permission hoặc
+  app elevated sẽ báo lỗi, giữ widget và nội dung đã copy để paste thủ công.
+  macOS dùng System Events và cần quyền Accessibility/Automation; X11 cần
+  `xdotool` đã có trên máy. Wayland không hỗ trợ direct paste trong adapter này.
+  Không tự cài dependency, xin elevation hoặc thay đổi quyền hệ thống.
+- Không có sync thiết bị, remote link preview, script
   tùy ý, AI, source-app exclusion hay auto-start trong bản này. OS shortcut chỉ
   hoạt động khi app đang chạy. Wayland có thể cần portal/consent; cần QA native.
   [globalShortcut](https://www.electronjs.org/docs/latest/api/global-shortcut)
@@ -99,6 +114,11 @@ biết mọi bí mật trong text/ảnh hoặc biết nguồn app đã copy.
   dữ liệu không được broadcast đến cửa sổ khác hoặc gửi ra mạng.
   Guard [webRequest](https://www.electronjs.org/docs/latest/api/web-request)
   chặn cả HTTP/WebSocket và file ngoài renderer resources của widget.
+
+Theme Light/Dark/System được main lưu trong `theme.json` (chỉ preference metadata),
+seed từ theme localStorage hiện có khi main renderer kết nối lần đầu. Main áp dụng
+`nativeTheme.themeSource` để native UI, quick window và Color/OCR helpers dùng
+cùng mode, kể cả khi cửa sổ chính đã đóng. Widget đang mở nhận event đổi theme.
 
 ## Kiểm chứng
 
@@ -130,3 +150,20 @@ UI QR decode đọc ảnh khác input hiện tại, xác nhận blob ảnh local
 đúng phạm vi. OCR fixture chạy model English/Vietnamese và PDF offline, kiểm tra
 logo popup và không còn renderer sau khi đóng. Hotkey kiểm tra đăng ký OS và
 lifecycle; chưa mô phỏng nhấn phím vật lý hoặc chạy native macOS/Linux.
+
+Lượt sửa UX ngày 2026-10-09: **124 files / 1.105 tests** qua; typecheck, production
+build, quick-tools UI và Electron quick fixture qua. UI kiểm tra Paste/keyboard,
+đồng bộ theme khi widget còn mở và từ titlebar chính, OCR inline ở cả hai cửa sổ,
+loading/error/empty/privacy states và tự cuộn kết quả vào viewport. Model Anh/Việt
+thật chạy thành công trong runner ẩn (`electron-ocr.smoke.mjs --inline-only`),
+không chụp màn hình hoặc đọc clipboard thật. Build còn warning vendor SQL cũ.
+
+`electron-clipboard-paste.smoke.mjs` dùng input Windows riêng, intercept WM_PASTE
+để không đọc/thay clipboard thật. Nó từ chối click nếu không xác minh đúng HWND
+đang chiếm vị trí màn hình; lần chạy này **SKIP** vì fixture bị che trong desktop
+chạy nền. Vì vậy native focus/Ctrl+V/Word chưa được xác nhận qua kiểm thử này.
+macOS/X11/Wayland và installer chưa được kiểm chứng trong lượt sửa UX này.
+Windows foreground/input behavior dựa trên
+[SetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow),
+[SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)
+và [AttachThreadInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-attachthreadinput).

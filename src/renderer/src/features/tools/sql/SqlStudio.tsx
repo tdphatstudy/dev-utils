@@ -1,18 +1,13 @@
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
 import { CopyButton } from '@renderer/components/ui/CopyButton'
 import { ToolStatus, ToolToolbar } from '@renderer/components/ui/ToolToolbar'
-import {
-  formatSql,
-  minifySql,
-  validateSql,
-  SQL_DIALECTS,
-  type SqlDialectId
-} from '@shared/sql'
+import { SQL_DIALECTS, type SqlDialectId } from '@shared/sql/dialects'
 import { useToolDraft } from '@renderer/hooks/useToolDraft'
 import { TextInputActions } from '@renderer/components/ui/TextInputActions'
 import { SaveToBoxButton } from '@renderer/features/secret-box/SaveToBoxButton'
+import { useSqlAnalysis } from './useSqlAnalysis'
 
 const SAMPLES: Record<SqlDialectId, string> = {
   generic: `select u.id, u.name, count(o.id) as order_count
@@ -66,7 +61,7 @@ LIMIT 100;`
 }
 
 export default function SqlStudio(): JSX.Element {
-  useUiLocale()
+  const { locale } = useUiLocale()
   const [dialect, setDialect] = useState<SqlDialectId>('mysql')
   const [input, setInput] = useState(SAMPLES.mysql)
   const [indent, setIndent] = useState(2)
@@ -77,25 +72,25 @@ export default function SqlStudio(): JSX.Element {
     historyOnUnmount: true
   })
 
-  const validated = useMemo(() => validateSql(input, { dialect }), [input, dialect])
-  const formatted = useMemo(
-    () => formatSql(input, { dialect, indent, uppercaseKeywords: uppercase }),
-    [input, dialect, indent, uppercase]
-  )
+  const analysis = useSqlAnalysis(input, dialect, setInput)
+  const validated = analysis.validation
+  const format = (): void => { if (validated?.ok && !analysis.actionPending) analysis.run('format', { dialect, indent, uppercaseKeywords: uppercase }) }
 
   const status = !input.trim()
-    ? { tone: 'neutral' as const, text: 'Paste SQL to get started' }
-    : validated.ok
+    ? { tone: 'neutral' as const, text: uiText('Paste SQL to get started') }
+    : analysis.pending || analysis.actionPending
+      ? { tone: 'neutral' as const, text: uiText(analysis.actionPending ? 'Processing SQL…' : 'Checking SQL…') }
+    : validated?.ok
       ? {
           tone: 'success' as const,
-          text: `${dialect === 'plsql' ? 'Formatted' : 'Syntax checked'} · ${input.length.toLocaleString()} chars${
-            validated.note ? ` · ${validated.note}` : ''
+          text: `${uiText('{value1} · {value2} chars', { value1: uiText(dialect === 'plsql' ? 'Formatting supported' : 'Syntax checked'), value2: input.length.toLocaleString(locale) })}${
+            validated.note ? ` · ${uiText(validated.note)}` : ''
           }`
         }
       : {
           tone: 'danger' as const,
-          text: `Invalid${validated.line ? ` · line ${validated.line}` : ''} — ${validated.error}${
-            validated.note ? ` (${validated.note})` : ''
+          text: `${uiText(validated?.error ?? 'Invalid SQL')}${validated?.line ? ` · ${uiText('Line {line}:', { line: validated.line.toLocaleString(locale) })}` : ''}${
+            validated?.note ? ` (${uiText(validated.note)})` : ''
           }`
         }
 
@@ -105,26 +100,22 @@ export default function SqlStudio(): JSX.Element {
         <button
           type="button"
           className="mac-btn-primary"
-          disabled={!formatted.ok || !input.trim()}
-          onClick={() => {
-            const r = formatSql(input, { dialect, indent, uppercaseKeywords: uppercase })
-            if (r.ok) setInput(r.text)
-          }}
+          disabled={!validated?.ok || analysis.actionPending}
+          onClick={format}
         >
           {uiText('Format')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
-          disabled={!formatted.ok || !input.trim()}
-          onClick={() => {
-            const r = minifySql(input, { dialect, uppercaseKeywords: uppercase })
-            if (r.ok) setInput(r.text)
-          }}
+          disabled={!validated?.ok || analysis.actionPending}
+          onClick={() => analysis.run('minify', { dialect, uppercaseKeywords: uppercase })}
         >
           {uiText('Minify')}</button>
+        {(analysis.pending || analysis.actionPending) && <button type="button" className="mac-btn-secondary" onClick={analysis.cancel}>{uiText('Cancel')}</button>}
+        {!analysis.pending && !analysis.actionPending && input.trim() && !validated?.ok && <button type="button" className="mac-btn-secondary" onClick={analysis.retry}>{uiText('Retry')}</button>}
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          Dialect
+          {uiText('Dialect')}
           <select
             className="mac-input !w-auto max-w-[11rem] !py-1"
             value={dialect}
@@ -135,7 +126,7 @@ export default function SqlStudio(): JSX.Element {
           >
             {SQL_DIALECTS.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.label}
+                {uiText(d.label)}
               </option>
             ))}
           </select>
@@ -145,6 +136,7 @@ export default function SqlStudio(): JSX.Element {
           {uiText('Indent')}<select
             className="mac-input !w-auto !py-1"
             value={indent}
+            disabled={analysis.actionPending}
             onChange={(e) => setIndent(Number(e.target.value))}
           >
             <option value={2}>2</option>
@@ -156,16 +148,17 @@ export default function SqlStudio(): JSX.Element {
           <input
             type="checkbox"
             checked={uppercase}
+            disabled={analysis.actionPending}
             onChange={(e) => setUppercase(e.target.checked)}
             className="accent-mac-accent"
           />
-          UPPER keywords
+          {uiText('Uppercase keywords')}
         </label>
 
         <div className="ml-auto flex gap-2">
           <SaveToBoxButton
             type="text"
-            content={formatted.ok ? formatted.text : input}
+            content={input}
             defaultName={`sql-${new Date().toISOString().slice(0, 10)}.sql`}
             disabled={!input.trim()}
           />
@@ -177,7 +170,7 @@ export default function SqlStudio(): JSX.Element {
           >
             {uiText('Sample')}</button>
         </div>
-        <TextInputActions value={input} onChange={setInput} output={formatted.ok ? formatted.text : ''} fileName="formatted.sql" accept=".sql,.txt" />
+        <TextInputActions value={input} onChange={setInput} output={input} fileName="query.sql" accept=".sql,.txt" />
       </ToolToolbar>
 
       <div className="min-h-0 flex-1 p-3">
@@ -186,15 +179,16 @@ export default function SqlStudio(): JSX.Element {
           onChange={setInput}
           language="sql"
           sqlDialect={dialect}
-          placeholder="Paste SQL…"
-          label={`${SQL_DIALECTS.find((item) => item.id === dialect)?.label ?? 'SQL'} input`}
-          issue={!input.trim() || validated.ok ? null : validated}
-          onRun={() => { if (formatted.ok) setInput(formatted.text) }}
+          placeholder={uiText('Paste SQL…')}
+          label={uiText('{dialect} input', { dialect: uiText(SQL_DIALECTS.find((item) => item.id === dialect)?.label ?? 'SQL') })}
+          issue={!input.trim() || validated?.ok ? null : validated}
+          onRun={format}
         />
       </div>
 
       <footer className="border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={status.tone}>{status.text}</ToolStatus>
+        {analysis.error && <p role="alert" className="text-[12px] text-mac-danger">{uiText(analysis.error)}</p>}
       </footer>
     </div>
   )

@@ -4,9 +4,10 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { SCRYPT_PARAMS, VAULT_DIR } from '@shared/secret-box/constants'
 import type { VaultConfig } from '@shared/secret-box/types'
-const mocks = vi.hoisted(() => ({ userData: '', hardware: 'fixture-hardware', available: true }))
+const mocks = vi.hoisted(() => ({ userData: '', hardware: 'fixture-hardware', available: true, backend: 'gnome_libsecret' }))
 vi.mock('electron', () => ({ app: { getPath: () => mocks.userData, isReady: () => true }, safeStorage: {
   isEncryptionAvailable: () => mocks.available,
+  getSelectedStorageBackend: () => mocks.backend,
   encryptString: (value: string) => Buffer.from(`encrypted:${value}`),
   decryptString: (value: Buffer) => { if (!value.toString().startsWith('encrypted:')) throw new Error('fixture decryption failure'); return value.toString().slice(10) }
 } }))
@@ -16,13 +17,46 @@ import { defaultSecretBoxPath, deviceSecretPath, hardwareSecretCachePath, secret
 import { resolveDeviceKeyAForSetup, listDeviceKeyCandidates } from './device-secret'
 import { deriveLayerKeys, sealDoc, serializeEnvelope } from './crypto'
 import { clearAccess, setAccess, getAccess } from './session'
-import { removeEntry, renameEntry } from './fs-ops'
+import { createFileWithContent, readDoc, removeEntry, renameEntry } from './fs-ops'
 import { resolveVaultPath } from './vault-paths'
 
 let root: string
 const config = (): VaultConfig => ({ version: 1, mode: 'device', kdf: 'scrypt', kdfParams: { ...SCRYPT_PARAMS }, salt: Buffer.alloc(16, 7).toString('base64'), createdAt: '2026-10-04T00:00:00.000Z' })
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'devutils-vault-preserve-')); mocks.userData = join(root, 'userData'); mocks.hardware = 'fixture-hardware'; mocks.available = true; await mkdir(mocks.userData) })
 afterEach(async () => { clearAccess(); await rm(root, { recursive: true, force: true }) })
+
+it('does not write or consume a hardware cache when Linux storage is insecure', async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { value: 'linux' })
+  try {
+    for (const backend of ['basic_text', 'unknown']) {
+      mocks.backend = backend
+      expect(await resolveDeviceKeyAForSetup()).toBe(mocks.hardware)
+      await expect(readFile(hardwareSecretCachePath())).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+    await writeFile(hardwareSecretCachePath(), 'encrypted:insecure-hint')
+    expect(await listDeviceKeyCandidates()).toEqual([{ source: 'hardware', keyA: mocks.hardware }])
+    expect(await readFile(hardwareSecretCachePath(), 'utf8')).toBe('encrypted:insecure-hint')
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+    mocks.backend = 'gnome_libsecret'
+  }
+})
+
+it('renames preserve binary bytes, encoding and MIME, and refuse text-to-media reinterpretation', async () => {
+  const vaultRoot = join(root, 'rename-box')
+  await mkdir(vaultRoot)
+  setAccess({ rootPath: vaultRoot, mode: 'device', config: config(), keyA: Buffer.alloc(32, 1), keyB: Buffer.alloc(32, 2) })
+  const media = await createFileWithContent('', 'photo.png', 'image', Buffer.from([0, 255, 1, 127]).toString('base64'), { encoding: 'base64', mimeType: 'image/png' })
+  await renameEntry(media.relativePath, 'renamed.txt')
+  expect(await readDoc(media.relativePath)).toMatchObject({ type: 'image', encoding: 'base64', mimeType: 'image/png', content: media.content })
+  const text = await createFileWithContent('', 'note.txt', 'text', 'unsaved media is not text')
+  const original = await readFile(join(vaultRoot, text.relativePath))
+  await expect(renameEntry(text.relativePath, 'note.png')).rejects.toThrow('requires importing')
+  expect(await readFile(join(vaultRoot, text.relativePath))).toEqual(original)
+  await renameEntry(text.relativePath, 'note.md')
+  expect(await readDoc(text.relativePath)).toMatchObject({ type: 'markdown', encoding: 'utf-8', content: text.content })
+})
 
 it('hardware setup/cache preserves legacy recovery material and a legacy encrypted document still unlocks', async () => {
   const legacy = 'legacy-secret', password = ' password with spaces '

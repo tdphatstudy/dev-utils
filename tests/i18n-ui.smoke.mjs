@@ -1,12 +1,12 @@
 import { createServer } from 'node:http'
-import { readFile, mkdir } from 'node:fs/promises'
+import { readFile, mkdir, readdir } from 'node:fs/promises'
 import { resolve, extname, sep, join } from 'node:path'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const rows = []
-for (const file of ['catalog', 'workspace-messages', 'settings-messages', 'tool-messages', 'analysis-messages', 'security-workspace-messages']) {
-  const ast = ts.createSourceFile(file, await readFile(`src/shared/i18n/${file}.ts`, 'utf8'), ts.ScriptTarget.Latest, true)
+for (const file of (await readdir('src/shared/i18n')).filter(file => file.endsWith('.ts')).sort()) {
+  const ast = ts.createSourceFile(file, await readFile(`src/shared/i18n/${file}`, 'utf8'), ts.ScriptTarget.Latest, true)
   const visit = node => { if (ts.isArrayLiteralExpression(node) && node.elements.length === 13 && node.elements.every(ts.isStringLiteral)) rows.push(node.elements.map(value => value.text)); ts.forEachChild(node, visit) }
   visit(ast)
 }
@@ -14,6 +14,11 @@ const languages = ['en', 'zh', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru', 'ar', '
 assert.equal(new Set(rows.map(row => row[0])).size, rows.length, 'Source messages must be unique')
 for (const row of rows) assert.ok(row.every(value => value.trim()), 'Every catalog row must have 13 non-empty values')
 const text = (language, key) => language === 'en' ? key : rows.find(row => row[0] === key)?.[languages.indexOf(language)] ?? key
+const translated = (language, key, values = {}) => {
+  const row = rows.find(row => row[0] === key)
+  assert.ok(row, `Missing expected translation row: ${key}`)
+  return (language === 'en' ? key : row[languages.indexOf(language)]).replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (marker, key) => Object.hasOwn(values, key) ? String(values[key]) : marker)
+}
 const root = resolve('out/renderer'), mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' }
 const server = createServer(async (request, response) => {
   try {
@@ -30,16 +35,36 @@ await page.exposeFunction('__language', () => ({ language: setting, resolved: se
 await page.exposeFunction('__saveLanguage', value => { if (failSave) { failSave = false; throw new Error('private fixture error') }; setting = value; return { language: setting, resolved: setting === 'system' ? 'en' : setting } })
 await page.addInitScript(() => {
   const listeners = new Set()
+  const fixture = window.__i18nFixture = {
+    vaultView: 'setup', keepAccess: false, copied: '', setupCalls: [], unlockCalls: [], savedNotes: [],
+    folderPath: 'C:/i18n-fixture/Home Settings 日本語', vaultName: 'Home Settings العربية 日本語'
+  }
   window.__deferLanguageReply = false
   window.__trayLanguage = async value => { const state = await window.__saveLanguage(value); for (const listener of listeners) listener(state) }
-  window.devutils = { platform: async () => 'win32', app: {
+  window.devutils = { platform: async () => 'win32', version: async () => '0.1.0-fixture', app: {
     language: () => window.__language(), setLanguage: async value => { const state = await window.__saveLanguage(value); for (const listener of listeners) listener(state); if (window.__deferLanguageReply) await new Promise(resolve => { window.__releaseLanguageReply = resolve }); return state },
     onLanguageChanged: callback => { listeners.add(callback); return () => listeners.delete(callback) }, onOpenTool: () => () => {}, trayAvailable: async () => true, quit: async () => {}
-  }, security: { state: async () => ({ idleMinutes: 15, lastLock: null, hasDraft: false }), onVaultLocked: () => () => {} } }
+  }, security: { state: async () => ({ idleMinutes: 15, lastLock: null, hasDraft: false }), onVaultLocked: () => () => {}, recoverDraft: async () => null },
+  privateBox: {
+    getStatus: async () => fixture.vaultView === 'setup'
+      ? { configured: false, hasAccess: false, mode: null, rootPath: null, activeId: null, vaults: [] }
+      : { configured: true, hasAccess: true, mode: 'portable', rootPath: fixture.folderPath, activeId: 'i18n-vault', sessionId: 'i18n-session', vaults: [{ id: 'i18n-vault', name: fixture.vaultName, rootPath: fixture.folderPath, mode: 'portable', createdAt: '2026-10-09T00:00:00Z' }] },
+    pickEmptyFolder: async () => fixture.folderPath, pickVaultFolder: async () => null,
+    setup: async value => { fixture.setupCalls.push(value) }, clearAccess: async () => { fixture.keepAccess = false },
+    list: async () => [], ensureDefault: async () => ({ id: 'i18n-default' }),
+    prepareDefaultForSave: async () => ({ boxId: 'i18n-default', hasAccess: fixture.keepAccess, sessionId: fixture.keepAccess ? 'i18n-keep-session' : null }),
+    accessDefault: async password => { fixture.unlockCalls.push(password); fixture.keepAccess = true; return 'i18n-keep-session' },
+    mkdir: async () => {}, listKeepNotes: async () => ({ notes: [], unreadable: [], nextCursor: null }),
+    saveDocument: async value => { fixture.savedNotes.push(value); throw new Error('Fixture should not save a note') }
+  } }
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { fixture.copied = value } } })
 })
 page.on('pageerror', error => errors.push(error.message))
 await page.route('**/*', route => { if (new URL(route.request().url()).origin === url) return route.continue(); external.push(route.request().url()); return route.abort() })
 const ready = id => page.locator(`[data-tool-ready="${id}"]`).waitFor()
+const openTool = async id => { await page.evaluate(id => { location.hash = `/tool/${id}` }, id); await ready(id) }
+const changeLanguage = language => page.evaluate(value => window.__trayLanguage(value), language)
+const workspace = page.locator('#workspace')
 const capture = async name => {
   if (!process.env.BRAND_SCREENSHOT_DIR) return
   await page.waitForFunction(() => [...document.querySelectorAll('.mac-page-enter')].every(element => Number(getComputedStyle(element).opacity) >= .99))
@@ -90,7 +115,7 @@ try {
   assert.equal(await input.innerText(), payload)
   await capture('json-guide-vi')
   await page.evaluate(() => { location.hash = '/' })
-  await page.locator('#home-tool-search').fill('phong thu')
+  await page.locator('#home-tool-search').fill('ham bam')
   await page.locator('#home-category').selectOption('hacking')
   await page.getByRole('button', { name: text('vi', 'Hash Lab'), exact: true }).waitFor()
   await page.getByRole('button', { name: text('vi', 'Hash Lab'), exact: true }).click()
@@ -133,6 +158,158 @@ try {
   if (await inputTab.isVisible()) await inputTab.click()
   assert.equal(await page.getByRole('textbox', { name: text('de', 'JSON Schema'), exact: true }).count(), 1, 'Language changes must retain the source editor')
   assert.match(await page.getByRole('textbox', { name: text('de', 'JSON Schema'), exact: true }).innerText(), /orderId/)
+
+  await page.setViewportSize({ width: 1180, height: 760 })
+  await openTool('app.about')
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('heading', { name: translated(language, 'Encryption and recovery'), exact: true }).waitFor()
+    for (const key of [
+      'No account sign-in or background telemetry. HTTP, DNS and TCP probes use the network only when you run them.',
+      'An encrypted backup cannot recover a forgotten password.',
+      'Private Box uses dual-layer AES-GCM. Device mode uses a key tied to the device; changes to hardware, the operating system or the user account can affect access. Portable mode uses two passwords you choose.',
+      'Supported tools retain input and session history in memory until the window closes or reloads. Clear them in Settings. Security, vault, SSH, HTTP, Mock API, URL, QR, OCR and screen-color tools exclude their input from this history.'
+    ]) await workspace.getByText(translated(language, key), { exact: true }).waitFor()
+    assert.equal(await workspace.evaluate(element => element.scrollWidth <= element.clientWidth), true, `${language} About overflow`)
+  }
+  console.log('PASS 13-language About privacy, recovery and retention paragraphs')
+
+  await changeLanguage('en')
+  await openTool('convert.file-ext')
+  const conversionPayload = '{"Home":"Settings","body":"Keep 日本語 العربية Tiếng Việt","number":123,"enabled":true}'
+  const conversionEditor = workspace.locator('.cm-content[contenteditable="true"]').first()
+  await conversionEditor.fill(conversionPayload)
+  const converted = workspace.locator('.cm-content').nth(1)
+  await page.waitForFunction(() => document.querySelectorAll('#workspace .cm-content')[1]?.textContent.includes('Keep 日本語 العربية Tiếng Việt'))
+  const conversionOutput = (await converted.locator('.cm-line').allTextContents()).join('\n')
+  assert.match(conversionOutput, /Home: Settings/)
+  assert.match(conversionOutput, /number: 123/)
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('textbox', { name: translated(language, '{label} input', { label: 'JSON' }), exact: true }).waitFor()
+    assert.equal(await workspace.getByRole('combobox', { name: translated(language, 'From') }).inputValue(), 'json')
+    assert.equal(await workspace.getByRole('combobox', { name: translated(language, 'To') }).inputValue(), 'yaml')
+    await workspace.getByRole('button', { name: translated(language, 'Swap'), exact: true }).waitFor()
+    await workspace.getByText(translated(language, 'Extensible format hub · more formats later'), { exact: true }).waitFor()
+    assert.equal(await conversionEditor.innerText(), conversionPayload, `${language} changed conversion input`)
+    assert.equal((await converted.locator('.cm-line').allTextContents()).join('\n'), conversionOutput, `${language} translated converted data`)
+  }
+  await workspace.getByRole('button', { name: translated('vi', 'Copy output'), exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__i18nFixture.copied), conversionOutput, 'Copy must preserve the converted data')
+  console.log('PASS 13-language data conversion controls preserve JSON input, YAML output and copied data')
+
+  await changeLanguage('en')
+  await openTool('sql.studio')
+  const sqlPayload = "SELECT 'Home Settings 日本語 العربية' AS fixture_label, 123 AS fixture_number;"
+  const sqlEditor = workspace.locator('.cm-content[contenteditable="true"]').first()
+  await sqlEditor.fill(sqlPayload)
+  await page.waitForFunction(name => [...document.querySelectorAll('#workspace button')].some(button => button.textContent.trim() === name && !button.disabled), translated('en', 'Format'))
+  await workspace.getByRole('combobox', { name: translated('en', 'Indent') }).selectOption('4')
+  await workspace.getByRole('checkbox', { name: translated('en', 'Uppercase keywords'), exact: true }).uncheck()
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('textbox', { name: translated(language, '{dialect} input', { dialect: 'MySQL' }), exact: true }).waitFor()
+    assert.equal(await workspace.getByRole('combobox', { name: translated(language, 'Dialect') }).inputValue(), 'mysql')
+    await workspace.getByRole('button', { name: translated(language, 'Minify'), exact: true }).waitFor()
+    await workspace.getByRole('status').filter({ hasText: translated(language, 'Syntax checked') }).first().waitFor()
+    assert.equal(await workspace.getByRole('combobox', { name: translated(language, 'Indent') }).inputValue(), '4')
+    assert.equal(await workspace.getByRole('checkbox', { name: translated(language, 'Uppercase keywords'), exact: true }).isChecked(), false)
+    assert.equal(await sqlEditor.innerText(), sqlPayload, `${language} changed SQL source`)
+  }
+  console.log('PASS 13-language SQL editor labels, options and validation status preserve SQL source')
+
+  await changeLanguage('en')
+  await openTool('privatebox.home')
+  const boxName = 'Home Settings العربية 日本語'
+  await workspace.getByRole('button', { name: translated('en', 'Select empty folder…'), exact: true }).click()
+  await workspace.getByLabel(translated('en', 'Box name (optional)'), { exact: true }).fill(boxName)
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('heading', { name: translated(language, 'Set up Private Box'), exact: true }).waitFor()
+    await workspace.getByRole('button', { name: translated(language, 'Add existing folder…'), exact: true }).waitFor()
+    assert.equal(await workspace.getByLabel(translated(language, 'Box name (optional)'), { exact: true }).inputValue(), boxName)
+    assert.equal(await workspace.getByRole('button', { name: 'C:/i18n-fixture/Home Settings 日本語', exact: true }).count(), 1, 'Folder paths must stay unchanged')
+  }
+  await changeLanguage('en')
+  await workspace.getByRole('button', { name: translated('en', 'Continue'), exact: true }).click()
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByText(translated(language, 'Device secret + your password. Files cannot open on another machine.'), { exact: true }).waitFor()
+    await workspace.getByText(translated(language, 'You set two keys. Copy the folder to Mac/Windows/Linux and unlock with the same keys.'), { exact: true }).waitFor()
+  }
+  await changeLanguage('en')
+  await workspace.getByRole('button', { name: translated('en', 'Continue'), exact: true }).click()
+  const keys = { 'Key A': 'Fixture Home Settings key A', 'Confirm Key A': 'Fixture Home Settings key A', 'Key B': 'Fixture 日本語 key B', 'Confirm Key B': 'Fixture 日本語 key B' }
+  for (const [label, value] of Object.entries(keys)) await workspace.getByLabel(translated('en', label), { exact: true }).fill(value)
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('button', { name: translated(language, 'Create Private Box'), exact: true }).waitFor()
+    await workspace.getByText(translated(language, 'Store both keys safely. There is no recovery if you lose them.'), { exact: true }).waitFor()
+    for (const [label, value] of Object.entries(keys)) assert.equal(await workspace.getByLabel(translated(language, label), { exact: true }).inputValue(), value, `${language} changed ${label}`)
+  }
+  assert.equal(await page.evaluate(() => window.__i18nFixture.setupCalls.length), 0, 'Language changes must not create a vault')
+  await openTool('app.about')
+  await page.evaluate(() => { window.__i18nFixture.vaultView = 'empty' })
+  await openTool('privatebox.home')
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByText(translated(language, 'This folder is empty'), { exact: true }).waitFor()
+    await workspace.getByRole('button', { name: translated(language, 'New box'), exact: true }).waitFor()
+    assert.equal(await workspace.getByText(boxName, { exact: true }).count(), 1, 'Vault names must stay unchanged')
+    const files = workspace.getByRole('group', { name: translated(language, 'Private Box files'), exact: true })
+    await files.press('Shift+F10')
+    await page.getByRole('menu').getByText(translated(language, 'New Folder'), { exact: true }).waitFor()
+    await page.getByRole('menu').press('Escape')
+  }
+  await changeLanguage('en')
+  await workspace.getByRole('group', { name: translated('en', 'Private Box files'), exact: true }).press('Shift+F10')
+  await page.getByRole('menu').getByText(translated('en', 'New Folder'), { exact: true }).click()
+  const newFolder = 'Home Settings Tiếng Việt 日本語'
+  await page.getByRole('dialog').getByRole('textbox').fill(newFolder)
+  for (const language of languages) {
+    await changeLanguage(language)
+    const dialog = page.getByRole('dialog', { name: translated(language, 'New folder'), exact: true })
+    await dialog.waitFor()
+    await dialog.getByRole('button', { name: translated(language, 'Create'), exact: true }).waitFor()
+    await dialog.getByRole('button', { name: translated(language, 'Cancel'), exact: true }).waitFor()
+    assert.equal(await dialog.getByRole('textbox').inputValue(), newFolder, `${language} changed the folder name`)
+  }
+  await page.getByRole('dialog').getByRole('button', { name: translated('vi', 'Cancel'), exact: true }).click()
+  console.log('PASS 13-language Private Box setup, key fields, empty state and folder actions preserve names, paths and keys')
+
+  await changeLanguage('en')
+  await openTool('privatebox.keep')
+  const keepPassword = 'Fixture Home Settings العربية password'
+  await workspace.getByLabel(translated('en', 'Keep password'), { exact: true }).fill(keepPassword)
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('button', { name: translated(language, 'Open Keep'), exact: true }).waitFor()
+    await workspace.getByText(translated(language, 'Notes are sealed in your local Default Secret Box. Device key is automatic; enter your password (key B) to open.'), { exact: true }).waitFor()
+    assert.equal(await workspace.getByLabel(translated(language, 'Keep password'), { exact: true }).inputValue(), keepPassword, `${language} changed Keep password`)
+  }
+  await changeLanguage('en')
+  await workspace.getByRole('button', { name: translated('en', 'Open Keep'), exact: true }).click()
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByText(translated(language, 'No notes yet — take one above'), { exact: true }).waitFor()
+    await workspace.getByRole('button', { name: translated(language, 'Take a note…'), exact: true }).waitFor()
+    await workspace.getByLabel(translated(language, 'Search notes by title or body'), { exact: true }).waitFor()
+  }
+  await changeLanguage('en')
+  await workspace.getByRole('button', { name: translated('en', 'Take a note…'), exact: true }).click()
+  const noteTitle = 'Home Settings 日本語', noteBody = 'Keep this fixture text: Input Output Save العربية Tiếng Việt'
+  await workspace.getByLabel(translated('en', 'Note title'), { exact: true }).fill(noteTitle)
+  await workspace.getByLabel(translated('en', 'Note body'), { exact: true }).fill(noteBody)
+  for (const language of languages) {
+    await changeLanguage(language)
+    await workspace.getByRole('button', { name: translated(language, 'Save note'), exact: true }).waitFor()
+    await workspace.getByRole('button', { name: translated(language, 'Pin note'), exact: true }).waitFor()
+    assert.equal(await workspace.getByLabel(translated(language, 'Note title'), { exact: true }).inputValue(), noteTitle, `${language} changed note title`)
+    assert.equal(await workspace.getByLabel(translated(language, 'Note body'), { exact: true }).inputValue(), noteBody, `${language} translated note contents`)
+  }
+  assert.deepEqual(await page.evaluate(() => window.__i18nFixture.unlockCalls), [keepPassword])
+  assert.equal(await page.evaluate(() => window.__i18nFixture.savedNotes.length), 0, 'Language changes must not save plaintext note content')
+  console.log('PASS 13-language Keep unlock, empty state and composer actions preserve passwords and unsaved note data')
   assert.deepEqual(errors, []); assert.deepEqual(external, [])
   console.log('PASS tray language events preserve live JSON input; translated accent-insensitive search; localized consent + Arabic hash worker; no external network or page crashes')
 } catch (error) {

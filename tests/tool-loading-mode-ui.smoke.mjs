@@ -71,7 +71,7 @@ const go = async (page, id) => page.evaluate((id) => { location.hash = '/tool/' 
 const section = (page) => page.getByRole('region', { name: 'Tool loading', exact: true })
 const button = (page, name) => section(page).getByRole('button', { name, exact: true })
 const status = (page) => section(page).getByRole('status')
-const waitHome = (page) => page.getByRole('searchbox', { name: 'What would you like to do?', exact: true }).waitFor()
+const waitHome = (page) => page.getByRole('searchbox', { name: 'Find a tool', exact: true }).waitFor()
 async function assertDormant(page, baseline) {
   assert.deepEqual(await page.evaluate(() => window.__bridgeCalls), baseline)
   assert.deepEqual(await page.evaluate(() => window.__workers), [])

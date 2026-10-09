@@ -31,4 +31,8 @@ describe('machine-id fingerprint', () => {
     const b = fingerprintFromParts(['REAL-UUID-123'])
     expect(a).toBe(b)
   })
+
+  it('rejects all-empty or generic input instead of deriving a shared empty fingerprint', () => {
+    for (const parts of [[], ['   ', '\0'], ['Default string   ', 'None ', '00000000-0000-0000-0000-000000000000']]) expect(fingerprintFromParts(parts)).toBe('')
+  })
 })

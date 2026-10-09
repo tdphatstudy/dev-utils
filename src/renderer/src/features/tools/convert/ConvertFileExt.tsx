@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { ArrowLeftRight } from 'lucide-react'
@@ -29,7 +30,7 @@ export default function ConvertFileExt(): JSX.Element {
   const [indent, setIndent] = useState(2)
 
   useToolDraft('convert.file-ext', input, setInput, {
-    label: 'Convert File Ext',
+    label: messageKey('Convert File Ext'),
     historyOnUnmount: true
   })
 
@@ -52,8 +53,7 @@ export default function ConvertFileExt(): JSX.Element {
     <div className="flex h-full flex-col">
       <ToolToolbar>
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          From
-          <select
+          {uiText('From')}<select
             className="mac-input !w-auto !py-1"
             value={from}
             onChange={(e) => setFrom(e.target.value as FormatId)}
@@ -66,14 +66,12 @@ export default function ConvertFileExt(): JSX.Element {
           </select>
         </label>
 
-        <button type="button" className="mac-btn-secondary" disabled={!result.ok} onClick={swap} title="Use the converted output as input and reverse formats">
+        <button type="button" className="mac-btn-secondary" disabled={!result.ok} onClick={swap} title={uiText('Use the converted output as input and reverse formats')}>
           <ArrowLeftRight className="h-3.5 w-3.5" />
-          Swap
-        </button>
+          {uiText('Swap')}</button>
 
         <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-          To
-          <select
+          {uiText('To')}<select
             className="mac-input !w-auto !py-1"
             value={to}
             onChange={(e) => setTo(e.target.value as FormatId)}
@@ -124,19 +122,19 @@ export default function ConvertFileExt(): JSX.Element {
       <SplitPane>
         <div className="flex min-h-0 flex-col gap-1">
           <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-            Input · {fromMeta.label}
+            {uiText('Input ·')} {fromMeta.label}
           </span>
           <CodeEditor
             value={input}
             onChange={setInput}
             language={fromMeta.language}
-            placeholder={`Paste ${fromMeta.label}…`}
-            label={`${fromMeta.label} input`}
+            placeholder={uiText('Paste {label}…', { label: fromMeta.label })}
+            label={uiText('{label} input', { label: fromMeta.label })}
           />
         </div>
         <div className="flex min-h-0 flex-col gap-1">
           <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-            Output · {toMeta.label}
+            {uiText('Output ·')} {toMeta.label}
           </span>
           <CodeEditor value={output} language={toMeta.language} readOnly />
         </div>
@@ -145,12 +143,11 @@ export default function ConvertFileExt(): JSX.Element {
       <footer className="flex items-center border-t border-mac-separator px-4 py-2">
         <ToolStatus tone={!input.trim() ? 'neutral' : result.ok ? 'success' : 'danger'}>
           {result.ok
-            ? `${fromMeta.label} → ${toMeta.label} · ${output.length.toLocaleString()} chars`
+            ? uiText('{label} → {label2} · {value3} chars', { label: fromMeta.label, label2: toMeta.label, value3: output.length.toLocaleString() })
             : result.error}
         </ToolStatus>
         <span className="ml-auto text-[11px] text-mac-label-tertiary">
-          Extensible format hub · more formats later
-        </span>
+          {uiText('Extensible format hub · more formats later')}</span>
       </footer>
     </div>
   )

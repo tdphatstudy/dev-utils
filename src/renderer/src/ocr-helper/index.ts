@@ -1,9 +1,11 @@
 import { validateOcrInput, MAX_OCR_PIXELS, MAX_OCR_PAGES, MAX_OCR_TEXT, type OcrInput, type OcrResult, type OcrProgress } from '@shared/ocr/types'
 import type { Worker as OcrWorker } from 'tesseract.js'
+import { ocrText, type OcrInterface, type OcrInterfaceMessage } from '@shared/ocr/interface'
 
 const status = document.getElementById('status')!
 const bar = document.getElementById('progress') as HTMLProgressElement
 const assets = new URL('./ocr-assets/', window.location.href).href
+let ui: OcrInterface
 document.getElementById('cancel')!.addEventListener('click', () => void window.ocrHelper.close())
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') void window.ocrHelper.close() })
 
@@ -11,8 +13,8 @@ async function extract(input: OcrInput): Promise<OcrResult> {
   let worker: OcrWorker | undefined
   let pageNumber = 1, total = 1, lastProgress = 0
   const confidences: number[] = []
-  const report = (stage: string, percent: number): void => {
-    status.textContent = `${stage} · page ${pageNumber} of ${total}`
+  const report = (stage: OcrInterfaceMessage, percent: number): void => {
+    status.textContent = ocrText(ui, '{stage} · page {page} of {total}', { stage: ocrText(ui, stage), page: pageNumber.toLocaleString(ui.intl), total: total.toLocaleString(ui.intl) })
     bar.value = Math.round(((pageNumber - 1) + percent / 100) / total * 100)
     if (performance.now() - lastProgress < 150 && percent !== 100) return
     lastProgress = performance.now()
@@ -21,12 +23,12 @@ async function extract(input: OcrInput): Promise<OcrResult> {
   }
   const recognize = async (canvas: HTMLCanvasElement): Promise<string> => {
     if (!worker) {
-      report('Loading OCR engine', 0)
+      report('Preparing text recognition', 0)
       const { createWorker, PSM } = await import('tesseract.js')
       worker = await createWorker(input.language, 1, {
         workerPath: assets + 'worker.min.js', corePath: assets.replace(/\/$/, ''), langPath: assets.replace(/\/$/, ''),
         workerBlobURL: false, cacheMethod: 'none',
-        logger: (message) => report(message.status === 'recognizing text' ? 'Recognizing text' : 'Loading OCR engine', Math.max(0, Math.min(100, message.progress * 100)))
+        logger: (message) => report(message.status === 'recognizing text' ? 'Recognizing text' : 'Preparing text recognition', Math.max(0, Math.min(100, message.progress * 100)))
       })
       await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO, preserve_interword_spaces: '1' })
     }
@@ -113,6 +115,11 @@ void (async () => {
   try {
     const view = await window.ocrHelper.view()
     if (view.kind !== 'run') throw new Error('Invalid OCR view.')
+    ui = view.ui
+    document.documentElement.lang = ui.locale; document.documentElement.dir = ui.direction
+    document.title = `DevFusion · ${ocrText(ui, 'Reading text locally')}`
+    for (const node of document.querySelectorAll<HTMLElement>('[data-message]')) node.textContent = ocrText(ui, node.dataset.message as OcrInterfaceMessage)
+    for (const node of document.querySelectorAll<HTMLElement>('[data-message-aria]')) node.setAttribute('aria-label', ocrText(ui, node.dataset.messageAria as OcrInterfaceMessage))
     await window.ocrHelper.ready()
     await window.ocrHelper.complete(await extract(validateOcrInput(view.input)))
   } catch (error) {

@@ -44,12 +44,12 @@
     <div class="brand"><img src="icon.png" alt=""><strong>DevFusion</strong><span>Color Picker</span></div>
     <div id="swatch"><strong id="selected-hex"></strong><span id="contrast"></span></div>
     <div id="fields"></div>
-    <div class="actions"><button id="repick" type="button">Repick</button><button id="close" type="button">Close</button></div>
+    <div class="actions"><button id="repick" type="button">Pick another color</button><button id="close" type="button">Close</button></div>
     <p id="status" role="status" aria-live="polite">Choose a format to copy. Esc closes this popup.</p>
   </section>
   <section id="overlay" hidden>
     <canvas id="desktop"></canvas>
-    <div id="hint"><span>Desktop snapshot · Click a pixel to select</span><button id="cancel" type="button">Cancel · Esc</button></div>
+    <div id="hint"><span>Click a screen color to select it</span><button id="cancel" type="button">Cancel · Esc</button></div>
     <div id="lens" hidden><canvas id="zoom" width="126" height="126"></canvas><output id="hover-hex"></output></div>
   </section>
   <script src="color-picker.js"></script>

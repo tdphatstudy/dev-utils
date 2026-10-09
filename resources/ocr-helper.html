@@ -5,14 +5,23 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'">
   <title>DevFusion · OCR</title>
   <style>
+    :root { color-scheme:dark }
     .brand{display:flex;align-items:center;gap:9px;font-size:12px;color:#b9becb}.brand img{width:24px;height:24px;object-fit:contain;flex-shrink:0}.brand span{margin-left:auto}
     *{box-sizing:border-box}body{margin:0;background:#171923;color:#f5f5f7;font:14px system-ui}button{font:inherit;border:1px solid #4c5267;border-radius:8px;background:#292e40;color:inherit;padding:9px 16px;cursor:pointer}button:focus-visible,textarea:focus-visible{outline:2px solid #a5b4fc;outline-offset:2px}button:disabled{opacity:.5;cursor:default}[hidden]{display:none!important}
     #desktop{position:fixed;inset:0;width:100vw;height:100vh;cursor:crosshair;touch-action:none}#region{position:fixed;border:2px solid #818cf8;box-shadow:0 0 0 99999px #0007;pointer-events:none}#hint{position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#171923ee;border:1px solid #454958;border-radius:12px;padding:12px 18px;pointer-events:none;white-space:nowrap}#hint button{margin-left:16px;pointer-events:auto}#result{height:100vh;display:flex;flex-direction:column;padding:24px;gap:14px}h1{font-size:20px;margin:0}p{margin:0;color:#b9becb}textarea{resize:none;min-height:100px;flex:1;border:1px solid #454958;border-radius:10px;padding:14px;background:#202431;color:#f5f5f7;font:14px/1.6 system-ui}footer{display:flex;justify-content:space-between;gap:12px}#status{color:#b9becb;font-size:12px;min-height:18px}
+    @media(prefers-color-scheme:light) {
+      :root { color-scheme:light }
+      body { background:#f5f6f9; color:#1c1c1e }
+      button { background:#fff; border-color:#d2d5dd }
+      textarea { background:#fff; color:#1c1c1e; border-color:#d2d5dd }
+      .brand,p,#status { color:#5b6170 }
+      #hint { background:#f5f6f9ee; border-color:#d2d5dd }
+    }
   </style>
 </head>
 <body>
-  <section id="capture" hidden><canvas id="desktop" aria-label="Drag to select text on this display"></canvas><div id="region" hidden></div><div id="hint"><span id="hint-text">Drag to select text · Esc cancels</span><button id="cancel" type="button">Cancel</button></div></section>
-  <section id="result" hidden><div class="brand"><img src="icon.png" alt=""><strong>DevFusion</strong><span>OCR</span></div><h1>Text from your screen</h1><p id="summary"></p><textarea id="text" aria-label="Extracted text" readonly spellcheck="false"></textarea><div id="status" role="status" aria-live="polite"></div><footer><button id="copy" type="button">Copy text</button><button id="close" type="button">Close</button></footer><p style="font-size:12px">The OCR engine has closed. This text clears when you close the popup.</p></section>
+  <section id="capture" hidden><canvas id="desktop" data-message-aria="Drag to select text on this display"></canvas><div id="region" hidden></div><div id="hint"><span id="hint-text" data-message="Drag to select text · Esc cancels"></span><button id="cancel" type="button" data-message="Cancel"></button></div></section>
+  <section id="result" hidden><div class="brand"><img src="icon.png" alt=""><strong>DevFusion</strong><span>OCR</span></div><h1 data-message="Extracted text"></h1><p id="summary"></p><textarea id="text" data-message-aria="Extracted text" readonly spellcheck="false"></textarea><div id="status" role="status" aria-live="polite"></div><footer><button id="copy" type="button" data-message="Copy text"></button><button id="close" type="button" data-message="Close"></button></footer><p style="font-size:12px" data-message="Recognition complete. Closing this window clears the result."></p></section>
   <script src="ocr-helper.js"></script>
 </body>
 </html>

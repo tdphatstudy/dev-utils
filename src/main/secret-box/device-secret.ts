@@ -15,13 +15,11 @@ export interface DeviceKeyCandidate {
   keyA: string
 }
 
-/**
- * Device-mode key A candidates for access (order):
- * 1. Legacy userData secret (if readable) — vaults created by older builds
- * 2. Hardware fingerprint — survives OS reinstall on the same machine
- *
- * Never silent-rotate a corrupt legacy file into a new random key.
- */
+function secureHardwareCacheAvailable(): boolean {
+  if (!safeStorage?.isEncryptionAvailable?.()) return false
+  return process.platform !== 'linux' || !['basic_text', 'unknown'].includes(safeStorage.getSelectedStorageBackend())
+}
+
 export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
   const out: DeviceKeyCandidate[] = []
   let legacyFatal: Error | null = null
@@ -43,7 +41,7 @@ export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
   }
 
   try {
-    if (safeStorage?.isEncryptionAvailable?.()) {
+    if (secureHardwareCacheAvailable()) {
       const raw = await readBoundedFile(hardwareSecretCachePath(), MAX_DEVICE_SECRET_BYTES)
       const keyA = safeStorage.decryptString(raw)
       if (keyA) out.push({ source: 'hardware-cache', keyA })
@@ -69,10 +67,6 @@ export async function listDeviceKeyCandidates(): Promise<DeviceKeyCandidate[]> {
   return unique
 }
 
-/**
- * New device-mode vaults: always prefer hardware so reinstalling the OS
- * on the same PC still unlocks. Legacy file only if hardware fails.
- */
 export async function resolveDeviceKeyAForSetup(): Promise<string> {
   try {
     const keyA = await resolveHardwareDeviceSecret()
@@ -135,10 +129,8 @@ async function tryLoadLegacyDeviceSecret(): Promise<string | null> {
 
 export async function cacheDeviceSecretHint(secret: string): Promise<void> {
   try {
-    if (!app?.isReady?.() || !safeStorage?.isEncryptionAvailable?.()) return
+    if (!app?.isReady?.() || !secureHardwareCacheAvailable()) return
     await mkdir(userDataRoot(), { recursive: true })
-    // Exclusive creation also preserves an older cached hardware identity.
-    // Only OS-encrypted material is written; never fall back to plaintext.
     await writeFile(hardwareSecretCachePath(), safeStorage.encryptString(secret), { flag: 'wx', mode: 0o600 })
   } catch {
     /* best-effort */

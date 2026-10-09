@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useMemo, useState } from 'react'
 import { CodeEditor } from '@renderer/components/ui/CodeEditor'
@@ -79,9 +80,9 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
           value={view}
           onChange={setView}
           options={[
-            { value: 'edit', label: 'Edit' },
-            { value: 'tree', label: uiText('Tree') },
-            { value: 'split', label: uiText('Split') }
+            { value: 'edit', label: messageKey('Edit') },
+            { value: 'tree', label: messageKey('Tree') },
+            { value: 'split', label: messageKey('Split') }
           ]}
         />
         <div className="ml-auto">
@@ -102,9 +103,7 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
           (treeData !== null ? (
             <TreeView data={treeData} className="min-h-0" />
           ) : (
-            <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[12px] text-mac-label-tertiary">
-              Fix JSON to show tree
-            </div>
+            <div className="flex items-center justify-center rounded-mac-lg border border-dashed border-mac-separator text-[12px] text-mac-label-tertiary">{uiText('Fix JSON to show tree')}{' '}</div>
           ))}
       </div>
 
@@ -116,7 +115,7 @@ export function JsonFileEditor({ value, onChange, className }: Props): JSX.Eleme
           status.tone === 'neutral' && 'text-mac-label-tertiary'
         )}
       >
-        {status.text}
+        {uiText(status.text)}
       </div>
     </div>
   )

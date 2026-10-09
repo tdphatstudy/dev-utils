@@ -4,6 +4,7 @@ import { promisify } from 'util'
 import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { authError } from './crypto'
+import { collectWindowsMachineIdParts } from '../platform/windows-machine-id'
 
 const execFileAsync = promisify(execFile)
 
@@ -52,33 +53,6 @@ async function run(
   }
 }
 
-/** Parse `wmic X get Y` table output → values under header. */
-function parseWmic(stdout: string, header: string): string[] {
-  const lines = stdout
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-  const out: string[] = []
-  for (const line of lines) {
-    if (line.toLowerCase() === header.toLowerCase()) continue
-    if (isUseful(line)) out.push(line)
-  }
-  return out
-}
-
-async function windowsIds(): Promise<string[]> {
-  const parts: string[] = []
-  const uuidOut = await run('wmic', ['csproduct', 'get', 'uuid'])
-  parts.push(...parseWmic(uuidOut, 'UUID'))
-  const board = await run('wmic', ['baseboard', 'get', 'serialnumber'])
-  parts.push(...parseWmic(board, 'SerialNumber'))
-  const bios = await run('wmic', ['bios', 'get', 'serialnumber'])
-  parts.push(...parseWmic(bios, 'SerialNumber'))
-  const cpu = await run('wmic', ['cpu', 'get', 'processorid'])
-  parts.push(...parseWmic(cpu, 'ProcessorId'))
-  return parts
-}
-
 async function darwinIds(): Promise<string[]> {
   const out = await run('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'])
   const m = /"IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(out)
@@ -105,25 +79,18 @@ async function linuxIds(): Promise<string[]> {
   return parts
 }
 
-/**
- * Stable machine fingerprint parts (motherboard / product UUID / CPU id, etc.).
- * Same hardware → same parts after OS reinstall (when firmware tables survive).
- */
 export async function collectMachineIdParts(): Promise<string[]> {
-  if (process.platform === 'win32') return windowsIds()
+  if (process.platform === 'win32') return collectWindowsMachineIdParts(run, isUseful)
   if (process.platform === 'darwin') return darwinIds()
   return linuxIds()
 }
 
 export function fingerprintFromParts(parts: string[]): string {
   const normalized = [...new Set(parts.map(clean).filter(isUseful))].sort().join('\n')
+  if (!normalized) return ''
   return createHash('sha256').update(normalized, 'utf8').digest('hex')
 }
 
-/**
- * keyA material for device-mode vaults — deterministic from hardware.
- * Survives app reinstall / OS reinstall on the same machine; fails on different PC.
- */
 export function deriveDeviceSecretFromFingerprint(fingerprintHex: string): string {
   return createHash('sha256')
     .update(`devutils-device-key-v1\0${fingerprintHex}`, 'utf8')

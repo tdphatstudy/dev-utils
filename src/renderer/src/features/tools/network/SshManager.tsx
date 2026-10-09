@@ -1,3 +1,4 @@
+import { messageKey } from '@shared/i18n/message-key'
 import { t as uiText, useI18n as useUiLocale } from '@renderer/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -364,15 +365,14 @@ export default function SshManager(): JSX.Element {
             setKeyFormMode(null)
           }}
           options={[
-            { value: 'hosts', label: 'Hosts' },
-            { value: 'keys', label: 'Keys' }
+            { value: 'hosts', label: messageKey('Hosts') },
+            { value: 'keys', label: messageKey('Keys') }
           ]}
         />
         {tab === 'hosts' ? (
           <button type="button" className="mac-btn-primary" disabled={!desktop || busy} onClick={openCreateHost}>
             <Plus className="h-3.5 w-3.5" />
-            Add host
-          </button>
+            {uiText('Add host')}</button>
         ) : (
           <button
             type="button"
@@ -388,89 +388,83 @@ export default function SshManager(): JSX.Element {
             }}
           >
             <Plus className="h-3.5 w-3.5" />
-            New key
-          </button>
+            {uiText('New key')}</button>
         )}
         <button type="button" className="mac-btn-secondary" disabled={!desktop || busy} onClick={() => void load()}>
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+          {uiText('Refresh')}</button>
         <button
           type="button"
           className="mac-btn-ghost"
           onClick={() => void openFolder(location)}
-          title="Open SSH directory"
+          title={uiText('Open SSH directory')}
           disabled={!desktop || busy}
         >
           <FolderOpen className="h-3.5 w-3.5" />
-          Open folder
-        </button>
+          {uiText('Open folder')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
           onClick={() => void pickSshDir()}
-          title="Use a custom directory for keys (not only ~/.ssh)"
+          title={uiText('Use a custom directory for keys (not only ~/.ssh)')}
           disabled={!desktop || busy}
         >
           <FolderOpen className="h-3.5 w-3.5" />
-          Set SSH dir…
-        </button>
+          {uiText('Set SSH dir…')}</button>
         <button
           type="button"
           className="mac-btn-secondary"
           onClick={() => void pickConfig()}
-          title="Point at a specific config file (ssh -F style)"
+          title={uiText('Point at a specific config file (ssh -F style)')}
           disabled={!desktop || busy}
         >
           <FileText className="h-3.5 w-3.5" />
-          Set config…
-        </button>
+          {uiText('Set config…')}</button>
         {(sshDir || sshConfigPath) && (
           <button
             type="button"
             className="mac-btn-ghost"
             onClick={resetLocation}
             disabled={busy}
-            title="Reset to $HOME/.ssh"
+            title={uiText('Reset to $HOME/.ssh')}
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            Default
-          </button>
+            {uiText('Default')}</button>
         )}
       </ToolToolbar>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-mac-separator bg-mac-control/30 px-4 py-1.5 font-mono text-[11px] text-mac-label-secondary">
-        <span title="Keys directory">
-          <span className="text-mac-label-tertiary">dir </span>
+        <span title={uiText('Keys directory')}>
+          <span className="text-mac-label-tertiary">{uiText('dir')} </span>
           {data?.sshDir ?? '…'}
           {data?.usingCustomLocation ? (
-            <span className="ml-1 text-mac-accent">· custom</span>
+            <span className="ml-1 text-mac-accent">{uiText('· custom')}</span>
           ) : (
-            <span className="ml-1 text-mac-label-tertiary">· default</span>
+            <span className="ml-1 text-mac-label-tertiary">{uiText('· default')}</span>
           )}
         </span>
-        <span className="min-w-0 truncate" title="ssh_config path">
-          <span className="text-mac-label-tertiary">config </span>
+        <span className="min-w-0 truncate" title={uiText('ssh_config path')}>
+          <span className="text-mac-label-tertiary">{uiText('config')} </span>
           {data?.configPath ?? '…'}
         </span>
         {data && !data.exists && (
-          <span className="text-mac-warning">path missing — will create on write</span>
+          <span className="text-mac-warning">{uiText('path missing — will create on write')}</span>
         )}
       </div>
 
       {recovery && <div className="shrink-0 space-y-2 border-b border-mac-separator bg-mac-control/30 px-4 py-2 text-[12px]">
-        <p>Recovery copy kept locally: <span className="break-all font-mono">{recovery.directory}</span></p>
+        <p>{uiText('Recovery copy kept locally:')} <span className="break-all font-mono">{recovery.directory}</span></p>
         <div className="flex flex-wrap items-center gap-2">
-          <CopyButton text={recovery.directory} label="Copy backup path" />
-          <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => void openFolder({ sshDir: recovery.directory })}>Open backup folder</button>
-          <label className="flex items-center gap-2">Restore as<input className="mac-input !w-40 font-mono" value={recoveryName} disabled={busy} aria-invalid={!!recoveryIssue} aria-describedby={recoveryIssue ? 'ssh-recovery-issue' : undefined} onChange={(e) => setRecoveryName(e.target.value)} /></label>
-          <button type="button" className="mac-btn-primary" disabled={busy || !!recoveryIssue} onClick={() => void restoreKey()}>Restore key</button>
+          <CopyButton text={recovery.directory} label={uiText('Copy backup path')} />
+          <button type="button" className="mac-btn-secondary" disabled={busy} onClick={() => void openFolder({ sshDir: recovery.directory })}>{uiText('Open backup folder')}</button>
+          <label className="flex items-center gap-2">{uiText('Restore as')}<input className="mac-input !w-40 font-mono" value={recoveryName} disabled={busy} aria-invalid={!!recoveryIssue} aria-describedby={recoveryIssue ? 'ssh-recovery-issue' : undefined} onChange={(e) => setRecoveryName(e.target.value)} /></label>
+          <button type="button" className="mac-btn-primary" disabled={busy || !!recoveryIssue} onClick={() => void restoreKey()}>{uiText('Restore key')}</button>
         </div>
         {recoveryIssue && <p id="ssh-recovery-issue" className="text-mac-error">{recoveryIssue}</p>}
-        <p className="text-[11px] text-mac-label-secondary">Restore never overwrites an existing name. Backup files survive closing the tool; use the folder path for manual recovery later.</p>
+        <p className="text-[11px] text-mac-label-secondary">{uiText('Restore never overwrites an existing name. Backup files survive closing the tool; use the folder path for manual recovery later.')}</p>
       </div>}
 
-      <p className="border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">Values shown belong to the selected block. Includes, Match rules and inherited defaults are not resolved. Edits preserve other directives and block order; new hosts precede conditional defaults.</p>
+      <p className="border-b border-mac-separator px-4 py-2 text-[11px] text-mac-label-secondary">{uiText('Values shown belong to the selected block. Includes, Match rules and inherited defaults are not resolved. Edits preserve other directives and block order; new hosts precede conditional defaults.')}</p>
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto auto-rows-[minmax(260px,1fr)] md:grid-cols-2">
         {/* List */}
         <div className="min-h-0 overflow-auto border-r border-mac-separator">
@@ -478,7 +472,7 @@ export default function SshManager(): JSX.Element {
             <ul className="p-2">
               {(data?.hosts.length ?? 0) === 0 && !hostFormMode && (
                 <li className="px-3 py-8 text-center text-[13px] text-mac-label-tertiary">
-                  {busy ? 'Reading SSH config…' : error ? 'SSH inventory unavailable. Resolve the error, then refresh.' : 'No Host entries — click Add host'}
+                  {busy ? uiText('Reading SSH config…') : error ? uiText('SSH inventory unavailable. Resolve the error, then refresh.') : uiText('No Host entries — click Add host')}
                 </li>
               )}
               {data?.hosts.map((h, index) => (
@@ -502,7 +496,7 @@ export default function SshManager(): JSX.Element {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-semibold">{h.alias}</div>
                       <div className="truncate font-mono text-[11px] opacity-70">
-                        {h.user ? `${h.user}@` : ''}
+                        {h.user ? uiText('{user}@', { user: h.user }) : ''}
                         {h.hostName || h.alias}:{h.port}
                       </div>
                     </div>
@@ -515,7 +509,7 @@ export default function SshManager(): JSX.Element {
             <ul className="p-2">
               {(data?.keys.length ?? 0) === 0 && !keyFormMode && (
                 <li className="px-3 py-8 text-center text-[13px] text-mac-label-tertiary">
-                  {busy ? 'Reading SSH keys…' : error ? 'SSH inventory unavailable. Resolve the error, then refresh.' : 'No keys — click New key'}
+                  {busy ? uiText('Reading SSH keys…') : error ? uiText('SSH inventory unavailable. Resolve the error, then refresh.') : uiText('No keys — click New key')}
                 </li>
               )}
               {data?.keys.map((k) => (
@@ -535,14 +529,14 @@ export default function SshManager(): JSX.Element {
                       <div className="flex items-center gap-2">
                         <span className="truncate text-[13px] font-semibold">{k.name}</span>
                         <span className="mac-chip !normal-case">
-                          {k.isPublic ? 'public' : 'private'}
+                          {k.isPublic ? uiText('public') : uiText('private')}
                         </span>
                         {k.external && (
-                          <span className="mac-chip !normal-case text-mac-warning">external</span>
+                          <span className="mac-chip !normal-case text-mac-warning">{uiText('external')}</span>
                         )}
                       </div>
                       <div className="truncate font-mono text-[11px] opacity-70">
-                        {k.keyType || 'key'}
+                        {k.keyType || uiText('key')}
                         {k.fingerprintSha256 ? ` · ${k.fingerprintSha256}` : ''}
                       </div>
                     </div>
@@ -559,42 +553,38 @@ export default function SshManager(): JSX.Element {
           {tab === 'hosts' && hostFormMode && (
             <div className="mb-4 space-y-3 rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
               <h2 className="text-[14px] font-semibold">
-                {hostFormMode === 'create' ? 'New host' : 'Edit host'}
+                {hostFormMode === 'create' ? uiText('New host') : uiText('Edit host')}
               </h2>
               <label className="block text-[12px] text-mac-label-secondary">
-                Alias (Host)
-                <input
+                {uiText('Alias (Host)')}<input
                   className="mac-input mt-1 font-mono"
                   value={hostForm.alias}
                   onChange={(e) => setHostForm((f) => ({ ...f, alias: e.target.value }))}
-                  placeholder="myserver"
+                  placeholder={uiText('myserver')}
                   spellCheck={false}
                 />
               </label>
               <label className="block text-[12px] text-mac-label-secondary">
-                HostName
-                <input
+                {uiText('HostName')}<input
                   className="mac-input mt-1 font-mono"
                   value={hostForm.hostName ?? ''}
                   onChange={(e) => setHostForm((f) => ({ ...f, hostName: e.target.value }))}
-                  placeholder="10.0.0.5 or example.com"
+                  placeholder={uiText('10.0.0.5 or example.com')}
                   spellCheck={false}
                 />
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[12px] text-mac-label-secondary">
-                  User
-                  <input
+                  {uiText('User')}<input
                     className="mac-input mt-1 font-mono"
                     value={hostForm.user ?? ''}
                     onChange={(e) => setHostForm((f) => ({ ...f, user: e.target.value }))}
-                    placeholder="deploy"
+                    placeholder={uiText('deploy')}
                     spellCheck={false}
                   />
                 </label>
                 <label className="block text-[12px] text-mac-label-secondary">
-                  Port
-                  <input
+                  {uiText('Port')}<input
                     type="number"
                     className="mac-input mt-1 font-mono"
                     value={hostForm.port ?? 22}
@@ -605,12 +595,11 @@ export default function SshManager(): JSX.Element {
                 </label>
               </div>
               <label className="block text-[12px] text-mac-label-secondary">
-                IdentityFile
-                <input
+                {uiText('IdentityFile')}<input
                   className="mac-input mt-1 font-mono text-[12px]"
                   value={hostForm.identityFile ?? ''}
                   onChange={(e) => setHostForm((f) => ({ ...f, identityFile: e.target.value }))}
-                  placeholder="~/.ssh/id_ed25519"
+                  placeholder={uiText('~/.ssh/id_ed25519')}
                   spellCheck={false}
                 />
               </label>
@@ -621,8 +610,7 @@ export default function SshManager(): JSX.Element {
                   disabled={busy || !desktop || !!hostFormIssue}
                   onClick={() => void saveHost()}
                 >
-                  Save to config
-                </button>
+                  {uiText('Save to config')}</button>
                 <button
                   type="button"
                   className="mac-btn-ghost"
@@ -638,15 +626,14 @@ export default function SshManager(): JSX.Element {
           {tab === 'keys' && keyFormMode && (
             <div className="mb-4 space-y-3 rounded-mac-xl border border-mac-separator bg-mac-surface p-4 shadow-[var(--mac-shadow-sm)]">
               <h2 className="text-[14px] font-semibold">
-                {keyFormMode === 'create' ? 'Generate SSH key' : 'Rename key'}
+                {keyFormMode === 'create' ? uiText('Generate SSH key') : uiText('Rename key')}
               </h2>
               <label className="block text-[12px] text-mac-label-secondary">
-                File name
-                <input
+                {uiText('File name')}<input
                   className="mac-input mt-1 font-mono"
                   value={keyName}
                   onChange={(e) => setKeyName(e.target.value)}
-                  placeholder="id_ed25519_work"
+                  placeholder={uiText('id_ed25519_work')}
                   spellCheck={false}
                 />
               </label>
@@ -654,20 +641,18 @@ export default function SshManager(): JSX.Element {
                 <>
                   <div className="flex flex-wrap gap-3">
                     <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-                      Algorithm
-                      <select
+                      {uiText('Algorithm')}<select
                         className="mac-input !w-auto !py-1"
                         value={keyAlg}
                         onChange={(e) => setKeyAlg(e.target.value as 'ed25519' | 'rsa')}
                       >
-                        <option value="ed25519">Ed25519</option>
-                        <option value="rsa">RSA</option>
+                        <option value="ed25519">{uiText('Ed25519')}</option>
+                        <option value="rsa">{uiText('RSA')}</option>
                       </select>
                     </label>
                     {keyAlg === 'rsa' && (
                       <label className="flex items-center gap-1.5 text-[12px] text-mac-label-secondary">
-                        Bits
-                        <select
+                        {uiText('Bits')}<select
                           className="mac-input !w-auto !py-1"
                           value={keyBits}
                           onChange={(e) =>
@@ -682,12 +667,11 @@ export default function SshManager(): JSX.Element {
                     )}
                   </div>
                   <label className="block text-[12px] text-mac-label-secondary">
-                    Comment
-                    <input
+                    {uiText('Comment')}<input
                       className="mac-input mt-1 font-mono"
                       value={keyComment}
                       onChange={(e) => setKeyComment(e.target.value)}
-                      placeholder="you@machine"
+                      placeholder={uiText('you@machine')}
                       spellCheck={false}
                     />
                   </label>
@@ -698,8 +682,7 @@ export default function SshManager(): JSX.Element {
                       onChange={(e) => setKeyOverwrite(e.target.checked)}
                       className="accent-mac-accent"
                     />
-                    Replace existing pair (keeps a recovery copy)
-                  </label>
+                    {uiText('Replace existing pair (keeps a recovery copy)')}</label>
                 </>
               )}
               <div className="flex gap-2">
@@ -709,7 +692,7 @@ export default function SshManager(): JSX.Element {
                   disabled={busy || !desktop || !!keyIssue}
                   onClick={() => void saveKey()}
                 >
-                  {keyFormMode === 'create' ? 'Generate & write' : 'Rename'}
+                  {keyFormMode === 'create' ? uiText('Generate & write') : uiText('Rename')}
                 </button>
                 <button
                   type="button"
@@ -719,7 +702,7 @@ export default function SshManager(): JSX.Element {
                   {uiText('Cancel')}</button>
               </div>
               {keyIssue && <p role="status" className="text-[12px] text-mac-label-secondary">{keyIssue}</p>}
-              <p className="text-[11px] text-mac-label-secondary">Private keys use OpenSSH format and have no passphrase. Keep the key and recovery copies private. Renaming does not update config or external scripts.</p>
+              <p className="text-[11px] text-mac-label-secondary">{uiText('Private keys use OpenSSH format and have no passphrase. Keep the key and recovery copies private. Renaming does not update config or external scripts.')}</p>
             </div>
           )}
 
@@ -736,8 +719,7 @@ export default function SshManager(): JSX.Element {
                     title={selectedHost.readOnlyReason}
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
+                    {uiText('Edit')}</button>
                   <button
                     type="button"
                     className="mac-btn-ghost !py-1 text-mac-danger"
@@ -746,19 +728,18 @@ export default function SshManager(): JSX.Element {
                     title={selectedHost.readOnlyReason}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                    {uiText('Delete')}</button>
                 </div>
               </div>
               {selectedHost.readOnlyReason && <p role="status" className="text-[12px] text-mac-warning">{selectedHost.readOnlyReason}</p>}
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-[12px]">
-                <dt className="text-mac-label-tertiary">HostName</dt>
+                <dt className="text-mac-label-tertiary">{uiText('HostName')}</dt>
                 <dd className="font-mono">{selectedHost.hostName || '—'}</dd>
-                <dt className="text-mac-label-tertiary">User</dt>
+                <dt className="text-mac-label-tertiary">{uiText('User')}</dt>
                 <dd className="font-mono">{selectedHost.user || '—'}</dd>
-                <dt className="text-mac-label-tertiary">Port</dt>
+                <dt className="text-mac-label-tertiary">{uiText('Port')}</dt>
                 <dd className="font-mono">{selectedHost.port}</dd>
-                <dt className="text-mac-label-tertiary">IdentityFile</dt>
+                <dt className="text-mac-label-tertiary">{uiText('IdentityFile')}</dt>
                 <dd className="break-all font-mono text-[11px]">
                   {selectedHost.identityFile || '—'}
                 </dd>
@@ -781,8 +762,7 @@ export default function SshManager(): JSX.Element {
                     disabled={busy || !!selectedKey.external || !!selectedKey.readOnlyReason}
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                    Rename
-                  </button>
+                    {uiText('Rename')}</button>
                   <button
                     type="button"
                     className="mac-btn-ghost !py-1 text-mac-danger"
@@ -790,27 +770,25 @@ export default function SshManager(): JSX.Element {
                     disabled={busy || !!selectedKey.external || !!selectedKey.readOnlyReason}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                    {uiText('Delete')}</button>
                 </div>
               </div>
               {selectedKey.readOnlyReason && <p role="status" className="text-[12px] text-mac-warning">{selectedKey.readOnlyReason}</p>}
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-[12px]">
-                <dt className="text-mac-label-tertiary">Type</dt>
+                <dt className="text-mac-label-tertiary">{uiText('Type')}</dt>
                 <dd className="font-mono">{selectedKey.keyType || '—'}</dd>
-                <dt className="text-mac-label-tertiary">Fingerprint</dt>
+                <dt className="text-mac-label-tertiary">{uiText('Fingerprint')}</dt>
                 <dd className="break-all font-mono text-[11px]">
                   {selectedKey.fingerprintSha256 || '—'}
                 </dd>
-                <dt className="text-mac-label-tertiary">Path</dt>
+                <dt className="text-mac-label-tertiary">{uiText('Path')}</dt>
                 <dd className="break-all font-mono text-[11px]">{selectedKey.path}</dd>
               </dl>
               {pubContent && (
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-                      Public key
-                    </span>
+                      {uiText('Public key')}</span>
                     <CopyButton text={pubContent} label={uiText('Copy')} />
                   </div>
                   <pre className="selectable max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-mac border border-mac-separator bg-mac-control p-2 font-mono text-[11px]">
@@ -820,39 +798,35 @@ export default function SshManager(): JSX.Element {
               )}
               {!selectedKey.isPublic && !selectedKey.publicPath && (
                 <p className="text-[12px] text-mac-label-tertiary">
-                  Private key material is not loaded into the UI.
-                </p>
+                  {uiText('Private key material is not loaded into the UI.')}</p>
               )}
             </div>
           )}
 
           {!selectedHost && !selectedKey && !hostFormMode && !keyFormMode && (
             <p className="text-[13px] text-mac-label-tertiary">
-              Select an item or use Add / New. Default path is <code className="font-mono">$HOME/.ssh</code>{' '}
-              (respects env <code className="font-mono">HOME</code>). Use <strong>Set SSH dir</strong> or{' '}
-              <strong>Set config</strong> if your keys/config live elsewhere. IdentityFile paths outside
-              the dir still appear as external keys (read-only).
-            </p>
+              {uiText('Select an item or use Add / New. Default path is')} <code className="font-mono">$HOME/.ssh</code>{' '}
+              {uiText('(respects env')} <code className="font-mono">HOME</code>{uiText('). Use')} <strong>{uiText('Set SSH dir')}</strong> {uiText('or')}{' '}
+              <strong>{uiText('Set config')}</strong> {uiText('if your keys/config live elsewhere. IdentityFile paths outside the dir still appear as external keys (read-only).')}</p>
           )}
 
           <div className="mt-auto space-y-2 border-t border-mac-separator pt-4">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-mac-label-tertiary">
-              Test connection (TCP)
-            </div>
+              {uiText('Test connection (TCP)')}</div>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 className="mac-input min-w-0 flex-1 font-mono text-[13px]"
                 value={testHost}
-                aria-label="TCP hostname or IP"
+                aria-label={uiText('TCP hostname or IP')}
                 onChange={(e) => setTestHost(e.target.value)}
-                placeholder="host"
+                placeholder={uiText('host')}
                 spellCheck={false}
               />
               <input
                 type="number"
                 className="mac-input !w-20 font-mono text-[13px]"
                 value={testPort}
-                aria-label="TCP port"
+                aria-label={uiText('TCP port')}
                 min={1}
                 max={65535}
                 onChange={(e) => setTestPort(Number(e.target.value))}
@@ -868,10 +842,10 @@ export default function SshManager(): JSX.Element {
                 ) : (
                   <Wifi className="h-3.5 w-3.5" />
                 )}
-                {testing ? 'Testing…' : uiText('Test')}
+                {testing ? uiText('Testing…') : uiText('Test')}
               </button>
             </div>
-            <p className="text-[11px] text-mac-label-tertiary">Tests TCP reachability only; does not authenticate SSH or verify host keys.</p>
+            <p className="text-[11px] text-mac-label-tertiary">{uiText('Tests TCP reachability only; does not authenticate SSH or verify host keys.')}</p>
             {testResult && testResult.host === testHost.trim() && testResult.port === testPort && (
               <p
                 className={cn(
@@ -880,8 +854,8 @@ export default function SshManager(): JSX.Element {
                 )}
               >
                 {testResult.ok
-                  ? `Open · ${testResult.host}:${testResult.port} · ${testResult.timeMs}ms`
-                  : `${testResult.status} · ${testResult.error ?? 'failed'} · ${testResult.timeMs}ms`}
+                  ? uiText('Open · {host}:{port} · {timeMs}ms', { host: testResult.host, port: testResult.port, timeMs: testResult.timeMs })
+                  : uiText('{status} · {value2} · {timeMs}ms', { status: uiText({ open: 'Open', refused: 'Connection refused', timeout: 'Timed out', error: 'Failed' }[testResult.status]), value2: testResult.error ?? uiText('Failed'), timeMs: testResult.timeMs })}
               </p>
             )}
           </div>
@@ -892,7 +866,7 @@ export default function SshManager(): JSX.Element {
         <ToolStatus tone={error ? 'danger' : statusMsg ? 'success' : 'neutral'}>
           {error ??
             statusMsg ??
-            `${data?.usingCustomLocation ? 'Custom location' : 'Default $HOME/.ssh'} · config.bak on write · ${data?.hosts.length ?? 0} hosts · ${data?.keys.length ?? 0} keys`}
+            uiText('{value1} · config.bak on write · {value2} hosts · {value3} keys', { value1: uiText(data?.usingCustomLocation ? 'Custom location' : 'Default $HOME/.ssh'), value2: data?.hosts.length ?? 0, value3: data?.keys.length ?? 0 })}
         </ToolStatus>
       </footer>
     </div>

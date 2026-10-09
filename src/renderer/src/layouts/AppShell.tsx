@@ -35,14 +35,14 @@ export function AppShell(): JSX.Element {
       <TitleBar />
       <div className="flex min-h-0 min-w-0 flex-1">
         <Sidebar />
-        <main id="workspace" tabIndex={-1} aria-label={routeTool ? `${routeTool.name} workspace` : 'Toolbox workspace'} className="mac-workspace min-w-0 flex-1 overflow-hidden bg-mac-bg focus-visible:outline-none">
+        <main id="workspace" tabIndex={-1} aria-label={routeTool ? uiText('{name} workspace', { name: routeTool.name }) : uiText('Toolbox workspace')} className="mac-workspace min-w-0 flex-1 overflow-hidden bg-mac-bg focus-visible:outline-none">
           {/* key remounts boundary when route changes so a fixed tool does not stick */}
           <ErrorBoundary key={location.pathname} scope="route" onHome={() => navigate('/')}>
             <Outlet />
           </ErrorBoundary>
         </main>
       </div>
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{routeTool ? `${routeTool.name} selected` : 'DevFusion toolbox opened'}</div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{routeTool ? uiText('{name} selected', { name: routeTool.name }) : uiText('DevFusion toolbox opened')}</div>
       <CommandPalette />
     </div>
   )
